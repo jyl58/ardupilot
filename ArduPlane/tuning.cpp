@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 /*
@@ -87,7 +85,7 @@ const AP_Tuning_Plane::tuning_name AP_Tuning_Plane::tuning_names[] = {
 };
 
 /*
-  get a pointer to an AP_Float for a parameter, or NULL on fail
+  get a pointer to an AP_Float for a parameter, or nullptr on fail
  */
 AP_Float *AP_Tuning_Plane::get_param_pointer(uint8_t parm)
 {
@@ -145,28 +143,28 @@ AP_Float *AP_Tuning_Plane::get_param_pointer(uint8_t parm)
         return &plane.quadplane.attitude_control->get_angle_yaw_p().kP();
 
     case TUNING_PXY_P:
-        return &plane.quadplane.p_pos_xy.kP();
+        return &plane.quadplane.pos_control->get_pos_xy_p().kP();
 
     case TUNING_PZ_P:
-        return &plane.quadplane.p_alt_hold.kP();
+        return &plane.quadplane.pos_control->get_pos_z_p().kP();
 
     case TUNING_VXY_P:
-        return &plane.quadplane.pi_vel_xy.kP();
+        return &plane.quadplane.pos_control->get_vel_xy_pid().kP();
 
     case TUNING_VXY_I:
-        return &plane.quadplane.pi_vel_xy.kI();
+        return &plane.quadplane.pos_control->get_vel_xy_pid().kI();
 
     case TUNING_VZ_P:
-        return &plane.quadplane.p_vel_z.kP();
+        return &plane.quadplane.pos_control->get_vel_z_p().kP();
 
     case TUNING_AZ_P:
-        return &plane.quadplane.pid_accel_z.kP();
+        return &plane.quadplane.pos_control->get_accel_z_pid().kP();
 
     case TUNING_AZ_I:
-        return &plane.quadplane.pid_accel_z.kI();
+        return &plane.quadplane.pos_control->get_accel_z_pid().kI();
 
     case TUNING_AZ_D:
-        return &plane.quadplane.pid_accel_z.kD();
+        return &plane.quadplane.pos_control->get_accel_z_pid().kD();
 
     // fixed wing tuning parameters
     case TUNING_RLL_P:
@@ -239,6 +237,18 @@ void AP_Tuning_Plane::set_value(uint8_t parm, float value)
     default:
         AP_Float *f = get_param_pointer(parm);
         if (f != nullptr) {
+            uint64_t param_bit = (1ULL << parm);
+            if (!(param_bit & have_set)) {
+                // first time this param has been set by tuning. We
+                // need to see if a reversion value is available in
+                // FRAM, and if not then save one
+                float current_value = f->get();
+                if (!f->load()) {
+                    // there is no value in FRAM, set one
+                    f->set_and_save(current_value);
+                }
+                have_set |= param_bit;
+            }
             f->set_and_notify(value);
         }
         break;
@@ -263,7 +273,11 @@ void AP_Tuning_Plane::reload_value(uint8_t parm)
     default:
         AP_Float *f = get_param_pointer(parm);
         if (f != nullptr) {
-            f->load();
+            uint64_t param_bit = (1ULL << parm);
+            // only reload if we have set this parameter at some point
+            if (param_bit & have_set) {
+                f->load();
+            }
         }
         break;
     }

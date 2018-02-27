@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
  * Copyright (C) 2015  Intel Corporation. All rights reserved.
  *
@@ -39,25 +38,8 @@ PWM_Sysfs_Base::PWM_Sysfs_Base(char* export_path, char* polarity_path,
     , _enable_path(enable_path)
     , _duty_path(duty_path)
     , _period_path(period_path)
+    , _channel(channel)
 {
-    if (_export_path == NULL || _enable_path == NULL ||
-        _period_path == NULL || _duty_path == NULL) {
-        AP_HAL::panic("PWM_Sysfs: export=%p enable=%p period=%p duty=%p"
-                      " required path is NULL", _export_path, _enable_path,
-                      _period_path, _duty_path);
-    }
-    /* Not checking the return of write_file since it will fail if
-     * the pwm has already been exported
-     */
-    Util::from(hal.util)->write_file(_export_path, "%u", channel);
-    free(_export_path);
-
-    _duty_cycle_fd = ::open(_duty_path, O_RDWR | O_CLOEXEC);
-    if (_duty_cycle_fd < 0) {
-        AP_HAL::panic("LinuxPWM_Sysfs:Unable to open file %s: %s",
-                      _duty_path, strerror(errno));
-    }
-    free(_duty_path);
 }
 
 PWM_Sysfs_Base::~PWM_Sysfs_Base()
@@ -67,6 +49,28 @@ PWM_Sysfs_Base::~PWM_Sysfs_Base()
     free(_polarity_path);
     free(_enable_path);
     free(_period_path);
+}
+
+void PWM_Sysfs_Base::init()
+{
+    if (_export_path == nullptr || _enable_path == nullptr ||
+        _period_path == nullptr || _duty_path == nullptr) {
+        AP_HAL::panic("PWM_Sysfs: export=%p enable=%p period=%p duty=%p"
+                      " required path is NULL", _export_path, _enable_path,
+                      _period_path, _duty_path);
+    }
+    /* Not checking the return of write_file since it will fail if
+     * the pwm has already been exported
+     */
+    Util::from(hal.util)->write_file(_export_path, "%u", _channel);
+    free(_export_path);
+
+    _duty_cycle_fd = ::open(_duty_path, O_RDWR | O_CLOEXEC);
+    if (_duty_cycle_fd < 0) {
+        AP_HAL::panic("LinuxPWM_Sysfs:Unable to open file %s: %s",
+                      _duty_path, strerror(errno));
+    }
+    free(_duty_path);
 }
 
 void PWM_Sysfs_Base::enable(bool value)
@@ -90,6 +94,8 @@ bool PWM_Sysfs_Base::is_enabled()
 
 void PWM_Sysfs_Base::set_period(uint32_t nsec_period)
 {
+    set_duty_cycle(0);
+
     if (Util::from(hal.util)->write_file(_period_path, "%u", nsec_period) < 0) {
         hal.console->printf("LinuxPWM_Sysfs: %s Unable to set period\n",
                             _period_path);
@@ -270,7 +276,7 @@ char *PWM_Sysfs_Bebop::_generate_period_path(uint8_t channel)
 
 PWM_Sysfs_Bebop::PWM_Sysfs_Bebop(uint8_t channel) :
     PWM_Sysfs_Base(_generate_export_path(),
-                   NULL,
+                   nullptr,
                    _generate_enable_path(channel),
                    _generate_duty_path(channel),
                    _generate_period_path(channel),

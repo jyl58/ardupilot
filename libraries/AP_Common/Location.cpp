@@ -10,12 +10,8 @@
 
 extern const AP_HAL::HAL& hal;
 
-const AP_AHRS_NavEKF *Location_Class::_ahrs = NULL;
-AP_Terrain *Location_Class::_terrain = NULL;
-
-// scalers to convert latitude and longitude to meters.  Duplicated from location.cpp
-#define LOCATION_SCALING_FACTOR 0.011131884502145034f
-#define LOCATION_SCALING_FACTOR_INV 89.83204953368922f
+const AP_AHRS_NavEKF *Location_Class::_ahrs = nullptr;
+AP_Terrain *Location_Class::_terrain = nullptr;
 
 /// constructors
 Location_Class::Location_Class()
@@ -45,7 +41,7 @@ Location_Class::Location_Class(const Vector3f &ekf_offset_neu)
     set_alt_cm(ekf_offset_neu.z, ALT_FRAME_ABOVE_ORIGIN);
 
     // calculate lat, lon
-    if (_ahrs != NULL) {
+    if (_ahrs != nullptr) {
         Location ekf_origin;
         if (_ahrs->get_origin(ekf_origin)) {
             lat = ekf_origin.lat;
@@ -130,7 +126,7 @@ bool Location_Class::get_alt_cm(ALT_FRAME desired_frame, int32_t &ret_alt_cm) co
     float alt_terr_cm = 0;
     if (frame == ALT_FRAME_ABOVE_TERRAIN || desired_frame == ALT_FRAME_ABOVE_TERRAIN) {
 #if AP_TERRAIN_AVAILABLE
-        if (_ahrs == NULL || _terrain == NULL || !_terrain->height_amsl(*(Location *)this, alt_terr_cm, true)) {
+        if (_ahrs == nullptr || _terrain == nullptr || !_terrain->height_amsl(*(Location *)this, alt_terr_cm, true)) {
             return false;
         }
         // convert terrain alt to cm
@@ -153,7 +149,7 @@ bool Location_Class::get_alt_cm(ALT_FRAME desired_frame, int32_t &ret_alt_cm) co
             {
                 // fail if we cannot get ekf origin
                 Location ekf_origin;
-                if (_ahrs == NULL || !_ahrs->get_origin(ekf_origin)) {
+                if (_ahrs == nullptr || !_ahrs->get_origin(ekf_origin)) {
                     return false;
                 }
                 alt_abs = alt + ekf_origin.alt;
@@ -179,7 +175,7 @@ bool Location_Class::get_alt_cm(ALT_FRAME desired_frame, int32_t &ret_alt_cm) co
             {
                 // fail if we cannot get ekf origin
                 Location ekf_origin;
-                if (_ahrs == NULL || !_ahrs->get_origin(ekf_origin)) {
+                if (_ahrs == nullptr || !_ahrs->get_origin(ekf_origin)) {
                     return false;
                 }
                 ret_alt_cm = alt_abs - ekf_origin.alt;
@@ -194,24 +190,26 @@ bool Location_Class::get_alt_cm(ALT_FRAME desired_frame, int32_t &ret_alt_cm) co
     }
 }
 
-bool Location_Class::get_vector_xy_from_origin_NEU(Vector3f &vec_neu) const
+bool Location_Class::get_vector_xy_from_origin_NE(Vector2f &vec_ne) const
 {
-    // convert to neu
     Location ekf_origin;
     if (!_ahrs->get_origin(ekf_origin)) {
         return false;
     }
-    vec_neu.x = (lat-ekf_origin.lat) * LATLON_TO_CM;
-    vec_neu.y = (lng-ekf_origin.lng) * LATLON_TO_CM * longitude_scale(ekf_origin);
+    vec_ne.x = (lat-ekf_origin.lat) * LATLON_TO_CM;
+    vec_ne.y = (lng-ekf_origin.lng) * LATLON_TO_CM * longitude_scale(ekf_origin);
     return true;
 }
 
 bool Location_Class::get_vector_from_origin_NEU(Vector3f &vec_neu) const
 {
     // convert lat, lon
-    if (!get_vector_xy_from_origin_NEU(vec_neu)) {
+    Vector2f vec_ne;
+    if (!get_vector_xy_from_origin_NE(vec_ne)) {
         return false;
     }
+    vec_neu.x = vec_ne.x;
+    vec_neu.y = vec_ne.y;
 
     // convert altitude
     int32_t alt_above_origin_cm = 0;

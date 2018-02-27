@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
  * Copyright (C) 2015-2016  Intel Corporation. All rights reserved.
  *
@@ -56,8 +55,6 @@ public:
     /* See Device::adjust_periodic_callback() */
     virtual bool adjust_periodic_callback(
         PeriodicHandle h, uint32_t period_usec) override { return false; }
-
-    virtual int get_fd() override = 0;
 };
 
 class SPIDeviceManager {
@@ -66,6 +63,12 @@ public:
     {
         return nullptr;
     }
+
+    /* Return the number of SPI devices currently registered. */
+    virtual uint8_t get_count() { return 0; }
+
+    /* Get spi device name at @idx */
+    virtual const char *get_device_name(uint8_t idx) { return nullptr; }
 };
 
 }

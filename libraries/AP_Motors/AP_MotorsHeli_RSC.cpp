@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -25,7 +24,7 @@ extern const AP_HAL::HAL& hal;
 void AP_MotorsHeli_RSC::init_servo()
 {
     // setup RSC on specified channel by default
-    RC_Channel_aux::set_aux_channel_default(_aux_fn, _default_channel);
+    SRV_Channels::set_aux_channel_default(_aux_fn, _default_channel);
 }
 
 // set_power_output_range
@@ -188,13 +187,6 @@ void AP_MotorsHeli_RSC::write_rsc(float servo_out)
         // ToDo: We should probably use RC_Channel_Aux to avoid this problem
         return;
     } else {
-        // calculate PWM value based on H_RSC_PWM_MIN, H_RSC_PWM_MAX and H_RSC_PWM_REV
-        uint16_t pwm = servo_out * (_pwm_max - _pwm_min);
-        if (_pwm_rev >= 0) {
-            pwm = _pwm_min + pwm;
-        } else {
-            pwm = _pwm_max - pwm;
-        }
-        RC_Channel_aux::set_radio(_aux_fn, pwm);
+        SRV_Channels::set_output_scaled(_aux_fn, (uint16_t) (servo_out * 1000));
     }
 }

@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 /// @file    AC_AttitudeControl.h
@@ -8,7 +7,7 @@
 #include <AP_Param/AP_Param.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_InertialSensor/AP_InertialSensor.h>
-#include <AP_AHRS/AP_AHRS.h>
+#include <AP_AHRS/AP_AHRS_View.h>
 #include <AP_Motors/AP_Motors.h>
 #include <AC_PID/AC_PID.h>
 #include <AC_PID/AC_P.h>
@@ -19,7 +18,7 @@
 #define AC_ATTITUDE_ACCEL_RP_CONTROLLER_MAX_RADSS       radians(720.0f)  // maximum body-frame acceleration limit for the stability controller (for roll and pitch axis)
 #define AC_ATTITUDE_ACCEL_Y_CONTROLLER_MIN_RADSS        radians(10.0f)   // minimum body-frame acceleration limit for the stability controller (for yaw axis)
 #define AC_ATTITUDE_ACCEL_Y_CONTROLLER_MAX_RADSS        radians(120.0f)  // maximum body-frame acceleration limit for the stability controller (for yaw axis)
-#define AC_ATTITUDE_CONTROL_SLEW_YAW_DEFAULT_CDS        6000      // constraint on yaw angle error in degrees.  This should lead to maximum turn rate of 10deg/sed * Stab Rate P so by default will be 45deg/sec.
+#define AC_ATTITUDE_CONTROL_SLEW_YAW_DEFAULT_CDS        6000      // constraint on yaw angle error in degrees.  This should lead to maximum turn rate of 10deg/sec * Stab Rate P so by default will be 45deg/sec.
 #define AC_ATTITUDE_CONTROL_ACCEL_RP_MAX_DEFAULT_CDSS   110000.0f // default maximum acceleration for roll/pitch axis in centidegrees/sec/sec
 #define AC_ATTITUDE_CONTROL_ACCEL_Y_MAX_DEFAULT_CDSS    27000.0f  // default maximum acceleration for yaw axis in centidegrees/sec/sec
 
@@ -36,15 +35,16 @@
 #define AC_ATTITUDE_CONTROL_ANGLE_LIMIT_TC_DEFAULT      1.0f    // Time constant used to limit lean angle so that vehicle does not lose altitude
 #define AC_ATTITUDE_CONTROL_ANGLE_LIMIT_THROTTLE_MAX    0.8f    // Max throttle used to limit lean angle so that vehicle does not lose altitude
 
-#define AC_ATTITUDE_CONTROL_MIN_DEFAULT                 0.1f    // minimum throttle mix
-#define AC_ATTITUDE_CONTROL_MID_DEFAULT                 0.5f    // manual throttle mix
+#define AC_ATTITUDE_CONTROL_MIN_DEFAULT                 0.1f    // minimum throttle mix default
+#define AC_ATTITUDE_CONTROL_MAN_DEFAULT                 0.5f    // manual throttle mix default
 #define AC_ATTITUDE_CONTROL_MAX_DEFAULT                 0.5f    // maximum throttle mix default
+#define AC_ATTITUDE_CONTROL_MAX                         5.0f    // maximum throttle mix default
 
 #define AC_ATTITUDE_CONTROL_THR_MIX_DEFAULT             0.5f  // ratio controlling the max throttle output during competing requests of low throttle from the pilot (or autopilot) and higher throttle for attitude control.  Higher favours Attitude over pilot input
 
 class AC_AttitudeControl {
 public:
-    AC_AttitudeControl( AP_AHRS &ahrs,
+    AC_AttitudeControl( AP_AHRS_View &ahrs,
                         const AP_Vehicle::MultiCopter &aparm,
                         AP_Motors& motors,
                         float dt) :
@@ -81,7 +81,7 @@ public:
     void set_accel_roll_max(float accel_roll_max) { _accel_roll_max = accel_roll_max; }
 
     // Sets and saves the roll acceleration limit in centidegrees/s/s
-    void save_accel_roll_max(float accel_roll_max) { _accel_roll_max = accel_roll_max; _accel_roll_max.save(); }
+    void save_accel_roll_max(float accel_roll_max) { _accel_roll_max.set_and_save(accel_roll_max); }
 
     // Sets the pitch acceleration limit in centidegrees/s/s
     float get_accel_pitch_max() { return _accel_pitch_max; }
@@ -90,7 +90,7 @@ public:
     void set_accel_pitch_max(float accel_pitch_max) { _accel_pitch_max = accel_pitch_max; }
 
     // Sets and saves the pitch acceleration limit in centidegrees/s/s
-    void save_accel_pitch_max(float accel_pitch_max) { _accel_pitch_max = accel_pitch_max; _accel_pitch_max.save(); }
+    void save_accel_pitch_max(float accel_pitch_max) { _accel_pitch_max.set_and_save(accel_pitch_max); }
 
     // Gets the yaw acceleration limit in centidegrees/s/s
     float get_accel_yaw_max() { return _accel_yaw_max; }
@@ -99,13 +99,16 @@ public:
     void set_accel_yaw_max(float accel_yaw_max) { _accel_yaw_max = accel_yaw_max; }
 
     // Sets and saves the yaw acceleration limit in centidegrees/s/s
-    void save_accel_yaw_max(float accel_yaw_max) { _accel_yaw_max = accel_yaw_max; _accel_yaw_max.save(); }
+    void save_accel_yaw_max(float accel_yaw_max) { _accel_yaw_max.set_and_save(accel_yaw_max); }
 
     // Ensure attitude controller have zero errors to relax rate controller output
     void relax_attitude_controllers();
 
     // reset rate controller I terms
     void reset_rate_controller_I_terms();
+
+    // Sets attitude target to vehicle attitude
+    void set_attitude_target_to_current_attitude() { _attitude_target_quat.from_rotation_matrix(_ahrs.get_rotation_body_to_ned()); }
 
     // Sets yaw target to vehicle heading
     void set_yaw_target_to_current_heading() { shift_ef_yaw_target(degrees(_ahrs.yaw - _attitude_target_euler_angle.z)*100.0f); }
@@ -117,16 +120,19 @@ public:
     void input_quaternion(Quaternion attitude_desired_quat, float smoothing_gain);
 
     // Command an euler roll and pitch angle and an euler yaw rate with angular velocity feedforward and smoothing
-    void input_euler_angle_roll_pitch_euler_rate_yaw(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_rate_cds, float smoothing_gain);
+    virtual void input_euler_angle_roll_pitch_euler_rate_yaw(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_rate_cds, float smoothing_gain);
 
     // Command an euler roll, pitch and yaw angle with angular velocity feedforward and smoothing
-    void input_euler_angle_roll_pitch_yaw(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_angle_cd, bool slew_yaw, float smoothing_gain);
+    virtual void input_euler_angle_roll_pitch_yaw(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_angle_cd, bool slew_yaw, float smoothing_gain);
 
     // Command an euler roll, pitch, and yaw rate with angular velocity feedforward and smoothing
     void input_euler_rate_roll_pitch_yaw(float euler_roll_rate_cds, float euler_pitch_rate_cds, float euler_yaw_rate_cds);
 
     // Command an angular velocity with angular velocity feedforward and smoothing
     virtual void input_rate_bf_roll_pitch_yaw(float roll_rate_bf_cds, float pitch_rate_bf_cds, float yaw_rate_bf_cds);
+
+    // Command an angular step (i.e change) in body frame angle
+    virtual void input_angle_step_bf_roll_pitch_yaw(float roll_angle_step_bf_cd, float pitch_angle_step_bf_cd, float yaw_angle_step_bf_cd);
 
     // Run angular velocity controller and send outputs to the motors
     virtual void rate_controller_run() = 0;
@@ -143,6 +149,8 @@ public:
 
     // Return 321-intrinsic euler angles in centidegrees representing the rotation from NED earth frame to the
     // attitude controller's target attitude.
+    // **NOTE** Using vector3f*deg(100) is more efficient than deg(vector3f)*100 or deg(vector3d*100) because it gives the
+    // same result with the fewest multiplications. Even though it may look like a bug, it is intentional. See issue 4895.
     Vector3f get_att_target_euler_cd() const { return _attitude_target_euler_angle*degrees(100.0f); }
 
     // Return the angle between the target thrust vector and the current thrust vector.
@@ -212,17 +220,14 @@ public:
     float lean_angle_max() const { return _aparm.angle_max; }
 
     // Proportional controller with piecewise sqrt sections to constrain second derivative
-    static float sqrt_controller(float error, float p, float second_ord_lim);
+    static float sqrt_controller(float error, float p, float second_ord_lim, float dt);
 
     // Inverse proportional controller with piecewise sqrt sections to constrain second derivative
     static float stopping_point(float first_ord_mag, float p, float second_ord_lim);
 
-    // User settable parameters
-    static const struct AP_Param::GroupInfo var_info[];
-
     // calculates the velocity correction from an angle error. The angular velocity has acceleration and
     // deceleration limits including basic jerk limiting using smoothing_gain
-    float input_shaping_angle(float error_angle, float smoothing_gain, float accel_max, float target_ang_vel);
+    static float input_shaping_angle(float error_angle, float smoothing_gain, float accel_max, float target_ang_vel, float dt);
 
     // limits the acceleration and deceleration of a velocity request
     float input_shaping_ang_vel(float target_ang_vel, float desired_ang_vel, float accel_max);
@@ -237,6 +242,36 @@ public:
     // Calculates the body frame angular velocities to follow the target attitude
     void attitude_controller_run_quat();
 
+    // sanity check parameters.  should be called once before take-off
+    virtual void parameter_sanity_check() {}
+
+    // return true if the rpy mix is at lowest value
+    virtual bool is_throttle_mix_min() const { return true; }
+
+    // control rpy throttle mix
+    virtual void set_throttle_mix_min() {}
+    virtual void set_throttle_mix_man() {}
+    virtual void set_throttle_mix_max() {}
+    virtual void set_throttle_mix_value(float value) {}
+    virtual float get_throttle_mix(void) const { return 0; }
+
+    // enable use of flybass passthrough on heli
+    virtual void use_flybar_passthrough(bool passthrough, bool tail_passthrough) {}
+
+	// use_leaky_i - controls whether we use leaky i term for body-frame to motor output stage on heli
+	virtual void use_leaky_i(bool leaky_i) {}
+
+    // set_hover_roll_scalar - scales Hover Roll Trim parameter. To be used by vehicle code according to vehicle condition.
+    virtual void set_hover_roll_trim_scalar(float scalar) {}
+
+    // passthrough_bf_roll_pitch_rate_yaw - roll and pitch are passed through directly, body-frame rate target for yaw
+    virtual void passthrough_bf_roll_pitch_rate_yaw(float roll_passthrough, float pitch_passthrough, float yaw_rate_bf_cds) {};
+
+    // enable inverted flight on backends that support it
+    virtual void set_inverted_flight(bool inverted) {}
+    
+    // User settable parameters
+    static const struct AP_Param::GroupInfo var_info[];
 
 protected:
 
@@ -244,13 +279,13 @@ protected:
     Vector3f update_ang_vel_target_from_att_error(Vector3f attitude_error_rot_vec_rad);
 
     // Run the roll angular velocity PID controller and return the output
-    float rate_target_to_motor_roll(float rate_target_rads);
+    float rate_target_to_motor_roll(float rate_actual_rads, float rate_target_rads);
 
     // Run the pitch angular velocity PID controller and return the output
-    float rate_target_to_motor_pitch(float rate_target_rads);
+    float rate_target_to_motor_pitch(float rate_actual_rads, float rate_target_rads);
 
     // Run the yaw angular velocity PID controller and return the output
-    virtual float rate_target_to_motor_yaw(float rate_target_rads);
+    virtual float rate_target_to_motor_yaw(float rate_actual_rads, float rate_target_rads);
 
     // Return angle in radians to be added to roll angle. Used by heli to counteract
     // tail rotor thrust in hover. Overloaded by AC_Attitude_Heli to return angle.
@@ -267,9 +302,6 @@ protected:
 
     // Return the yaw slew rate limit in radians/s
     float get_slew_yaw_rads() { return radians(_slew_yaw*0.01f); }
-
-    // Return the tilt angle limit in radians
-    float get_tilt_limit_rad() { return radians(_aparm.angle_max*0.01f); }
 
     // Maximum rate the yaw target can be updated in Loiter, RTL, Auto flight modes
     AP_Float            _slew_yaw;
@@ -300,7 +332,7 @@ protected:
     // Intersampling period in seconds
     float               _dt;
 
-    // This represents a 321-intrinsic rotation from NED frame to the target (setpoint)
+    // This represents a 321-intrinsic rotation in NED frame to the target (setpoint)
     // attitude used in the attitude controller, in radians.
     Vector3f            _attitude_target_euler_angle;
 
@@ -309,7 +341,7 @@ protected:
     // second.
     Vector3f            _attitude_target_euler_rate;
 
-    // This represents a quaternion rotation from NED frame to the target (setpoint)
+    // This represents a quaternion rotation in NED frame to the target (setpoint)
     // attitude used in the attitude controller.
     Quaternion          _attitude_target_quat;
 
@@ -318,7 +350,7 @@ protected:
     // the target attitude frame.
     Vector3f            _attitude_target_ang_vel;
 
-    // This represents the angular velocity in radians per second, used in the angular
+    // This represents the angular velocity in radians per second in the body frame, used in the angular
     // velocity controller.
     Vector3f            _rate_target_ang_vel;
 
@@ -345,7 +377,7 @@ protected:
     float               _throttle_rpy_mix;
 
     // References to external libraries
-    const AP_AHRS&      _ahrs;
+    const AP_AHRS_View&  _ahrs;
     const AP_Vehicle::MultiCopter &_aparm;
     AP_Motors&          _motors;
 
@@ -365,6 +397,9 @@ protected:
     void control_monitor_filter_pid(float value, float &rms_P);
     void control_monitor_update(void);
 
+    // true in inverted flight mode
+    bool _inverted_flight;
+    
 public:
     // log a CTRL message
     void control_monitor_log(void);

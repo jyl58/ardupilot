@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
@@ -41,7 +39,7 @@ static const struct {
     uint8_t pin;
     float scaling;
 } pin_scaling[] = {
-#if defined(CONFIG_ARCH_BOARD_VRBRAIN_V45) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V51) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V52) || defined(CONFIG_ARCH_BOARD_VRCORE_V10) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V54)
+#if defined(CONFIG_ARCH_BOARD_VRBRAIN_V45) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V51) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V52) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V52E) || defined(CONFIG_ARCH_BOARD_VRCORE_V10) || defined(CONFIG_ARCH_BOARD_VRBRAIN_V54)
     { 10, 3.3f/4096 },
     { 11, 3.3f/4096 },
 #elif defined(CONFIG_ARCH_BOARD_VRUBRAIN_V51)
@@ -54,6 +52,7 @@ static const struct {
 #else
 #error "Unknown board type for AnalogIn scaling"
 #endif
+    { 0, 0.f          },
 };
 
 using namespace VRBRAIN;
@@ -239,6 +238,11 @@ void VRBRAINAnalogIn::next_stop_pin(void)
  */
 void VRBRAINAnalogIn::_timer_tick(void)
 {
+    if (_adc_fd == -1) {
+        // not initialised yet
+        return;
+    }
+
     // read adc at 100Hz
     uint32_t now = AP_HAL::micros();
     uint32_t delta_t = now - _last_run;
@@ -250,7 +254,7 @@ void VRBRAINAnalogIn::_timer_tick(void)
     struct adc_msg_s buf_adc[VRBRAIN_ANALOG_MAX_CHANNELS];
 
     // cope with initial setup of stop pin
-    if (_channels[_current_stop_pin_i] == NULL ||
+    if (_channels[_current_stop_pin_i] == nullptr ||
         _channels[_current_stop_pin_i]->_stop_pin == -1) {
         next_stop_pin();
     }
@@ -265,7 +269,7 @@ void VRBRAINAnalogIn::_timer_tick(void)
                   (unsigned)buf_adc[i].am_data);
             for (uint8_t j=0; j<VRBRAIN_ANALOG_MAX_CHANNELS; j++) {
                 VRBRAIN::VRBRAINAnalogSource *c = _channels[j];
-                if (c != NULL && buf_adc[i].am_channel == c->_pin) {
+                if (c != nullptr && buf_adc[i].am_channel == c->_pin) {
                     // add a value if either there is no stop pin, or
                     // the stop pin has been settling for enough time
                     if (c->_stop_pin == -1 || 
@@ -286,13 +290,13 @@ void VRBRAINAnalogIn::_timer_tick(void)
 AP_HAL::AnalogSource* VRBRAINAnalogIn::channel(int16_t pin)
 {
     for (uint8_t j=0; j<VRBRAIN_ANALOG_MAX_CHANNELS; j++) {
-        if (_channels[j] == NULL) {
+        if (_channels[j] == nullptr) {
             _channels[j] = new VRBRAINAnalogSource(pin, 0.0f);
             return _channels[j];
         }
     }
-    hal.console->println("Out of analog channels");
-    return NULL;
+    hal.console->printf("Out of analog channels\n");
+    return nullptr;
 }
 
 #endif // CONFIG_HAL_BOARD

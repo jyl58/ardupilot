@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 //
 #pragma once
 
@@ -77,5 +76,6 @@
     MASK_LOG_RCIN | \
     MASK_LOG_IMU | \
     MASK_LOG_RCOUT | \
-    MASK_LOG_COMPASS
+    MASK_LOG_COMPASS | \
+    MASK_LOG_CURRENT
 #endif

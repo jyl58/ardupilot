@@ -1,9 +1,9 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 #include <AP_Common/AP_Common.h>
 #include <AP_Math/AP_Math.h>            // ArduPilot Mega Vector/Matrix math Library
-#include <RC_Channel/RC_Channel.h>      // RC Channel Library
+#include <RC_Channel/RC_Channel.h>
+#include <SRV_Channel/SRV_Channel.h>
 
 // rotor controller states
 enum RotorControlState {
@@ -24,8 +24,10 @@ enum RotorControlMode {
 class AP_MotorsHeli_RSC {
 public:
     friend class AP_MotorsHeli_Single;
+    friend class AP_MotorsHeli_Dual;
+    friend class AP_MotorsHeli_Quad;
     
-    AP_MotorsHeli_RSC(RC_Channel_aux::Aux_servo_function_t aux_fn,
+    AP_MotorsHeli_RSC(SRV_Channel::Aux_servo_function_t aux_fn,
                       uint8_t default_channel) :
         _aux_fn(aux_fn),
         _default_channel(default_channel)
@@ -81,7 +83,7 @@ private:
     uint64_t        _last_update_us;
     
     // channel setup for aux function
-    RC_Channel_aux::Aux_servo_function_t _aux_fn;
+    SRV_Channel::Aux_servo_function_t _aux_fn;
     uint8_t         _default_channel;
     
     // internal variables
@@ -101,10 +103,6 @@ private:
     uint16_t        _power_slewrate = 0;        // slewrate for throttle (percentage per second)
     float           _load_feedforward = 0.0f;   // estimate of motor load, range 0-1.0f
 
-    AP_Int16        _pwm_min;
-    AP_Int16        _pwm_max;
-    AP_Int8         _pwm_rev;
-    
     // update_rotor_ramp - slews rotor output scalar between 0 and 1, outputs float scalar to _rotor_ramp_output
     void            update_rotor_ramp(float rotor_ramp_input, float dt);
 

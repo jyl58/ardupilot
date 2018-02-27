@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -37,8 +36,8 @@
 #include <AP_Baro/AP_Baro.h>
 #include <AP_InertialSensor/AP_InertialSensor.h>
 #include <AP_InertialNav/AP_InertialNav.h>
-#include <AP_NavEKF/AP_NavEKF.h>
 #include <AP_NavEKF2/AP_NavEKF2.h>
+#include <AP_NavEKF3/AP_NavEKF3.h>
 #include <AP_Mission/AP_Mission.h>
 #include <AP_Rally/AP_Rally.h>
 #include <AP_BattMonitor/AP_BattMonitor.h>
@@ -52,10 +51,10 @@
 #include <signal.h>
 #include <unistd.h>
 #include <AP_HAL/utility/getopt_cpp.h>
-#include <AP_SerialManager/AP_SerialManager.h>
 
 class ReplayVehicle {
 public:
+    ReplayVehicle() { unused = -1; }
     void setup();
     void load_parameters(void);
 
@@ -64,14 +63,15 @@ public:
     AP_GPS gps;
     Compass compass;
     AP_SerialManager serial_manager;
-    RangeFinder rng {serial_manager};
-    NavEKF EKF{&ahrs, barometer, rng};
+    RangeFinder rng{serial_manager, ROTATION_PITCH_270};
     NavEKF2 EKF2{&ahrs, barometer, rng};
-    AP_AHRS_NavEKF ahrs {ins, barometer, gps, rng, EKF, EKF2};
+    NavEKF3 EKF3{&ahrs, barometer, rng};
+    AP_AHRS_NavEKF ahrs{ins, barometer, EKF2, EKF3};
     AP_InertialNav_NavEKF inertial_nav{ahrs};
     AP_Vehicle::FixedWing aparm;
     AP_Airspeed airspeed;
-    DataFlash_Class dataflash{"Replay v0.1"};
+    AP_Int32 unused; // logging is magic for Replay; this is unused
+    DataFlash_Class dataflash{"Replay v0.1", unused};
 
 private:
     Parameters g;
@@ -94,6 +94,7 @@ public:
     void loop() override;
 
     void flush_dataflash(void);
+    void show_packet_counts();
 
     bool check_solution = false;
     const char *log_filename = NULL;
@@ -122,8 +123,6 @@ private:
 
     LogReader logreader{_vehicle.ahrs, _vehicle.ins, _vehicle.barometer, _vehicle.compass, _vehicle.gps, _vehicle.airspeed, _vehicle.dataflash, nottypes};
 
-    FILE *plotf;
-    FILE *plotf2;
     FILE *ekf1f;
     FILE *ekf2f;
     FILE *ekf3f;
@@ -143,6 +142,8 @@ private:
     uint16_t downsample = 0;
     bool logmatch = false;
     uint32_t output_counter = 0;
+    uint64_t last_timestamp = 0;
+    bool packet_counts = false;
 
     struct {
         float max_roll_error;
@@ -177,6 +178,9 @@ private:
     bool parse_param_line(char *line, char **vname, float &value);
     void load_param_file(const char *filename);
     void set_signal_handlers(void);
+    void flush_and_exit();
+
+    FILE *xfopen(const char *f, const char *mode);
 };
 
 enum {

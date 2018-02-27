@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /// @file    AP_Rally.h
 /// @brief   Handles rally point storage and retrieval.
 #include "AP_Rally.h"
@@ -43,7 +41,7 @@ const AP_Param::GroupInfo AP_Rally::var_info[] = {
     // @DisplayName: Rally Limit
     // @Description: Maximum distance to rally point. If the closest rally point is more than this number of kilometers from the current position and the home location is closer than any of the rally points from the current position then do RTL to home rather than to the closest rally point. This prevents a leftover rally point from a different airfield being used accidentally. If this is set to 0 then the closest rally point is always used.
     // @User: Advanced
-    // @Units: kilometers
+    // @Units: km
     // @Increment: 0.1
     AP_GROUPINFO("LIMIT_KM", 1, AP_Rally, _rally_limit_km, RALLY_LIMIT_KM_DEFAULT),
 

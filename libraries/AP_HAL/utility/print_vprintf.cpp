@@ -1,4 +1,3 @@
-// -*- Mode: C++; c-basic-offset: 8; indent-tabs-mode: nil -*-
 /*
    Adapted from the avr-libc vfprintf:
 
@@ -429,7 +428,8 @@ flt_oper:
                     goto ultoa;
                 case 'p':
                     flags |= FL_ALT;
-                    /* no break */
+
+                    FALLTHROUGH;
                 case 'x':
                     if (flags & FL_ALT)
                         flags |= FL_ALTHEX;

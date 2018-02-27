@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /// @file	GCS_MAVLink.h
 /// @brief	One size fits all header for MAVLink integration.
 #pragma once
@@ -52,12 +50,12 @@ static inline bool valid_channel(mavlink_channel_t chan)
 /// @param chan		Channel to send to
 /// @param ch		Byte to send
 ///
-static inline void comm_send_ch(mavlink_channel_t chan, uint8_t ch)
+static inline void comm_send_ch(mavlink_channel_t chan, uint8_t chr)
 {
     if (!valid_channel(chan)) {
         return;
     }
-    mavlink_comm_port[chan]->write(ch);
+    mavlink_comm_port[chan]->write(chr);
 }
 
 void comm_send_buffer(mavlink_channel_t chan, const uint8_t *buf, uint8_t len);

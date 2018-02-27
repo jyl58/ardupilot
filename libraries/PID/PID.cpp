@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /// @file	PID.cpp
 /// @brief	Generic PID algorithm
 
@@ -119,6 +117,11 @@ PID::reset_I()
 	// derivative value is not valid
     _last_derivative = NAN;
     _pid_info.I = 0;
+}
+
+void PID::reset() {
+    memset(&_pid_info, 0, sizeof(_pid_info));
+    reset_I();
 }
 
 void

@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -29,13 +28,10 @@
 #pragma once
 
 #include <AP_HAL/AP_HAL.h>
-#include <AP_AHRS/AP_AHRS.h>
 
-#ifdef HAVE_LIBDL
-#define AP_MODULE_SUPPORTED 1
-#else
-#define AP_MODULE_SUPPORTED 0
-#endif
+#if AP_MODULE_SUPPORTED
+
+#include <AP_AHRS/AP_AHRS.h>
 
 #ifndef AP_MODULE_DEFAULT_DIRECTORY
 #define AP_MODULE_DEFAULT_DIRECTORY "/usr/lib/ardupilot/modules"
@@ -60,7 +56,7 @@ public:
     static void call_hook_gyro_sample(uint8_t instance, float dt, const Vector3f &gyro);
 
     // call any accel_sample hooks
-    static void call_hook_accel_sample(uint8_t instance, float dt, const Vector3f &accel);
+    static void call_hook_accel_sample(uint8_t instance, float dt, const Vector3f &accel, bool fsync_set);
     
     
 private:
@@ -91,3 +87,5 @@ private:
     // scan a module for hooks
     static void module_scan(const char *path);
 };
+
+#endif // AP_MODULE_SUPPORTED

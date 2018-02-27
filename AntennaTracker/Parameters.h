@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 #include <AP_Common/AP_Common.h>
@@ -93,6 +92,8 @@ public:
         k_param_gcs3,               // stream rates for fourth MAVLink port
         k_param_log_bitmask,        // 140
         k_param_notify,
+        k_param_BoardConfig_CAN,
+        k_param_battery,
 
         //
         // 150: Telemetry control
@@ -107,10 +108,12 @@ public:
         //
         // 200 : Radio settings
         //
-        k_param_channel_yaw = 200,
-        k_param_channel_pitch,
+        k_param_channel_yaw_old = 200,
+        k_param_channel_pitch_old,
         k_param_pidPitch2Srv,
         k_param_pidYaw2Srv,
+        k_param_rc_channels,
+        k_param_servo_channels,
 
         //
         // 220: Waypoint data

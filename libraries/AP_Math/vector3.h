@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -210,6 +209,17 @@ public:
     {
         return v * (*this * v)/(v*v);
     }
+
+    // distance from the tip of this vector to another vector squared (so as to avoid the sqrt calculation)
+    float distance_squared(const Vector3<T> &v) const {
+        float dist_x = x-v.x;
+        float dist_y = y-v.y;
+        float dist_z = z-v.z;
+        return (dist_x*dist_x + dist_y*dist_y + dist_z*dist_z);
+    }
+
+    // distance from the tip of this vector to a line segment specified by two vectors
+    float distance_to_segment(const Vector3<T> &seg_start, const Vector3<T> &seg_end) const;
 
     // given a position p1 and a velocity v1 produce a vector
     // perpendicular to v1 maximising distance from p1.  If p1 is the

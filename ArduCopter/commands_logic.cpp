@@ -1,13 +1,13 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
+#if MODE_AUTO_ENABLED == ENABLED
+
 // start_command - this function will be called when the ap_mission lib wishes to start a new command
-bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::start_command(const AP_Mission::Mission_Command& cmd)
 {
     // To-Do: logging when new commands start/end
-    if (should_log(MASK_LOG_CMD)) {
-        DataFlash.Log_Write_Mission_Cmd(mission, cmd);
+    if (copter.should_log(MASK_LOG_CMD)) {
+        copter.DataFlash.Log_Write_Mission_Cmd(copter.mission, cmd);
     }
 
     switch(cmd.id) {
@@ -25,6 +25,10 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
 
     case MAV_CMD_NAV_LAND:              // 21 LAND to Waypoint
         do_land(cmd);
+        break;
+
+    case MAV_CMD_NAV_PAYLOAD_PLACE:              // 94 place at Waypoint
+        do_payload_place(cmd);
         break;
 
     case MAV_CMD_NAV_LOITER_UNLIM:              // 17 Loiter indefinitely
@@ -84,20 +88,20 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
         break;
 
     case MAV_CMD_DO_SET_SERVO:
-        ServoRelayEvents.do_set_servo(cmd.content.servo.channel, cmd.content.servo.pwm);
+        copter.ServoRelayEvents.do_set_servo(cmd.content.servo.channel, cmd.content.servo.pwm);
         break;
         
     case MAV_CMD_DO_SET_RELAY:
-        ServoRelayEvents.do_set_relay(cmd.content.relay.num, cmd.content.relay.state);
+        copter.ServoRelayEvents.do_set_relay(cmd.content.relay.num, cmd.content.relay.state);
         break;
         
     case MAV_CMD_DO_REPEAT_SERVO:
-        ServoRelayEvents.do_repeat_servo(cmd.content.repeat_servo.channel, cmd.content.repeat_servo.pwm,
+        copter.ServoRelayEvents.do_repeat_servo(cmd.content.repeat_servo.channel, cmd.content.repeat_servo.pwm,
                                          cmd.content.repeat_servo.repeat_count, cmd.content.repeat_servo.cycle_time * 1000.0f);
         break;
         
     case MAV_CMD_DO_REPEAT_RELAY:
-        ServoRelayEvents.do_repeat_relay(cmd.content.repeat_relay.num, cmd.content.repeat_relay.repeat_count,
+        copter.ServoRelayEvents.do_repeat_relay(cmd.content.repeat_relay.num, cmd.content.repeat_relay.repeat_count,
                                          cmd.content.repeat_relay.cycle_time * 1000.0f);
         break;
 
@@ -109,6 +113,18 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
     case MAV_CMD_DO_MOUNT_CONTROL:          // 205
         // point the camera to a specified angle
         do_mount_control(cmd);
+        break;
+    
+    case MAV_CMD_DO_FENCE_ENABLE:
+#if AC_FENCE == ENABLED
+        if (cmd.p1 == 0) { //disable
+            copter.fence.enable(false);
+            gcs().send_text(MAV_SEVERITY_INFO, "Fence Disabled");
+        } else { //enable fence
+            copter.fence.enable(true);
+            gcs().send_text(MAV_SEVERITY_INFO, "Fence Enabled");
+        }
+#endif //AC_FENCE == ENABLED
         break;
 
 #if CAMERA == ENABLED
@@ -124,7 +140,7 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
         break;
 
     case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
-        camera.set_trigger_distance(cmd.content.cam_trigg_dist.meters);
+        copter.camera.set_trigger_distance(cmd.content.cam_trigg_dist.meters);
         break;
 #endif
 
@@ -134,8 +150,8 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
         break;
 #endif
 
-#if EPM_ENABLED == ENABLED
-    case MAV_CMD_DO_GRIPPER:                            // Mission command to control EPM gripper
+#if GRIPPER_ENABLED == ENABLED
+    case MAV_CMD_DO_GRIPPER:                            // Mission command to control gripper
         do_gripper(cmd);
         break;
 #endif
@@ -143,6 +159,12 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
 #if NAV_GUIDED == ENABLED
     case MAV_CMD_DO_GUIDED_LIMITS:                      // 220  accept guided mode limits
         do_guided_limits(cmd);
+        break;
+#endif
+
+#if WINCH_ENABLED == ENABLED
+    case MAV_CMD_DO_WINCH:                             // Mission command to control winch
+        do_winch(cmd);
         break;
 #endif
 
@@ -161,14 +183,14 @@ bool Copter::start_command(const AP_Mission::Mission_Command& cmd)
 
 // verify_command_callback - callback function called from ap-mission at 10hz or higher when a command is being run
 //      we double check that the flight mode is AUTO to avoid the possibility of ap-mission triggering actions while we're not in AUTO mode
-bool Copter::verify_command_callback(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_command_callback(const AP_Mission::Mission_Command& cmd)
 {
-    if (control_mode == AUTO) {
+    if (copter.flightmode == &copter.mode_auto) {
         bool cmd_complete = verify_command(cmd);
 
         // send message to GCS
         if (cmd_complete) {
-            gcs_send_mission_item_reached_message(cmd.index);
+            gcs().send_mission_item_reached_message(cmd.index);
         }
 
         return cmd_complete;
@@ -176,14 +198,18 @@ bool Copter::verify_command_callback(const AP_Mission::Mission_Command& cmd)
     return false;
 }
 
+/*******************************************************************************
+Verify command Handlers
 
-// verify_command - this will be called repeatedly by ap_mission lib to ensure the active commands are progressing
-//  should return true once the active navigation command completes successfully
-//  called at 10hz or higher
-bool Copter::verify_command(const AP_Mission::Mission_Command& cmd)
+Each type of mission element has a "verify" operation. The verify
+operation returns true when the mission element has completed and we
+should move onto the next mission element.
+Return true if we do not recognize the command so that we move on to the next command
+*******************************************************************************/
+
+bool Copter::ModeAuto::verify_command(const AP_Mission::Mission_Command& cmd)
 {
     switch(cmd.id) {
-
     //
     // navigation commands
     //
@@ -195,6 +221,9 @@ bool Copter::verify_command(const AP_Mission::Mission_Command& cmd)
 
     case MAV_CMD_NAV_LAND:
         return verify_land();
+
+    case MAV_CMD_NAV_PAYLOAD_PLACE:
+        return verify_payload_place();
 
     case MAV_CMD_NAV_LOITER_UNLIM:
         return verify_loiter_unlimited();
@@ -231,30 +260,48 @@ bool Copter::verify_command(const AP_Mission::Mission_Command& cmd)
     case MAV_CMD_CONDITION_YAW:
         return verify_yaw();
 
-    case MAV_CMD_DO_PARACHUTE:
-        // assume parachute was released successfully
+    // do commands (always return true)
+    case MAV_CMD_DO_CHANGE_SPEED:
+    case MAV_CMD_DO_SET_HOME:
+    case MAV_CMD_DO_SET_SERVO:
+    case MAV_CMD_DO_SET_RELAY:
+    case MAV_CMD_DO_REPEAT_SERVO:
+    case MAV_CMD_DO_REPEAT_RELAY:
+    case MAV_CMD_DO_SET_ROI:
+    case MAV_CMD_DO_MOUNT_CONTROL:
+    case MAV_CMD_DO_CONTROL_VIDEO:
+    case MAV_CMD_DO_DIGICAM_CONFIGURE:
+    case MAV_CMD_DO_DIGICAM_CONTROL:
+    case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
+    case MAV_CMD_DO_PARACHUTE:  // assume parachute was released successfully
+    case MAV_CMD_DO_GRIPPER:
+    case MAV_CMD_DO_GUIDED_LIMITS:
+    case MAV_CMD_DO_FENCE_ENABLE:
+    case MAV_CMD_DO_WINCH:
         return true;
 
     default:
+        // error message
+        gcs().send_text(MAV_SEVERITY_WARNING,"Skipping invalid cmd #%i",cmd.id);
         // return true if we do not recognize the command so that we move on to the next command
         return true;
     }
 }
 
 // exit_mission - function that is called once the mission completes
-void Copter::exit_mission()
+void Copter::ModeAuto::exit_mission()
 {
     // play a tone
     AP_Notify::events.mission_complete = 1;
     // if we are not on the ground switch to loiter or land
     if(!ap.land_complete) {
         // try to enter loiter but if that fails land
-        if(!auto_loiter_start()) {
+        if(!loiter_start()) {
             set_mode(LAND, MODE_REASON_MISSION_END);
         }
     }else{
         // if we've landed it's safe to disarm
-        init_disarm_motors();
+        copter.init_disarm_motors();
     }
 }
 
@@ -263,10 +310,10 @@ void Copter::exit_mission()
 /********************************************************************************/
 
 // do_RTL - start Return-to-Launch
-void Copter::do_RTL(void)
+void Copter::ModeAuto::do_RTL(void)
 {
     // start rtl in auto flight mode
-    auto_rtl_start();
+    rtl_start();
 }
 
 /********************************************************************************/
@@ -274,16 +321,18 @@ void Copter::do_RTL(void)
 /********************************************************************************/
 
 // do_takeoff - initiate takeoff navigation command
-void Copter::do_takeoff(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_takeoff(const AP_Mission::Mission_Command& cmd)
 {
     // Set wp navigation target to safe altitude above current position
-    auto_takeoff_start(cmd.content.location);
+    takeoff_start(cmd.content.location);
 }
 
 // do_nav_wp - initiate move to next waypoint
-void Copter::do_nav_wp(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_nav_wp(const AP_Mission::Mission_Command& cmd)
 {
     Location_Class target_loc(cmd.content.location);
+    const Location_Class &current_loc = copter.current_loc;
+
     // use current lat, lon if zero
     if (target_loc.lat == 0 && target_loc.lng == 0) {
         target_loc.lat = current_loc.lat;
@@ -307,16 +356,38 @@ void Copter::do_nav_wp(const AP_Mission::Mission_Command& cmd)
     loiter_time_max = cmd.p1;
 
     // Set wp navigation target
-    auto_wp_start(target_loc);
+    wp_start(target_loc);
 
     // if no delay set the waypoint as "fast"
     if (loiter_time_max == 0 ) {
-        wp_nav.set_fast_waypoint(true);
+        copter.wp_nav->set_fast_waypoint(true);
     }
 }
 
+// terrain_adjusted_location: returns a Location with lat/lon from cmd
+// and altitude from our current altitude adjusted for location
+Location_Class Copter::ModeAuto::terrain_adjusted_location(const AP_Mission::Mission_Command& cmd) const
+{
+    // convert to location class
+    Location_Class target_loc(cmd.content.location);
+    const Location_Class &current_loc = copter.current_loc;
+
+    // decide if we will use terrain following
+    int32_t curr_terr_alt_cm, target_terr_alt_cm;
+    if (current_loc.get_alt_cm(Location_Class::ALT_FRAME_ABOVE_TERRAIN, curr_terr_alt_cm) &&
+        target_loc.get_alt_cm(Location_Class::ALT_FRAME_ABOVE_TERRAIN, target_terr_alt_cm)) {
+        curr_terr_alt_cm = MAX(curr_terr_alt_cm,200);
+        // if using terrain, set target altitude to current altitude above terrain
+        target_loc.set_alt_cm(curr_terr_alt_cm, Location_Class::ALT_FRAME_ABOVE_TERRAIN);
+    } else {
+        // set target altitude to current altitude above home
+        target_loc.set_alt_cm(current_loc.alt, Location_Class::ALT_FRAME_ABOVE_HOME);
+    }
+    return target_loc;
+}
+
 // do_land - initiate landing procedure
-void Copter::do_land(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_land(const AP_Mission::Mission_Command& cmd)
 {
     // To-Do: check if we have already landed
 
@@ -325,42 +396,51 @@ void Copter::do_land(const AP_Mission::Mission_Command& cmd)
         // set state to fly to location
         land_state = LandStateType_FlyToLocation;
 
-        // convert to location class
-        Location_Class target_loc(cmd.content.location);
+        Location_Class target_loc = terrain_adjusted_location(cmd);
 
-        // decide if we will use terrain following
-        int32_t curr_terr_alt_cm, target_terr_alt_cm;
-        if (current_loc.get_alt_cm(Location_Class::ALT_FRAME_ABOVE_TERRAIN, curr_terr_alt_cm) &&
-            target_loc.get_alt_cm(Location_Class::ALT_FRAME_ABOVE_TERRAIN, target_terr_alt_cm)) {
-            curr_terr_alt_cm = MAX(curr_terr_alt_cm,200);
-            // if using terrain, set target altitude to current altitude above terrain
-            target_loc.set_alt_cm(curr_terr_alt_cm, Location_Class::ALT_FRAME_ABOVE_TERRAIN);
-        } else {
-            // set target altitude to current altitude above home
-            target_loc.set_alt_cm(current_loc.alt, Location_Class::ALT_FRAME_ABOVE_HOME);
-        }
-        auto_wp_start(target_loc);
+        wp_start(target_loc);
     }else{
         // set landing state
         land_state = LandStateType_Descending;
 
         // initialise landing controller
-        auto_land_start();
+        land_start();
     }
+}
+
+// do_payload_place - initiate placing procedure
+void Copter::ModeAuto::do_payload_place(const AP_Mission::Mission_Command& cmd)
+{
+    // if location provided we fly to that location at current altitude
+    if (cmd.content.location.lat != 0 || cmd.content.location.lng != 0) {
+        // set state to fly to location
+        nav_payload_place.state = PayloadPlaceStateType_FlyToLocation;
+
+        Location_Class target_loc = terrain_adjusted_location(cmd);
+
+        wp_start(target_loc);
+    } else {
+        nav_payload_place.state = PayloadPlaceStateType_Calibrating_Hover_Start;
+
+        // initialise placing controller
+        payload_place_start();
+    }
+    nav_payload_place.descend_max = cmd.p1;
 }
 
 // do_loiter_unlimited - start loitering with no end conditions
 // note: caller should set yaw_mode
-void Copter::do_loiter_unlimited(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_loiter_unlimited(const AP_Mission::Mission_Command& cmd)
 {
     // convert back to location
     Location_Class target_loc(cmd.content.location);
+    const Location_Class &current_loc = copter.current_loc;
 
     // use current location if not provided
     if (target_loc.lat == 0 && target_loc.lng == 0) {
         // To-Do: make this simpler
         Vector3f temp_pos;
-        wp_nav.get_wp_stopping_point_xy(temp_pos);
+        copter.wp_nav->get_wp_stopping_point_xy(temp_pos);
         Location_Class temp_loc(temp_pos);
         target_loc.lat = temp_loc.lat;
         target_loc.lng = temp_loc.lng;
@@ -380,13 +460,14 @@ void Copter::do_loiter_unlimited(const AP_Mission::Mission_Command& cmd)
     }
 
     // start way point navigator and provide it the desired location
-    auto_wp_start(target_loc);
+    wp_start(target_loc);
 }
 
 // do_circle - initiate moving in a circle
-void Copter::do_circle(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_circle(const AP_Mission::Mission_Command& cmd)
 {
     Location_Class circle_center(cmd.content.location);
+    const Location_Class &current_loc = copter.current_loc;
 
     // default lat/lon to current position if not provided
     // To-Do: use stopping point or position_controller's target instead of current location to avoid jerk?
@@ -404,7 +485,7 @@ void Copter::do_circle(const AP_Mission::Mission_Command& cmd)
         } else {
             // default to current altitude above origin
             circle_center.set_alt_cm(current_loc.alt, current_loc.get_alt_frame());
-            Log_Write_Error(ERROR_SUBSYSTEM_TERRAIN, ERROR_CODE_MISSING_TERRAIN_DATA);
+            copter.Log_Write_Error(ERROR_SUBSYSTEM_TERRAIN, ERROR_CODE_MISSING_TERRAIN_DATA);
         }
     }
 
@@ -412,12 +493,12 @@ void Copter::do_circle(const AP_Mission::Mission_Command& cmd)
     uint8_t circle_radius_m = HIGHBYTE(cmd.p1); // circle radius held in high byte of p1
 
     // move to edge of circle (verify_circle) will ensure we begin circling once we reach the edge
-    auto_circle_movetoedge_start(circle_center, circle_radius_m);
+    circle_movetoedge_start(circle_center, circle_radius_m);
 }
 
 // do_loiter_time - initiate loitering at a point for a given time period
 // note: caller should set yaw_mode
-void Copter::do_loiter_time(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_loiter_time(const AP_Mission::Mission_Command& cmd)
 {
     // re-use loiter unlimited
     do_loiter_unlimited(cmd);
@@ -428,9 +509,11 @@ void Copter::do_loiter_time(const AP_Mission::Mission_Command& cmd)
 }
 
 // do_spline_wp - initiate move to next waypoint
-void Copter::do_spline_wp(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_spline_wp(const AP_Mission::Mission_Command& cmd)
 {
     Location_Class target_loc(cmd.content.location);
+    const Location_Class &current_loc = copter.current_loc;
+
     // use current lat, lon if zero
     if (target_loc.lat == 0 && target_loc.lng == 0) {
         target_loc.lat = current_loc.lat;
@@ -460,9 +543,9 @@ void Copter::do_spline_wp(const AP_Mission::Mission_Command& cmd)
 
     // if previous command was a wp_nav command with no delay set stopped_at_start to false
     // To-Do: move processing of delay into wp-nav controller to allow it to determine the stopped_at_start value itself?
-    uint16_t prev_cmd_idx = mission.get_prev_nav_cmd_index();
+    uint16_t prev_cmd_idx = copter.mission.get_prev_nav_cmd_index();
     if (prev_cmd_idx != AP_MISSION_CMD_INDEX_NONE) {
-        if (mission.read_cmd_from_storage(prev_cmd_idx, temp_cmd)) {
+        if (copter.mission.read_cmd_from_storage(prev_cmd_idx, temp_cmd)) {
             if ((temp_cmd.id == MAV_CMD_NAV_WAYPOINT || temp_cmd.id == MAV_CMD_NAV_SPLINE_WAYPOINT) && temp_cmd.p1 == 0) {
                 stopped_at_start = false;
             }
@@ -471,7 +554,7 @@ void Copter::do_spline_wp(const AP_Mission::Mission_Command& cmd)
 
     // if there is no delay at the end of this segment get next nav command
     Location_Class next_loc;
-    if (cmd.p1 == 0 && mission.get_next_nav_cmd(cmd.index+1, temp_cmd)) {
+    if (cmd.p1 == 0 && copter.mission.get_next_nav_cmd(cmd.index+1, temp_cmd)) {
         next_loc = temp_cmd.content.location;
         // default lat, lon to first waypoint's lat, lon
         if (next_loc.lat == 0 && next_loc.lng == 0) {
@@ -497,25 +580,25 @@ void Copter::do_spline_wp(const AP_Mission::Mission_Command& cmd)
     }
 
     // set spline navigation target
-    auto_spline_start(target_loc, stopped_at_start, seg_end_type, next_loc);
+    spline_start(target_loc, stopped_at_start, seg_end_type, next_loc);
 }
 
 #if NAV_GUIDED == ENABLED
 // do_nav_guided_enable - initiate accepting commands from external nav computer
-void Copter::do_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
 {
     if (cmd.p1 > 0) {
         // initialise guided limits
-        guided_limit_init_time_and_pos();
+        copter.mode_guided.limit_init_time_and_pos();
 
         // set spline navigation target
-        auto_nav_guided_start();
+        nav_guided_start();
     }
 }
 #endif  // NAV_GUIDED
 
 // do_nav_delay - Delay the next navigation command
-void Copter::do_nav_delay(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_nav_delay(const AP_Mission::Mission_Command& cmd)
 {
     nav_delay_time_start = millis();
 
@@ -526,24 +609,24 @@ void Copter::do_nav_delay(const AP_Mission::Mission_Command& cmd)
         // absolute delay to utc time
         nav_delay_time_max = hal.util->get_time_utc(cmd.content.nav_delay.hour_utc, cmd.content.nav_delay.min_utc, cmd.content.nav_delay.sec_utc, 0);
     }
-    gcs_send_text_fmt(MAV_SEVERITY_INFO, "Delaying %u sec",(unsigned int)(nav_delay_time_max/1000));
+    gcs().send_text(MAV_SEVERITY_INFO, "Delaying %u sec",(unsigned int)(nav_delay_time_max/1000));
 }
 
 #if PARACHUTE == ENABLED
 // do_parachute - configure or release parachute
-void Copter::do_parachute(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_parachute(const AP_Mission::Mission_Command& cmd)
 {
     switch (cmd.p1) {
         case PARACHUTE_DISABLE:
-            parachute.enabled(false);
+            copter.parachute.enabled(false);
             Log_Write_Event(DATA_PARACHUTE_DISABLED);
             break;
         case PARACHUTE_ENABLE:
-            parachute.enabled(true);
+            copter.parachute.enabled(true);
             Log_Write_Event(DATA_PARACHUTE_ENABLED);
             break;
         case PARACHUTE_RELEASE:
-            parachute_release();
+            copter.parachute_release();
             break;
         default:
             // do nothing
@@ -552,19 +635,19 @@ void Copter::do_parachute(const AP_Mission::Mission_Command& cmd)
 }
 #endif
 
-#if EPM_ENABLED == ENABLED
-// do_gripper - control EPM gripper
-void Copter::do_gripper(const AP_Mission::Mission_Command& cmd)
+#if GRIPPER_ENABLED == ENABLED
+// do_gripper - control gripper
+void Copter::ModeAuto::do_gripper(const AP_Mission::Mission_Command& cmd)
 {
     // Note: we ignore the gripper num parameter because we only support one gripper
     switch (cmd.content.gripper.action) {
         case GRIPPER_ACTION_RELEASE:
-            epm.release();
-            Log_Write_Event(DATA_EPM_RELEASE);
+            g2.gripper.release();
+            Log_Write_Event(DATA_GRIPPER_RELEASE);
             break;
         case GRIPPER_ACTION_GRAB:
-            epm.grab();
-            Log_Write_Event(DATA_EPM_GRAB);
+            g2.gripper.grab();
+            Log_Write_Event(DATA_GRIPPER_GRAB);
             break;
         default:
             // do nothing
@@ -575,12 +658,38 @@ void Copter::do_gripper(const AP_Mission::Mission_Command& cmd)
 
 #if NAV_GUIDED == ENABLED
 // do_guided_limits - pass guided limits to guided controller
-void Copter::do_guided_limits(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_guided_limits(const AP_Mission::Mission_Command& cmd)
 {
-    guided_limit_set(cmd.p1 * 1000, // convert seconds to ms
-                     cmd.content.guided_limits.alt_min * 100.0f,    // convert meters to cm
-                     cmd.content.guided_limits.alt_max * 100.0f,    // convert meters to cm
-                     cmd.content.guided_limits.horiz_max * 100.0f); // convert meters to cm
+    copter.mode_guided.limit_set(
+        cmd.p1 * 1000, // convert seconds to ms
+        cmd.content.guided_limits.alt_min * 100.0f,    // convert meters to cm
+        cmd.content.guided_limits.alt_max * 100.0f,    // convert meters to cm
+        cmd.content.guided_limits.horiz_max * 100.0f); // convert meters to cm
+}
+#endif
+
+#if WINCH_ENABLED == ENABLED
+// control winch based on mission command
+void Copter::ModeAuto::do_winch(const AP_Mission::Mission_Command& cmd)
+{
+    // Note: we ignore the gripper num parameter because we only support one gripper
+    switch (cmd.content.winch.action) {
+        case WINCH_RELAXED:
+            g2.winch.relax();
+            Log_Write_Event(DATA_WINCH_RELAXED);
+            break;
+        case WINCH_RELATIVE_LENGTH_CONTROL:
+            g2.winch.release_length(cmd.content.winch.release_length, cmd.content.winch.release_rate);
+            Log_Write_Event(DATA_WINCH_LENGTH_CONTROL);
+            break;
+        case WINCH_RATE_CONTROL:
+            g2.winch.set_desired_rate(cmd.content.winch.release_rate);
+            Log_Write_Event(DATA_WINCH_RATE_CONTROL);
+            break;
+        default:
+            // do nothing
+            break;
+    }
 }
 #endif
 
@@ -589,26 +698,26 @@ void Copter::do_guided_limits(const AP_Mission::Mission_Command& cmd)
 /********************************************************************************/
 
 // verify_takeoff - check if we have completed the takeoff
-bool Copter::verify_takeoff()
+bool Copter::ModeAuto::verify_takeoff()
 {
     // have we reached our target altitude?
-    return wp_nav.reached_wp_destination();
+    return copter.wp_nav->reached_wp_destination();
 }
 
 // verify_land - returns true if landing has been completed
-bool Copter::verify_land()
+bool Copter::ModeAuto::verify_land()
 {
     bool retval = false;
 
     switch (land_state) {
         case LandStateType_FlyToLocation:
             // check if we've reached the location
-            if (wp_nav.reached_wp_destination()) {
+            if (copter.wp_nav->reached_wp_destination()) {
                 // get destination so we can use it for loiter target
-                Vector3f dest = wp_nav.get_wp_destination();
+                Vector3f dest = copter.wp_nav->get_wp_destination();
 
                 // initialise landing controller
-                auto_land_start(dest);
+                land_start(dest);
 
                 // advance to next state
                 land_state = LandStateType_Descending;
@@ -631,11 +740,173 @@ bool Copter::verify_land()
     return retval;
 }
 
+#define NAV_PAYLOAD_PLACE_DEBUGGING 0
+
+#if NAV_PAYLOAD_PLACE_DEBUGGING
+#include <stdio.h>
+#define debug(fmt, args ...)  do {::fprintf(stderr,"%s:%d: " fmt "\n", __FUNCTION__, __LINE__, ## args); } while(0)
+#else
+#define debug(fmt, args ...)
+#endif
+
+// verify_payload_place - returns true if placing has been completed
+bool Copter::ModeAuto::verify_payload_place()
+{
+    const uint16_t hover_throttle_calibrate_time = 2000; // milliseconds
+    const uint16_t descend_throttle_calibrate_time = 2000; // milliseconds
+    const float hover_throttle_placed_fraction = 0.7; // i.e. if throttle is less than 70% of hover we have placed
+    const float descent_throttle_placed_fraction = 0.9; // i.e. if throttle is less than 90% of descent throttle we have placed
+    const uint16_t placed_time = 500; // how long we have to be below a throttle threshold before considering placed
+
+    const float current_throttle_level = motors->get_throttle();
+    const uint32_t now =  AP_HAL::millis();
+
+    // if we discover we've landed then immediately release the load:
+    if (ap.land_complete) {
+        switch (nav_payload_place.state) {
+        case PayloadPlaceStateType_FlyToLocation:
+        case PayloadPlaceStateType_Calibrating_Hover_Start:
+        case PayloadPlaceStateType_Calibrating_Hover:
+        case PayloadPlaceStateType_Descending_Start:
+        case PayloadPlaceStateType_Descending:
+            gcs().send_text(MAV_SEVERITY_INFO, "NAV_PLACE: landed");
+            nav_payload_place.state = PayloadPlaceStateType_Releasing_Start;
+            break;
+        case PayloadPlaceStateType_Releasing_Start:
+        case PayloadPlaceStateType_Releasing:
+        case PayloadPlaceStateType_Released:
+        case PayloadPlaceStateType_Ascending_Start:
+        case PayloadPlaceStateType_Ascending:
+        case PayloadPlaceStateType_Done:
+            break;
+        }
+    }
+
+    switch (nav_payload_place.state) {
+    case PayloadPlaceStateType_FlyToLocation:
+        if (!copter.wp_nav->reached_wp_destination()) {
+            return false;
+        }
+        // we're there; set loiter target
+        nav_payload_place.state = PayloadPlaceStateType_Calibrating_Hover_Start;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Calibrating_Hover_Start:
+        // hover for 1 second to get an idea of what our hover
+        // throttle looks like
+        debug("Calibrate start");
+        nav_payload_place.hover_start_timestamp = now;
+        nav_payload_place.state = PayloadPlaceStateType_Calibrating_Hover;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Calibrating_Hover: {
+        if (now - nav_payload_place.hover_start_timestamp < hover_throttle_calibrate_time) {
+            // still calibrating...
+            debug("Calibrate Timer: %d", now - nav_payload_place.hover_start_timestamp);
+            return false;
+        }
+        // we have a valid calibration.  Hopefully.
+        nav_payload_place.hover_throttle_level = current_throttle_level;
+        const float hover_throttle_delta = fabsf(nav_payload_place.hover_throttle_level - motors->get_throttle_hover());
+        gcs().send_text(MAV_SEVERITY_INFO, "hover throttle delta: %f", static_cast<double>(hover_throttle_delta));
+        nav_payload_place.state = PayloadPlaceStateType_Descending_Start;
+        }
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Descending_Start:
+        nav_payload_place.descend_start_timestamp = now;
+        nav_payload_place.descend_start_altitude = inertial_nav.get_altitude();
+        nav_payload_place.descend_throttle_level = 0;
+        nav_payload_place.state = PayloadPlaceStateType_Descending;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Descending:
+        // make sure we don't descend too far:
+        debug("descended: %f cm (%f cm max)", (nav_payload_place.descend_start_altitude - inertial_nav.get_altitude()), nav_payload_place.descend_max);
+        if (!is_zero(nav_payload_place.descend_max) &&
+            nav_payload_place.descend_start_altitude - inertial_nav.get_altitude()  > nav_payload_place.descend_max) {
+            nav_payload_place.state = PayloadPlaceStateType_Ascending;
+            gcs().send_text(MAV_SEVERITY_WARNING, "Reached maximum descent");
+            return false; // we'll do any cleanups required next time through the loop
+        }
+        // see if we've been descending long enough to calibrate a descend-throttle-level:
+        if (is_zero(nav_payload_place.descend_throttle_level) &&
+            now - nav_payload_place.descend_start_timestamp > descend_throttle_calibrate_time) {
+            nav_payload_place.descend_throttle_level = current_throttle_level;
+        }
+        // watch the throttle to determine whether the load has been placed
+        // debug("hover ratio: %f   descend ratio: %f\n", current_throttle_level/nav_payload_place.hover_throttle_level, ((nav_payload_place.descend_throttle_level == 0) ? -1.0f : current_throttle_level/nav_payload_place.descend_throttle_level));
+        if (current_throttle_level/nav_payload_place.hover_throttle_level > hover_throttle_placed_fraction &&
+            (is_zero(nav_payload_place.descend_throttle_level) ||
+             current_throttle_level/nav_payload_place.descend_throttle_level > descent_throttle_placed_fraction)) {
+            // throttle is above both threshold ratios (or above hover threshold ration and descent threshold ratio not yet valid)
+            nav_payload_place.place_start_timestamp = 0;
+            return false;
+        }
+        if (nav_payload_place.place_start_timestamp == 0) {
+            // we've only just now hit the correct throttle level
+            nav_payload_place.place_start_timestamp = now;
+            return false;
+        } else if (now - nav_payload_place.place_start_timestamp < placed_time) {
+            // keep going down....
+            debug("Place Timer: %d", now - nav_payload_place.place_start_timestamp);
+            return false;
+        }
+        nav_payload_place.state = PayloadPlaceStateType_Releasing_Start;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Releasing_Start:
+#if GRIPPER_ENABLED == ENABLED
+        if (g2.gripper.valid()) {
+            gcs().send_text(MAV_SEVERITY_INFO, "Releasing the gripper");
+            g2.gripper.release();
+        } else {
+            gcs().send_text(MAV_SEVERITY_INFO, "Gripper not valid");
+            nav_payload_place.state = PayloadPlaceStateType_Ascending_Start;
+            break;
+        }
+#else
+        gcs().send_text(MAV_SEVERITY_INFO, "Gripper code disabled");
+#endif
+        nav_payload_place.state = PayloadPlaceStateType_Releasing;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Releasing:
+#if GRIPPER_ENABLED == ENABLED
+        if (g2.gripper.valid() && !g2.gripper.released()) {
+            return false;
+        }
+#endif
+        nav_payload_place.state = PayloadPlaceStateType_Released;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Released: {
+        nav_payload_place.state = PayloadPlaceStateType_Ascending_Start;
+        }
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Ascending_Start: {
+        Location_Class target_loc = inertial_nav.get_position();
+        target_loc.alt = nav_payload_place.descend_start_altitude;
+        wp_start(target_loc);
+        nav_payload_place.state = PayloadPlaceStateType_Ascending;
+        }
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Ascending:
+        if (!copter.wp_nav->reached_wp_destination()) {
+            return false;
+        }
+        nav_payload_place.state = PayloadPlaceStateType_Done;
+        FALLTHROUGH;
+    case PayloadPlaceStateType_Done:
+        return true;
+    default:
+        // this should never happen
+        // TO-DO: log an error
+        return true;
+    }
+    // should never get here
+    return true;
+}
+#undef debug
+
 // verify_nav_wp - check if we have reached the next way point
-bool Copter::verify_nav_wp(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_nav_wp(const AP_Mission::Mission_Command& cmd)
 {
     // check if we have reached the waypoint
-    if( !wp_nav.reached_wp_destination() ) {
+    if( !copter.wp_nav->reached_wp_destination() ) {
         return false;
     }
 
@@ -649,23 +920,23 @@ bool Copter::verify_nav_wp(const AP_Mission::Mission_Command& cmd)
 
     // check if timer has run out
     if (((millis() - loiter_time) / 1000) >= loiter_time_max) {
-        gcs_send_text_fmt(MAV_SEVERITY_INFO, "Reached command #%i",cmd.index);
+        gcs().send_text(MAV_SEVERITY_INFO, "Reached command #%i",cmd.index);
         return true;
     }else{
         return false;
     }
 }
 
-bool Copter::verify_loiter_unlimited()
+bool Copter::ModeAuto::verify_loiter_unlimited()
 {
     return false;
 }
 
 // verify_loiter_time - check if we have loitered long enough
-bool Copter::verify_loiter_time()
+bool Copter::ModeAuto::verify_loiter_time()
 {
     // return immediately if we haven't reached our destination
-    if (!wp_nav.reached_wp_destination()) {
+    if (!copter.wp_nav->reached_wp_destination()) {
         return false;
     }
 
@@ -679,13 +950,13 @@ bool Copter::verify_loiter_time()
 }
 
 // verify_circle - check if we have circled the point enough
-bool Copter::verify_circle(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_circle(const AP_Mission::Mission_Command& cmd)
 {
     // check if we've reached the edge
-    if (auto_mode == Auto_CircleMoveToEdge) {
-        if (wp_nav.reached_wp_destination()) {
-            Vector3f curr_pos = inertial_nav.get_position();
-            Vector3f circle_center = pv_location_to_vector(cmd.content.location);
+    if (mode() == Auto_CircleMoveToEdge) {
+        if (copter.wp_nav->reached_wp_destination()) {
+            const Vector3f curr_pos = copter.inertial_nav.get_position();
+            Vector3f circle_center = copter.pv_location_to_vector(cmd.content.location);
 
             // set target altitude if not provided
             if (is_zero(circle_center.z)) {
@@ -699,28 +970,28 @@ bool Copter::verify_circle(const AP_Mission::Mission_Command& cmd)
             }
 
             // start circling
-            auto_circle_start();
+            circle_start();
         }
         return false;
     }
 
     // check if we have completed circling
-    return fabsf(circle_nav.get_angle_total()/M_2PI) >= LOWBYTE(cmd.p1);
+    return fabsf(copter.circle_nav->get_angle_total()/M_2PI) >= LOWBYTE(cmd.p1);
 }
 
 // verify_RTL - handles any state changes required to implement RTL
 // do_RTL should have been called once first to initialise all variables
 // returns true with RTL has completed successfully
-bool Copter::verify_RTL()
+bool Copter::ModeAuto::verify_RTL()
 {
-    return (rtl_state_complete && (rtl_state == RTL_FinalDescent || rtl_state == RTL_Land));
+    return (copter.mode_rtl.state_complete() && (copter.mode_rtl.state() == RTL_FinalDescent || copter.mode_rtl.state() == RTL_Land));
 }
 
 // verify_spline_wp - check if we have reached the next way point using spline
-bool Copter::verify_spline_wp(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_spline_wp(const AP_Mission::Mission_Command& cmd)
 {
     // check if we have reached the waypoint
-    if( !wp_nav.reached_wp_destination() ) {
+    if( !copter.wp_nav->reached_wp_destination() ) {
         return false;
     }
 
@@ -731,7 +1002,7 @@ bool Copter::verify_spline_wp(const AP_Mission::Mission_Command& cmd)
 
     // check if timer has run out
     if (((millis() - loiter_time) / 1000) >= loiter_time_max) {
-        gcs_send_text_fmt(MAV_SEVERITY_INFO, "Reached command #%i",cmd.index);
+        gcs().send_text(MAV_SEVERITY_INFO, "Reached command #%i",cmd.index);
         return true;
     }else{
         return false;
@@ -740,7 +1011,7 @@ bool Copter::verify_spline_wp(const AP_Mission::Mission_Command& cmd)
 
 #if NAV_GUIDED == ENABLED
 // verify_nav_guided - check if we have breached any limits
-bool Copter::verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
 {
     // if disabling guided mode then immediately return true so we move to next command
     if (cmd.p1 == 0) {
@@ -748,12 +1019,12 @@ bool Copter::verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
     }
 
     // check time and position limits
-    return guided_limit_check();
+    return copter.mode_guided.limit_check();
 }
 #endif  // NAV_GUIDED
 
 // verify_nav_delay - check if we have waited long enough
-bool Copter::verify_nav_delay(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::verify_nav_delay(const AP_Mission::Mission_Command& cmd)
 {
     if (millis() - nav_delay_time_start > (uint32_t)MAX(nav_delay_time_max,0)) {
         nav_delay_time_max = 0;
@@ -767,24 +1038,24 @@ bool Copter::verify_nav_delay(const AP_Mission::Mission_Command& cmd)
 //	Condition (May) commands
 /********************************************************************************/
 
-void Copter::do_wait_delay(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_wait_delay(const AP_Mission::Mission_Command& cmd)
 {
     condition_start = millis();
     condition_value = cmd.content.delay.seconds * 1000;     // convert seconds to milliseconds
 }
 
-void Copter::do_within_distance(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_within_distance(const AP_Mission::Mission_Command& cmd)
 {
     condition_value  = cmd.content.distance.meters * 100;
 }
 
-void Copter::do_yaw(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_yaw(const AP_Mission::Mission_Command& cmd)
 {
 	set_auto_yaw_look_at_heading(
 		cmd.content.yaw.angle_deg,
 		cmd.content.yaw.turn_rate_dps,
 		cmd.content.yaw.direction,
-		cmd.content.yaw.relative_angle);
+		cmd.content.yaw.relative_angle > 0);
 }
 
 
@@ -792,7 +1063,7 @@ void Copter::do_yaw(const AP_Mission::Mission_Command& cmd)
 // Verify Condition (May) commands
 /********************************************************************************/
 
-bool Copter::verify_wait_delay()
+bool Copter::ModeAuto::verify_wait_delay()
 {
     if (millis() - condition_start > (uint32_t)MAX(condition_value,0)) {
         condition_value = 0;
@@ -801,11 +1072,9 @@ bool Copter::verify_wait_delay()
     return false;
 }
 
-bool Copter::verify_within_distance()
+bool Copter::ModeAuto::verify_within_distance()
 {
-    // update distance calculation
-    calc_wp_distance();
-    if (wp_distance < (uint32_t)MAX(condition_value,0)) {
+    if (wp_distance() < (uint32_t)MAX(condition_value,0)) {
         condition_value = 0;
         return true;
     }
@@ -813,7 +1082,7 @@ bool Copter::verify_within_distance()
 }
 
 // verify_yaw - return true if we have reached the desired heading
-bool Copter::verify_yaw()
+bool Copter::ModeAuto::verify_yaw()
 {
     // set yaw mode if it has been changed (the waypoint controller often retakes control of yaw as it executes a new waypoint command)
     if (auto_yaw_mode != AUTO_YAW_LOOK_AT_HEADING) {
@@ -821,7 +1090,7 @@ bool Copter::verify_yaw()
     }
 
     // check if we are within 2 degrees of the target heading
-    if (labs(wrap_180_cd(ahrs.yaw_sensor-yaw_look_at_heading)) <= 200) {
+    if (labs(wrap_180_cd(ahrs.yaw_sensor-copter.yaw_look_at_heading)) <= 200) {
         return true;
     }else{
         return false;
@@ -833,10 +1102,10 @@ bool Copter::verify_yaw()
 /********************************************************************************/
 
 // do_guided - start guided mode
-bool Copter::do_guided(const AP_Mission::Mission_Command& cmd)
+bool Copter::ModeAuto::do_guided(const AP_Mission::Mission_Command& cmd)
 {
     // only process guided waypoint if we are in guided mode
-    if (control_mode != GUIDED && !(control_mode == AUTO && auto_mode == Auto_NavGuided)) {
+    if (copter.control_mode != GUIDED && !(copter.control_mode == AUTO && mode() == Auto_NavGuided)) {
         return false;
     }
 
@@ -847,108 +1116,83 @@ bool Copter::do_guided(const AP_Mission::Mission_Command& cmd)
         {
             // set wp_nav's destination
             Location_Class dest(cmd.content.location);
-            return guided_set_destination(dest);
-            break;
+            return copter.mode_guided.set_destination(dest);
         }
 
         case MAV_CMD_CONDITION_YAW:
             do_yaw(cmd);
             return true;
-            break;
 
         default:
             // reject unrecognised command
             return false;
-            break;
     }
 
     return true;
 }
 
-void Copter::do_change_speed(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_change_speed(const AP_Mission::Mission_Command& cmd)
 {
     if (cmd.content.speed.target_ms > 0) {
-        wp_nav.set_speed_xy(cmd.content.speed.target_ms * 100.0f);
+        copter.wp_nav->set_speed_xy(cmd.content.speed.target_ms * 100.0f);
     }
 }
 
-void Copter::do_set_home(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_set_home(const AP_Mission::Mission_Command& cmd)
 {
     if(cmd.p1 == 1 || (cmd.content.location.lat == 0 && cmd.content.location.lng == 0 && cmd.content.location.alt == 0)) {
-        set_home_to_current_location();
+        copter.set_home_to_current_location(false);
     } else {
-        if (!far_from_EKF_origin(cmd.content.location)) {
-            set_home(cmd.content.location);
-        }
+        copter.set_home(cmd.content.location, false);
     }
 }
 
-// do_roi - starts actions required by MAV_CMD_NAV_ROI
+// do_roi - starts actions required by MAV_CMD_DO_SET_ROI
 //          this involves either moving the camera to point at the ROI (region of interest)
 //          and possibly rotating the copter to point at the ROI if our mount type does not support a yaw feature
 //	TO-DO: add support for other features of MAV_CMD_DO_SET_ROI including pointing at a given waypoint
-void Copter::do_roi(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_roi(const AP_Mission::Mission_Command& cmd)
 {
-    set_auto_yaw_roi(cmd.content.location);
+    copter.set_auto_yaw_roi(cmd.content.location);
 }
 
-// do_digicam_configure Send Digicam Configure message with the camera library
-void Copter::do_digicam_configure(const AP_Mission::Mission_Command& cmd)
-{
 #if CAMERA == ENABLED
-    camera.configure(cmd.content.digicam_configure.shooting_mode,
-                     cmd.content.digicam_configure.shutter_speed,
-                     cmd.content.digicam_configure.aperture,
-                     cmd.content.digicam_configure.ISO,
-                     cmd.content.digicam_configure.exposure_type,
-                     cmd.content.digicam_configure.cmd_id,
-                     cmd.content.digicam_configure.engine_cutoff_time);
-#endif
+
+// do_digicam_configure Send Digicam Configure message with the camera library
+void Copter::ModeAuto::do_digicam_configure(const AP_Mission::Mission_Command& cmd)
+{
+    copter.camera.configure(
+        cmd.content.digicam_configure.shooting_mode,
+        cmd.content.digicam_configure.shutter_speed,
+        cmd.content.digicam_configure.aperture,
+        cmd.content.digicam_configure.ISO,
+        cmd.content.digicam_configure.exposure_type,
+        cmd.content.digicam_configure.cmd_id,
+        cmd.content.digicam_configure.engine_cutoff_time);
 }
 
 // do_digicam_control Send Digicam Control message with the camera library
-void Copter::do_digicam_control(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_digicam_control(const AP_Mission::Mission_Command& cmd)
 {
-#if CAMERA == ENABLED
-    if (camera.control(cmd.content.digicam_control.session,
-                       cmd.content.digicam_control.zoom_pos,
-                       cmd.content.digicam_control.zoom_step,
-                       cmd.content.digicam_control.focus_lock,
-                       cmd.content.digicam_control.shooting_cmd,
-                       cmd.content.digicam_control.cmd_id)) {
-        log_picture();
-    }
-#endif
+    copter.camera.control(cmd.content.digicam_control.session,
+                           cmd.content.digicam_control.zoom_pos,
+                           cmd.content.digicam_control.zoom_step,
+                           cmd.content.digicam_control.focus_lock,
+                           cmd.content.digicam_control.shooting_cmd,
+                           cmd.content.digicam_control.cmd_id);
 }
 
-// do_take_picture - take a picture with the camera library
-void Copter::do_take_picture()
-{
-#if CAMERA == ENABLED
-    camera.trigger_pic(true);
-    log_picture();
 #endif
-}
-
-// log_picture - log picture taken and send feedback to GCS
-void Copter::log_picture()
-{
-    if (!camera.using_feedback_pin()) {
-        gcs_send_message(MSG_CAMERA_FEEDBACK);
-        if (should_log(MASK_LOG_CAMERA)) {
-            DataFlash.Log_Write_Camera(ahrs, gps, current_loc);
-        }
-    } else {
-        if (should_log(MASK_LOG_CAMERA)) {
-            DataFlash.Log_Write_Trigger(ahrs, gps, current_loc);
-        }      
-    }
-}
 
 // point the camera to a specified angle
-void Copter::do_mount_control(const AP_Mission::Mission_Command& cmd)
+void Copter::ModeAuto::do_mount_control(const AP_Mission::Mission_Command& cmd)
 {
 #if MOUNT == ENABLED
-    camera_mount.set_angle_targets(cmd.content.mount_control.roll, cmd.content.mount_control.pitch, cmd.content.mount_control.yaw);
+    if(!copter.camera_mount.has_pan_control()) {
+        copter.set_auto_yaw_look_at_heading(cmd.content.mount_control.yaw,0.0f,0,0);
+    }
+    copter.camera_mount.set_angle_targets(cmd.content.mount_control.roll, cmd.content.mount_control.pitch, cmd.content.mount_control.yaw);
 #endif
 }
+
+#endif

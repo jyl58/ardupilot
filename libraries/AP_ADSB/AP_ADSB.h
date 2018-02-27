@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 /*
@@ -30,33 +29,28 @@
 
 #include <AP_Buffer/AP_Buffer.h>
 
-class AP_ADSB
-{
+class AP_ADSB {
 public:
+    AP_ADSB(const AP_AHRS &ahrs)
+        : _ahrs(ahrs)
+    {
+        AP_Param::setup_object_defaults(this, var_info);
+    }
+
+    /* Do not allow copies */
+    AP_ADSB(const AP_ADSB &other) = delete;
+    AP_ADSB &operator=(const AP_ADSB&) = delete;
+
     struct adsb_vehicle_t {
         mavlink_adsb_vehicle_t info; // the whole mavlink struct with all the juicy details. sizeof() == 38
         uint32_t last_update_ms; // last time this was refreshed, allows timeouts
     };
-
-
-    // Constructor
-    AP_ADSB(const AP_AHRS &ahrs) :
-        _ahrs(ahrs)
-    {
-        AP_Param::setup_object_defaults(this, var_info);
-    }
 
     // for holding parameters
     static const struct AP_Param::GroupInfo var_info[];
 
     // periodic task that maintains vehicle_list
     void update(void);
-
-    // add or update vehicle_list from inbound mavlink msg
-    void update_vehicle(const mavlink_message_t* msg);
-
-    // handle ADS-B transceiver report
-    void transceiver_report(mavlink_channel_t chan, const mavlink_message_t* msg);
 
     uint16_t get_vehicle_count() { return in_state.vehicle_count; }
 
@@ -78,8 +72,10 @@ public:
     }
     bool next_sample(adsb_vehicle_t &obstacle);
 
-private:
+    // mavlink message handler
+    void handle_message(const mavlink_channel_t chan, const mavlink_message_t* msg);
 
+private:
     // initialize _vehicle_list
     void init();
 
@@ -107,6 +103,11 @@ private:
     void send_configure(const mavlink_channel_t chan);
     void send_dynamic_out(const mavlink_channel_t chan);
 
+    // add or update vehicle_list from inbound mavlink msg
+    void handle_vehicle(const mavlink_message_t* msg);
+
+    // handle ADS-B transceiver report for ping2020
+    void handle_transceiver_report(mavlink_channel_t chan, const mavlink_message_t* msg);
 
     // reference to AHRS, so we can ask for our position,
     // heading and speed

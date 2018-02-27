@@ -18,8 +18,8 @@ public:
     void clear_capabilities(uint64_t cap) { capabilities &= ~(cap); }
     uint64_t get_capabilities() const { return capabilities; }
 
-    virtual const char* get_custom_log_directory() { return NULL; }
-    virtual const char* get_custom_terrain_directory() const { return NULL;  }
+    virtual const char* get_custom_log_directory() const { return nullptr; }
+    virtual const char* get_custom_terrain_directory() const { return nullptr;  }
 
     // get path to custom defaults file for AP_Param
     virtual const char* get_custom_defaults_file() const {
@@ -67,11 +67,6 @@ public:
     virtual bool get_system_id(char buf[40]) { return false; }
 
     /**
-       how much free memory do we have in bytes. If unknown return 4096
-     */
-    virtual uint32_t available_memory(void) { return 4096; }
-
-    /**
        return commandline arguments, if available
      */
     virtual void commandline_arguments(uint8_t &argc, char * const *&argv) { argc = 0; }
@@ -86,7 +81,7 @@ public:
     /*
       return a stream for access to a system shell, if available
      */
-    virtual AP_HAL::Stream *get_shell_stream() { return NULL; }
+    virtual AP_HAL::Stream *get_shell_stream() { return nullptr; }
 
     /* Support for an imu heating system */
     virtual void set_imu_temp(float current) {}
@@ -103,7 +98,7 @@ public:
         PC_INTERVAL      /**< measure the interval between instances of an event */
     };
     typedef void *perf_counter_t;
-    virtual perf_counter_t perf_alloc(perf_counter_type t, const char *name) { return NULL; }
+    virtual perf_counter_t perf_alloc(perf_counter_type t, const char *name) { return nullptr; }
     virtual void perf_begin(perf_counter_t h) {}
     virtual void perf_end(perf_counter_t h) {}
     virtual void perf_count(perf_counter_t h) {}
@@ -111,6 +106,18 @@ public:
     // create a new semaphore
     virtual Semaphore *new_semaphore(void) { return nullptr; }
 
+    // allocate and free DMA-capable memory if possible. Otherwise return normal memory
+    enum Memory_Type {
+        MEM_DMA_SAFE,
+        MEM_FAST
+    };
+    virtual void *malloc_type(size_t size, Memory_Type mem_type) { return calloc(1, size); }
+    virtual void free_type(void *ptr, size_t size, Memory_Type mem_type) { return free(ptr); }
+
+    /**
+       how much free memory do we have in bytes. If unknown return 4096
+     */
+    virtual uint32_t available_memory(void) { return 4096; }
 protected:
     // we start soft_armed false, so that actuators don't send any
     // values until the vehicle code has fully started

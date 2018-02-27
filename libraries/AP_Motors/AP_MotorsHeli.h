@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /// @file	AP_MotorsHeli.h
 /// @brief	Motor control class for Traditional Heli
 #pragma once
@@ -8,12 +6,10 @@
 
 #include <AP_Common/AP_Common.h>
 #include <AP_Math/AP_Math.h>            // ArduPilot Mega Vector/Matrix math Library
-#include <RC_Channel/RC_Channel.h>      // RC Channel Library
+#include <RC_Channel/RC_Channel.h>
+#include <SRV_Channel/SRV_Channel.h>
 #include "AP_Motors_Class.h"
 #include "AP_MotorsHeli_RSC.h"
-
-// maximum number of swashplate servos
-#define AP_MOTORS_HELI_NUM_SWASHPLATE_SERVOS    3
 
 // servo output rates
 #define AP_MOTORS_HELI_SPEED_DEFAULT            125     // default servo update rate for helicopters
@@ -64,14 +60,13 @@ public:
     };
 
     // init
-    void Init();
+    void init(motor_frame_class frame_class, motor_frame_type frame_type);
+
+    // set frame class (i.e. quad, hexa, heli) and type (i.e. x, plus)
+    void set_frame_class_and_type(motor_frame_class frame_class, motor_frame_type frame_type);
 
     // set update rate to motors - a value in hertz
-    // you must have setup_motors before calling this
     virtual void set_update_rate( uint16_t speed_hz ) = 0;
-
-    // enable - starts allowing signals to be sent to motors
-    virtual void enable() = 0;
 
     // output_min - sets servos to neutral point with motors stopped
     void output_min();
@@ -79,7 +74,7 @@ public:
     // output_test - spin a motor at the pwm value specified
     //  motor_seq is the motor's sequence number from 1 to the number of motors on the frame
     //  pwm value is an actual pwm value that will be output, normally in the range of 1000 ~ 2000
-    virtual void        output_test(uint8_t motor_seq, int16_t pwm) = 0;
+    virtual void output_test(uint8_t motor_seq, int16_t pwm) = 0;
 
     //
     // heli specific methods
@@ -94,6 +89,9 @@ public:
     // set_collective_for_landing - limits collective from going too low if we know we are landed
     void set_collective_for_landing(bool landing) { _heliflags.landing_collective = landing; }
 
+    // set_inverted_flight - enables/disables inverted flight
+    void set_inverted_flight(bool inverted) { _heliflags.inverted_flight = inverted; }
+    
     // get_rsc_mode - gets the rotor speed control method (AP_MOTORS_HELI_RSC_MODE_CH8_PASSTHROUGH or AP_MOTORS_HELI_RSC_MODE_SETPOINT)
     uint8_t get_rsc_mode() const { return _rsc_mode; }
 
@@ -119,8 +117,13 @@ public:
     //  this can be used to ensure other pwm outputs (i.e. for servos) do not conflict
     virtual uint16_t get_motor_mask() = 0;
 
+    virtual void set_acro_tail(bool set) {}
+
+    // ext_gyro_gain - set external gyro gain in range 0 ~ 1
+    virtual void ext_gyro_gain(float gain) {}
+    
     // output - sends commands to the motors
-    void    output();
+    void output();
 
     // supports_yaw_passthrough
     virtual bool supports_yaw_passthrough() const { return false; }
@@ -143,9 +146,9 @@ protected:
     };
 
     // output - sends commands to the motors
-    void        output_armed_stabilizing();
-    void        output_armed_zero_throttle();
-    void        output_disarmed();
+    void output_armed_stabilizing();
+    void output_armed_zero_throttle();
+    void output_disarmed();
 
     // update_motor_controls - sends commands to motor controllers
     virtual void update_motor_control(RotorControlState state) = 0;
@@ -154,16 +157,16 @@ protected:
     void reset_flight_controls();
 
     // update the throttle input filter
-    void                update_throttle_filter();
+    void update_throttle_filter();
 
     // move_actuators - moves swash plate and tail rotor
     virtual void move_actuators(float roll_out, float pitch_out, float coll_in, float yaw_out) = 0;
 
     // reset_swash_servo - free up swash servo for maximum movement
-    void reset_swash_servo(RC_Channel& servo);
+    void reset_swash_servo(SRV_Channel *servo);
 
     // init_outputs - initialise Servo/PWM ranges and endpoints
-    virtual void init_outputs() = 0;
+    virtual bool init_outputs() = 0;
 
     // calculate_armed_scalars - must be implemented by child classes
     virtual void calculate_armed_scalars() = 0;
@@ -182,6 +185,7 @@ protected:
     struct heliflags_type {
         uint8_t landing_collective      : 1;    // true if collective is setup for landing which has much higher minimum
         uint8_t rotor_runup_complete    : 1;    // true if the rotors have had enough time to wind up
+        uint8_t inverted_flight         : 1;    // true for inverted flight
     } _heliflags;
 
     // parameters
@@ -204,9 +208,8 @@ protected:
     AP_Int8         _servo_test;                // sets number of cycles to test servo movement on bootup
 
     // internal variables
-    float           _rollFactor[AP_MOTORS_HELI_NUM_SWASHPLATE_SERVOS];
-    float           _pitchFactor[AP_MOTORS_HELI_NUM_SWASHPLATE_SERVOS];
-    float           _collectiveFactor[AP_MOTORS_HELI_NUM_SWASHPLATE_SERVOS];
     float           _collective_mid_pct = 0.0f;      // collective mid parameter value converted to 0 ~ 1 range
     uint8_t         _servo_test_cycle_counter = 0;   // number of test cycles left to run after bootup
+
+    motor_frame_type _frame_type;
 };

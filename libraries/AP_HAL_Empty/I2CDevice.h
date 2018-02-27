@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
  * Copyright (C) 2015-2016  Intel Corporation. All rights reserved.
  *
@@ -77,9 +76,6 @@ public:
     {
         return true;
     }
-
-    /* See AP_HAL::Device::get_fd() */
-    int get_fd() { return -1; }
 };
 
 class I2CDeviceManager : public AP_HAL::I2CDeviceManager {
@@ -87,7 +83,10 @@ public:
     I2CDeviceManager() { }
 
     /* AP_HAL::I2CDeviceManager implementation */
-    AP_HAL::OwnPtr<AP_HAL::I2CDevice> get_device(uint8_t bus, uint8_t address)
+    AP_HAL::OwnPtr<AP_HAL::I2CDevice> get_device(uint8_t bus, uint8_t address,
+                                                 uint32_t bus_clock=400000,
+                                                 bool use_smbus = false,
+                                                 uint32_t timeout_ms=4) override
     {
         return nullptr;
     }

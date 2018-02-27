@@ -1,4 +1,3 @@
-// -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,7 +18,7 @@
 #include "utility/print_vprintf.h"
 #include "UARTDriver.h"
 
-/* 
+/*
    BetterStream method implementations
    These are implemented in AP_HAL to ensure consistent behaviour on
    all boards, although they can be overridden by a port

@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -48,23 +46,24 @@ static Util utilInstance(&sitlState);
 
 HAL_SITL::HAL_SITL() :
     AP_HAL::HAL(
-        &sitlUart0Driver,  /* uartA */
-        &sitlUart1Driver,  /* uartB */
-        &sitlUart2Driver,  /* uartC */
-        &sitlUart3Driver,  /* uartD */
-        &sitlUart4Driver,  /* uartE */
-        &sitlUart5Driver,  /* uartF */
+        &sitlUart0Driver,   /* uartA */
+        &sitlUart1Driver,   /* uartB */
+        &sitlUart2Driver,   /* uartC */
+        &sitlUart3Driver,   /* uartD */
+        &sitlUart4Driver,   /* uartE */
+        &sitlUart5Driver,   /* uartF */
         &i2c_mgr_instance,
-        &emptySPI, /* spi */
-        &sitlAnalogIn, /* analogin */
+        &emptySPI,          /* spi */
+        &sitlAnalogIn,      /* analogin */
         &sitlEEPROMStorage, /* storage */
-        &sitlUart0Driver, /* console */
-        &sitlGPIO, /* gpio */
-        &sitlRCInput,  /* rcinput */
-        &sitlRCOutput, /* rcoutput */
-        &sitlScheduler, /* scheduler */
-        &utilInstance, /* util */
-        &emptyOpticalFlow), /* onboard optical flow */
+        &sitlUart0Driver,   /* console */
+        &sitlGPIO,          /* gpio */
+        &sitlRCInput,       /* rcinput */
+        &sitlRCOutput,      /* rcoutput */
+        &sitlScheduler,     /* scheduler */
+        &utilInstance,      /* util */
+        &emptyOpticalFlow, /* onboard optical flow */
+        nullptr),           /* CAN */
     _sitl_state(&sitlState)
 {}
 
@@ -79,7 +78,7 @@ void HAL_SITL::run(int argc, char * const argv[], Callbacks* callbacks) const
     rcin->init();
     rcout->init();
 
-    //spi->init();
+    // spi->init();
     analogin->init();
 
     callbacks->setup();
@@ -87,6 +86,7 @@ void HAL_SITL::run(int argc, char * const argv[], Callbacks* callbacks) const
 
     for (;;) {
         callbacks->loop();
+        sitlScheduler._run_io_procs(false);
     }
 }
 
@@ -95,4 +95,4 @@ const AP_HAL::HAL& AP_HAL::get_HAL() {
     return hal;
 }
 
-#endif // CONFIG_HAL_BOARD == HAL_BOARD_SITL
+#endif  // CONFIG_HAL_BOARD == HAL_BOARD_SITL

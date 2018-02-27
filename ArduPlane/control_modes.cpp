@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 void Plane::read_control_switch()
@@ -11,8 +9,8 @@ void Plane::read_control_switch()
     // If we get this value we do not want to change modes.
     if(switchPosition == 255) return;
 
-    if (failsafe.ch3_failsafe || failsafe.ch3_counter > 0) {
-        // when we are in ch3_failsafe mode then RC input is not
+    if (failsafe.rc_failsafe || failsafe.throttle_counter > 0) {
+        // when we are in rc_failsafe mode then RC input is not
         // working, and we need to ignore the mode switch channel
         return;
     }
@@ -41,7 +39,7 @@ void Plane::read_control_switch()
             return;
         }
 
-        set_mode((enum FlightMode)(flight_modes[switchPosition].get()));
+        set_mode((enum FlightMode)(flight_modes[switchPosition].get()), MODE_REASON_TX_COMMAND);
 
         oldSwitchPosition = switchPosition;
     }
@@ -68,7 +66,7 @@ void Plane::read_control_switch()
     }
 #endif
     
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+#if HAVE_PX4_MIXER
     if (g.override_channel > 0) {
         // if the user has configured an override channel then check it
         bool override_requested = (hal.rcin->read(g.override_channel-1) >= PX4IO_OVERRIDE_PWM);
@@ -76,17 +74,17 @@ void Plane::read_control_switch()
             if (hal.util->get_soft_armed() || (last_mixer_crc != -1)) {
                 px4io_override_enabled = true;
                 // disable output channels to force PX4IO override
-                gcs_send_text(MAV_SEVERITY_WARNING, "PX4IO override enabled");
+                gcs().send_text(MAV_SEVERITY_WARNING, "PX4IO override enabled");
             } else {
                 // we'll let the one second loop reconfigure the mixer. The
                 // PX4IO code sometimes rejects a mixer, probably due to it
                 // being busy in some way?
-                gcs_send_text(MAV_SEVERITY_WARNING, "PX4IO override enable failed");
+                gcs().send_text(MAV_SEVERITY_WARNING, "PX4IO override enable failed");
             }
         } else if (!override_requested && px4io_override_enabled) {
             px4io_override_enabled = false;
-            RC_Channel_aux::enable_aux_servos();
-            gcs_send_text(MAV_SEVERITY_WARNING, "PX4IO override disabled");
+            SRV_Channels::enable_aux_servos();
+            gcs().send_text(MAV_SEVERITY_WARNING, "PX4IO override disabled");
         }
         if (px4io_override_enabled && 
             hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_ARMED &&
@@ -97,19 +95,19 @@ void Plane::read_control_switch()
             hal.rcout->force_safety_off();
         }
     }
-#endif // CONFIG_HAL_BOARD
+#endif // HAVE_PX4_MIXER
 }
 
 uint8_t Plane::readSwitch(void)
 {
     uint16_t pulsewidth = hal.rcin->read(g.flight_mode_channel - 1);
     if (pulsewidth <= 900 || pulsewidth >= 2200) return 255;            // This is an error condition
-    if (pulsewidth > 1230 && pulsewidth <= 1360) return 1;
-    if (pulsewidth > 1360 && pulsewidth <= 1490) return 2;
-    if (pulsewidth > 1490 && pulsewidth <= 1620) return 3;
-    if (pulsewidth > 1620 && pulsewidth <= 1749) return 4;              // Software Manual
-    if (pulsewidth >= 1750) return 5;                                                           // Hardware Manual
-    return 0;
+    if (pulsewidth <= 1230) return 0;
+    if (pulsewidth <= 1360) return 1;
+    if (pulsewidth <= 1490) return 2;
+    if (pulsewidth <= 1620) return 3;
+    if (pulsewidth <= 1749) return 4;              // Software Manual
+    return 5;                                                           // Hardware Manual
 }
 
 void Plane::reset_control_switch()

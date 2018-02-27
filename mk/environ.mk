@@ -35,15 +35,6 @@ endif
 ifeq ($(SKETCHBOOK),)
   SKETCHBOOK		:=	$(shell cd $(SRCROOT)/.. && pwd)
   ifeq ($(wildcard $(SKETCHBOOK)/libraries),)
-    SKETCHBOOK		:=	$(shell cd $(SRCROOT)/../.. && pwd)
-  endif
-  ifeq ($(wildcard $(SKETCHBOOK)/libraries),)
-    SKETCHBOOK		:=	$(shell cd $(SRCROOT)/../../.. && pwd)
-  endif
-  ifeq ($(wildcard $(SKETCHBOOK)/libraries),)
-    SKETCHBOOK		:=	$(shell cd $(SRCROOT)/../../../.. && pwd)
-  endif
-  ifeq ($(wildcard $(SKETCHBOOK)/libraries),)
     $(error ERROR: cannot determine sketchbook location - please specify on the commandline with SKETCHBOOK=<path>)
   endif
 else
@@ -145,57 +136,6 @@ HAL_BOARD = HAL_BOARD_SITL
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
-ifneq ($(findstring linux, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_NONE
-endif
-
-ifneq ($(findstring erleboard, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_ERLEBOARD
-endif
-
-ifneq ($(findstring zynq, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_ZYNQ
-endif
-
-ifneq ($(findstring pxf, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_PXF
-endif
-
-ifneq ($(findstring bebop, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_BEBOP
-endif
-
-
-ifneq ($(findstring navio, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_NAVIO
-endif
-
-ifneq ($(findstring raspilot, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_RASPILOT
-endif
-
-ifneq ($(findstring erlebrain2, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_ERLEBRAIN2
-endif
-
-ifneq ($(findstring bbbmini, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_BBBMINI
-endif
-
-ifneq ($(findstring minlure, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_MINLURE
-endif
-
 ifneq ($(findstring vrbrain, $(MAKECMDGOALS)),)
 HAL_BOARD = HAL_BOARD_VRBRAIN
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
@@ -211,11 +151,6 @@ HAL_BOARD = HAL_BOARD_VRBRAIN
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
-ifneq ($(findstring bhat, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_BH
-endif
-
 ifneq ($(findstring qflight, $(MAKECMDGOALS)),)
 HAL_BOARD = HAL_BOARD_LINUX
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_QFLIGHT
@@ -226,18 +161,13 @@ HAL_BOARD = HAL_BOARD_QURT
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
-ifneq ($(findstring pxfmini, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_PXFMINI
+ifneq ($(findstring f4light, $(MAKECMDGOALS)),)
+HAL_BOARD = HAL_BOARD_F4LIGHT
+HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
 # default to SITL
 ifeq ($(HAL_BOARD),)
 HAL_BOARD = HAL_BOARD_SITL
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
-endif
-
-ifneq ($(findstring navio2, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_LINUX
-HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_NAVIO2
 endif
