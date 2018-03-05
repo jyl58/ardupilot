@@ -292,6 +292,12 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// Follow - follow another vehicle or GCS
+#ifndef MODE_FOLLOW_ENABLED
+# define MODE_FOLLOW_ENABLED !HAL_MINIMIZE_FEATURES
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // Guided mode - control vehicle's position or angles from GCS
 #ifndef MODE_GUIDED_ENABLED
 # define MODE_GUIDED_ENABLED ENABLED
@@ -666,10 +672,6 @@
 
 #if AC_TERRAIN && !MODE_AUTO_ENABLED
   #error Terrain requires ModeAuto which is disabled
-#endif
-
-#if AC_AVOID_ENABLED && !BEACON_ENABLED
-  #error AC_Avoid requires Beacon which is disabled
 #endif
 
 //////////////////////////////////////////////////////////////////////////////

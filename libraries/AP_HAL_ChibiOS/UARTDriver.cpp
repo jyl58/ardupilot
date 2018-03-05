@@ -395,7 +395,7 @@ bool UARTDriver::is_initialized()
 
 void UARTDriver::set_blocking_writes(bool blocking)
 {
-    _nonblocking_writes = !blocking;
+    _blocking_writes = blocking;
 }
 
 bool UARTDriver::tx_pending() { return false; }
@@ -457,7 +457,7 @@ size_t UARTDriver::write(uint8_t c)
     }
 
     while (_writebuf.space() == 0) {
-        if (_nonblocking_writes) {
+        if (!_blocking_writes) {
             chMtxUnlock(&_write_mutex);
             return 0;
         }
@@ -481,7 +481,7 @@ size_t UARTDriver::write(const uint8_t *buffer, size_t size)
         return -1;
     }
 
-    if (!_nonblocking_writes && !unbuffered_writes) {
+    if (_blocking_writes && !unbuffered_writes) {
         /*
           use the per-byte delay loop in write() above for blocking writes
          */
@@ -546,7 +546,10 @@ void UARTDriver::write_pending_bytes_DMA(uint32_t n)
     if (tx_len == 0) {
         return;
     }
-    dma_handle->lock();
+    if (!dma_handle->lock_nonblock()) {
+        tx_len = 0;
+        return;
+    }
     tx_bounce_buf_ready = false;
     osalDbgAssert(txdma != nullptr, "UART TX DMA allocation failed");
     dmaStreamSetMemory0(txdma, tx_bounce_buf);
