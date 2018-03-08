@@ -1457,7 +1457,8 @@ void GCS_MAVLINK::send_local_position(const AP_AHRS &ahrs) const
 /*
 	send local positon relative ekf origin by command packet
 */
-void GCS_MAVLINK::send_local_ekf_position(const AP_AHRS &ahrs,uint8_t sys_id){
+void GCS_MAVLINK::send_local_ekf_position(const AP_AHRS &ahrs,uint8_t sys_id) const
+{
 	Vector3f local_position_ekf, velocity_ekf;
     if (!ahrs.get_relative_position_NED_origin(local_position_ekf) ||
         !ahrs.get_velocity_NED(velocity_ekf)) {
