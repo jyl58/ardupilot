@@ -1454,7 +1454,25 @@ void GCS_MAVLINK::send_local_position(const AP_AHRS &ahrs) const
         velocity.y,
         velocity.z);
 }
-
+/*
+	send local positon relative ekf origin by command packet
+*/
+void GCS_MAVLINK::send_local_ekf_position(const AP_AHRS &ahrs,uint8_t sys_id){
+	Vector3f local_position_ekf, velocity_ekf;
+    if (!ahrs.get_relative_position_NED_origin(local_position_ekf) ||
+        !ahrs.get_velocity_NED(velocity_ekf)) {
+        // we don't know the position and velocity
+        return;
+    }
+	mavlink_msg_command_long_send( chan,
+        sys_id,
+        0,
+        MAV_CMD_USER_1,
+        0,
+        local_position_ekf.x,local_position_ekf.y,local_position_ekf.z,
+		velocity_ekf.x,velocity_ekf.y,velocity_ekf.z,
+		0);
+}
 /*
   send VIBRATION message
  */
