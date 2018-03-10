@@ -239,9 +239,9 @@ private:
     AP_RPM rpm_sensor;
 
     // Inertial Navigation EKF
-    NavEKF2 EKF2{&ahrs, barometer, rangefinder};
-    NavEKF3 EKF3{&ahrs, barometer, rangefinder};
-    AP_AHRS_NavEKF ahrs{ins, barometer, EKF2, EKF3, AP_AHRS_NavEKF::FLAG_ALWAYS_USE_EKF};
+    NavEKF2 EKF2{&ahrs, rangefinder};
+    NavEKF3 EKF3{&ahrs, rangefinder};
+    AP_AHRS_NavEKF ahrs{ins, EKF2, EKF3, AP_AHRS_NavEKF::FLAG_ALWAYS_USE_EKF};
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     SITL::SITL sitl;
@@ -266,7 +266,7 @@ private:
 #endif
 
     // Arming/Disarming mangement class
-    AP_Arming_Copter arming{ahrs, barometer, compass, battery, inertial_nav, ins};
+    AP_Arming_Copter arming{ahrs, compass, battery, inertial_nav, ins};
 
     // Optical flow sensor
 #if OPTFLOW == ENABLED
@@ -572,7 +572,7 @@ private:
 #endif
 
 #if ADSB_ENABLED == ENABLED
-    AP_ADSB adsb{ahrs};
+    AP_ADSB adsb;
 
     // avoidance of adsb enabled vehicles (normally manned vehicles)
     AP_Avoidance_Copter avoidance_adsb{ahrs, adsb};

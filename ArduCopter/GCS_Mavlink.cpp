@@ -316,13 +316,7 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
     case MSG_LOCATION:
         CHECK_PAYLOAD_SIZE(GLOBAL_POSITION_INT);
         copter.send_location(chan);
-        break;
-
-    case MSG_LOCAL_POSITION:
-        CHECK_PAYLOAD_SIZE(LOCAL_POSITION_NED);
-        send_local_position(copter.ahrs);
-		//send ekf local position
-		send_local_ekf_position(copter.ahrs,copter.g.sysid_this_mav);
+		send_local_ekf_position(copter.g.sysid_this_mav);
         break;
 
     case MSG_NAV_CONTROLLER_OUTPUT:
@@ -352,12 +346,12 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
 
     case MSG_RAW_IMU2:
         CHECK_PAYLOAD_SIZE(SCALED_PRESSURE);
-        send_scaled_pressure(copter.barometer);
+        send_scaled_pressure();
         break;
 
     case MSG_RAW_IMU3:
         CHECK_PAYLOAD_SIZE(SENSOR_OFFSETS);
-        send_sensor_offsets(copter.ins, copter.compass, copter.barometer);
+        send_sensor_offsets(copter.ins, copter.compass);
         break;
 
     case MSG_RANGEFINDER:
@@ -391,18 +385,13 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
 #endif
         break;
 
-    case MSG_AHRS:
-        CHECK_PAYLOAD_SIZE(AHRS);
-        send_ahrs(copter.ahrs);
-        break;
-
     case MSG_SIMSTATE:
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         CHECK_PAYLOAD_SIZE(SIMSTATE);
         copter.send_simstate(chan);
 #endif
         CHECK_PAYLOAD_SIZE(AHRS2);
-        send_ahrs2(copter.ahrs);
+        send_ahrs2();
         break;
 
     case MSG_MOUNT_STATUS:
@@ -420,7 +409,7 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
     case MSG_OPTICAL_FLOW:
 #if OPTFLOW == ENABLED
         CHECK_PAYLOAD_SIZE(OPTICAL_FLOW);
-        send_opticalflow(copter.ahrs, copter.optflow);
+        send_opticalflow(copter.optflow);
 #endif
         break;
 
@@ -1664,7 +1653,7 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
 
         ins.set_accel(0, accels);
 
-        copter.barometer.setHIL(packet.alt*0.001f);
+        AP::baro().setHIL(packet.alt*0.001f);
         copter.compass.setHIL(0, packet.roll, packet.pitch, packet.yaw);
         copter.compass.setHIL(1, packet.roll, packet.pitch, packet.yaw);
 

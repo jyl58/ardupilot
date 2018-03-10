@@ -517,11 +517,6 @@ bool GCS_MAVLINK_Sub::try_send_message(enum ap_message id)
         sub.send_location(chan);
         break;
 
-    case MSG_LOCAL_POSITION:
-        CHECK_PAYLOAD_SIZE(LOCAL_POSITION_NED);
-        send_local_position(sub.ahrs);
-        break;
-
     case MSG_NAV_CONTROLLER_OUTPUT:
         CHECK_PAYLOAD_SIZE(NAV_CONTROLLER_OUTPUT);
         sub.send_nav_controller_output(chan);
@@ -549,13 +544,13 @@ bool GCS_MAVLINK_Sub::try_send_message(enum ap_message id)
 
     case MSG_RAW_IMU2:
         CHECK_PAYLOAD_SIZE(SCALED_PRESSURE);
-        send_scaled_pressure(sub.barometer);
+        send_scaled_pressure();
         sub.send_temperature(chan);
         break;
 
     case MSG_RAW_IMU3:
         CHECK_PAYLOAD_SIZE(SENSOR_OFFSETS);
-        send_sensor_offsets(sub.ins, sub.compass, sub.barometer);
+        send_sensor_offsets(sub.ins, sub.compass);
         break;
 
     case MSG_RANGEFINDER:
@@ -588,18 +583,13 @@ bool GCS_MAVLINK_Sub::try_send_message(enum ap_message id)
 #endif
         break;
 
-    case MSG_AHRS:
-        CHECK_PAYLOAD_SIZE(AHRS);
-        send_ahrs(sub.ahrs);
-        break;
-
     case MSG_SIMSTATE:
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         CHECK_PAYLOAD_SIZE(SIMSTATE);
         sub.send_simstate(chan);
 #endif
         CHECK_PAYLOAD_SIZE(AHRS2);
-        send_ahrs2(sub.ahrs);
+        send_ahrs2();
         break;
 
     case MSG_MOUNT_STATUS:
@@ -617,7 +607,7 @@ bool GCS_MAVLINK_Sub::try_send_message(enum ap_message id)
     case MSG_OPTICAL_FLOW:
 #if OPTFLOW == ENABLED
         CHECK_PAYLOAD_SIZE(OPTICAL_FLOW);
-        send_opticalflow(sub.ahrs, sub.optflow);
+        send_opticalflow(sub.optflow);
 #endif
         break;
 
