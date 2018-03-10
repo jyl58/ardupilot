@@ -53,7 +53,7 @@ public:
     friend class AP_AHRS_View;
     
     // Constructor
-    AP_AHRS(AP_InertialSensor &ins, AP_Baro &baro) :
+    AP_AHRS(AP_InertialSensor &ins) :
         roll(0.0f),
         pitch(0.0f),
         yaw(0.0f),
@@ -67,7 +67,6 @@ public:
         _beacon(nullptr),
         _compass_last_update(0),
         _ins(ins),
-        _baro(baro),
         _cos_roll(1.0f),
         _cos_pitch(1.0f),
         _cos_yaw(1.0f),
@@ -76,6 +75,8 @@ public:
         _sin_yaw(0.0f),
         _active_accel_instance(0)
     {
+        _singleton = this;
+
         // load default values from var_info table
         AP_Param::setup_object_defaults(this, var_info);
 
@@ -99,6 +100,11 @@ public:
 
     // empty virtual destructor
     virtual ~AP_AHRS() {}
+
+    // get singleton instance
+    static AP_AHRS *get_singleton() {
+        return _singleton;
+    }
 
     // init sets up INS board orientation
     virtual void init() {
@@ -204,10 +210,6 @@ public:
         return _ins;
     }
 
-    const AP_Baro &get_baro() const {
-        return _baro;
-    }
-
     // get the index of the current primary accelerometer sensor
     virtual uint8_t get_primary_accel_index(void) const {
         return _ins.get_primary_accel();
@@ -295,6 +297,8 @@ public:
     // get our current position estimate. Return true if a position is available,
     // otherwise false. This call fills in lat, lng and alt
     virtual bool get_position(struct Location &loc) const = 0;
+
+    virtual bool get_hagl(float &height) const { return false; }
 
     // return a wind estimation vector, in m/s
     virtual Vector3f wind_estimate(void) const = 0;
@@ -630,7 +634,6 @@ protected:
     // note: we use ref-to-pointer here so that our caller can change the GPS without our noticing
     //       IMU under us without our noticing.
     AP_InertialSensor   &_ins;
-    AP_Baro             &_baro;
 
     // a vector to capture the difference between the controller and body frames
     AP_Vector3f         _trim;
@@ -670,6 +673,10 @@ protected:
     // AOA and SSA
     float _AOA, _SSA;
     uint32_t _last_AOA_update_ms;
+
+private:
+    static AP_AHRS *_singleton;
+
 };
 
 #include "AP_AHRS_DCM.h"
@@ -680,3 +687,7 @@ protected:
 #else
 #define AP_AHRS_TYPE AP_AHRS
 #endif
+
+namespace AP {
+    AP_AHRS &ahrs();
+};

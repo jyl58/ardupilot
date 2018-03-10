@@ -39,9 +39,9 @@ class build_binaries(object):
         return self.run_program("BB-GIT", cmd_list)
 
     def board_branch_bit(self, board):
-        '''return a fragment which might modify the branch name'''
-        if board in ["apm1", "apm2"]:
-            return "-AVR"
+        '''return a fragment which might modify the branch name.
+        this was previously used to have a master-AVR branch etc
+        if the board type was apm1 or apm2'''
         return None
 
     def board_options(self, board):
@@ -300,34 +300,6 @@ is bob we will attempt to checkout bob-AVR'''
             with open(filepath, "a"):
                 pass
 
-    def build_vehicle_apm(self, tag, vehicle, board,
-                          vehicle_binaries_subdir, binaryname):
-        self.progress("Building %s %s %s binaries" % (vehicle, tag, board))
-        if not self.checkout(vehicle, tag, board):
-            self.progress("Failed checkout of %s %s %s" %
-                          (vehicle, board, tag))
-            self.error_count += 1
-            return
-        framesuffix = ""
-        ddir = os.path.join(self.binaries,
-                            vehicle_binaries_subdir,
-                            self.hdate_ym,
-                            self.hdate_ymdhm,
-                            "".join([board, framesuffix]))
-        if self.skip_build(tag, ddir):
-            return
-
-        self.run_make(["-C", vehicle, "clean"])
-        self.run_make(["-C", vehicle, "-j4", board])
-
-        binaryname = vehicle  # HACK!  make targets are mixed-case
-        path = os.path.join(self.tmpdir,
-                            "".join([vehicle, ".build"]),
-                            "".join([binaryname, framesuffix, ".hex"]))
-        self.copyit(path, ddir, tag, vehicle)
-        self.touch_filepath(os.path.join(self.binaries,
-                                         vehicle_binaries_subdir, tag))
-
     def build_vehicle(self, tag, vehicle, boards, vehicle_binaries_subdir,
                       binaryname, px4_binaryname, frames=[None]):
         '''build vehicle binaries'''
@@ -344,11 +316,6 @@ is bob we will attempt to checkout bob-AVR'''
         # # end pointless checkout
 
         for board in boards:
-            if "apm" in board:
-                # apm does't do frames
-                self.build_vehicle_apm(tag, vehicle, board,
-                                       vehicle_binaries_subdir, binaryname)
-                continue
             self.progress("Building board: %s" % board)
             for frame in frames:
                 if frame is not None:
@@ -359,9 +326,10 @@ is bob we will attempt to checkout bob-AVR'''
                 else:
                     framesuffix = "-%s" % frame
                 if not self.checkout(vehicle, tag, board, frame):
-                    self.progress("Failed checkout of %s %s %s %s" %
-                                  (vehicle, board, tag, frame))
-                    self.error_count += 1
+                    msg = ("Failed checkout of %s %s %s %s" %
+                           (vehicle, board, tag, frame,))
+                    self.progress(msg)
+                    self.error_strings.append(msg)
                     continue
                 if self.skip_board_waf(board):
                     continue
@@ -393,9 +361,10 @@ is bob we will attempt to checkout bob-AVR'''
                                           "".join([binaryname, framesuffix]))
                     self.run_waf(["build", "--targets", target])
                 except subprocess.CalledProcessError as e:
-                    self.progress("Failed build of %s %s%s %s" %
-                                  (vehicle, board, framesuffix, tag))
-                    self.error_count += 1
+                    msg = ("Failed build of %s %s%s %s" %
+                           (vehicle, board, framesuffix, tag))
+                    self.progress(msg)
+                    self.error_strings.append(msg)
                     continue
 
                 bare_path = os.path.join(self.buildroot,
@@ -410,8 +379,7 @@ is bob we will attempt to checkout bob-AVR'''
                 try:
                     self.copyit(path, ddir, tag, vehicle)
                 except Exception as e:
-                    self.progress("Failed to copy %s to %s: %s",
-                                  path, ddir, str(e))
+                    self.progress("Failed to copy %s to %s: %s" % (path, ddir, str(e)))
                 # why is touching this important? -pb20170816
                 self.touch_filepath(os.path.join(self.binaries,
                                                  vehicle_binaries_subdir, tag))
@@ -426,9 +394,10 @@ is bob we will attempt to checkout bob-AVR'''
                 framesuffix = "-%s" % frame
 
             if not self.checkout(vehicle, tag, "PX4", frame):
-                self.progress("Failed checkout of %s %s %s %s" %
-                              (vehicle, "PX4", tag, frame))
-                self.error_count += 1
+                msg = ("Failed checkout of %s %s %s %s" %
+                       (vehicle, "PX4", tag, frame))
+                self.progress(msg)
+                self.error_strings.append(msg)
                 self.checkout(vehicle, "latest")
                 continue
 
@@ -470,9 +439,10 @@ is bob we will attempt to checkout bob-AVR'''
                         os.path.join("bin",
                                      "".join([binaryname, framesuffix]))])
                 except subprocess.CalledProcessError as e:
-                    self.progress("Failed build of %s %s%s %s for %s" %
-                                  (vehicle, board, framesuffix, tag, v))
-                    self.error_count += 1
+                    msg = ("Failed build of %s %s%s %s for %s" %
+                           (vehicle, board, framesuffix, tag, v))
+                    self.progress(msg)
+                    self.error_strings.append(msg)
                     continue
 
                 oldfile = os.path.join(self.buildroot, px4_v, "bin",
@@ -483,9 +453,10 @@ is bob we will attempt to checkout bob-AVR'''
                     shutil.copyfile(oldfile, newfile)
                 except Exception as e:
                     self.progress("FIXME: narrow exception (%s)" % repr(e))
-                    self.progress("Failed build copy of %s PX4%s %s for %s" %
-                                  (vehicle, framesuffix, tag, v))
-                    self.error_count += 1
+                    msg = ("Failed build copy of %s PX4%s %s for %s" %
+                           (vehicle, framesuffix, tag, v))
+                    self.progress(msg)
+                    self.error_strings.append(msg)
                     continue
                 # FIXME: why the two stage copy?!
                 self.copyit(newfile, ddir, tag, vehicle)
@@ -522,7 +493,6 @@ is bob we will attempt to checkout bob-AVR'''
     def build_antennatracker(self, tag):
         '''build Tracker binaries'''
         boards = ['navio', 'navio2']
-        boards.append('apm2')
         self.build_vehicle(tag,
                            "AntennaTracker",
                            boards,
@@ -533,7 +503,6 @@ is bob we will attempt to checkout bob-AVR'''
     def build_rover(self, tag):
         '''build Rover binaries'''
         boards = self.common_boards()
-        boards.extend(['apm1', 'apm2'])
         self.build_vehicle(tag,
                            "APMrover2",
                            boards,
@@ -626,7 +595,7 @@ is bob we will attempt to checkout bob-AVR'''
         self.binaries = os.path.join(os.getcwd(), "..", "buildlogs",
                                      "binaries")
         self.basedir = os.getcwd()
-        self.error_count = 0
+        self.error_strings = []
 
         if os.path.exists("config.mk"):
             # FIXME: narrow exception
@@ -651,7 +620,9 @@ is bob we will attempt to checkout bob-AVR'''
 
         self.generate_manifest()
 
-        sys.exit(self.error_count)
+        for error_string in self.error_strings:
+            self.progress("%s" % error_string)
+        sys.exit(len(self.error_strings))
 
 
 if __name__ == '__main__':
