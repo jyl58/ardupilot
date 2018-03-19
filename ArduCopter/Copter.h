@@ -177,6 +177,7 @@ public:
     friend class Parameters;
     friend class ParametersG2;
     friend class AP_Avoidance_Copter;
+
 #if ADVANCED_FAILSAFE == ENABLED
     friend class AP_AdvancedFailsafe_Copter;
 #endif
@@ -241,7 +242,7 @@ private:
     // Inertial Navigation EKF
     NavEKF2 EKF2{&ahrs, rangefinder};
     NavEKF3 EKF3{&ahrs, rangefinder};
-    AP_AHRS_NavEKF ahrs{ins, EKF2, EKF3, AP_AHRS_NavEKF::FLAG_ALWAYS_USE_EKF};
+    AP_AHRS_NavEKF ahrs{EKF2, EKF3, AP_AHRS_NavEKF::FLAG_ALWAYS_USE_EKF};
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     SITL::SITL sitl;
@@ -266,7 +267,7 @@ private:
 #endif
 
     // Arming/Disarming mangement class
-    AP_Arming_Copter arming{ahrs, compass, battery, inertial_nav, ins};
+    AP_Arming_Copter arming{ahrs, compass, battery, inertial_nav};
 
     // Optical flow sensor
 #if OPTFLOW == ENABLED
@@ -657,8 +658,6 @@ private:
     void update_altitude();
 
     // Attitude.cpp
-    float get_smoothing_gain();
-    void get_pilot_desired_lean_angles(float roll_in, float pitch_in, float &roll_out, float &pitch_out, float angle_max);
     float get_pilot_desired_yaw_rate(int16_t stick_angle);
     float get_roi_yaw();
     float get_look_ahead_yaw();
@@ -784,7 +783,6 @@ private:
 
     // Log.cpp
     void Log_Write_Optflow();
-    void Log_Write_Nav_Tuning();
     void Log_Write_Control_Tuning();
     void Log_Write_Performance();
     void Log_Write_Attitude();
@@ -960,10 +958,12 @@ private:
 #include "mode.h"
 
     Mode *flightmode;
+#if MODE_ACRO_ENABLED == ENABLED
 #if FRAME_CONFIG == HELI_FRAME
     ModeAcro_Heli mode_acro;
 #else
     ModeAcro mode_acro;
+#endif
 #endif
     ModeAltHold mode_althold;
 #if MODE_AUTO_ENABLED == ENABLED
@@ -1009,7 +1009,9 @@ private:
 #if ADSB_ENABLED == ENABLED
     ModeAvoidADSB mode_avoid_adsb;
 #endif
+#if MODE_THROW_ENABLED == ENABLED
     ModeThrow mode_throw;
+#endif
 #if MODE_GUIDED_NOGPS_ENABLED == ENABLED
     ModeGuidedNoGPS mode_guided_nogps;
 #endif
