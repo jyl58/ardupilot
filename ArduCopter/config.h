@@ -216,7 +216,7 @@
  # define OPTFLOW       ENABLED
 #endif
 #ifndef VISUAL_ODOMETRY_ENABLED
-# define VISUAL_ODOMETRY_ENABLED ENABLED
+# define VISUAL_ODOMETRY_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -258,13 +258,19 @@
 //////////////////////////////////////////////////////////////////////////////
 // ADSB support
 #ifndef ADSB_ENABLED
-# define ADSB_ENABLED ENABLED
+# define ADSB_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
 // Nav-Guided - allows external nav computer to control vehicle
 #ifndef NAV_GUIDED
- # define NAV_GUIDED    ENABLED
+ # define NAV_GUIDED    !HAL_MINIMIZE_FEATURES
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
+// Acro - fly vehicle in acrobatic mode
+#ifndef MODE_ACRO_ENABLED
+# define MODE_ACRO_ENABLED ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -340,9 +346,15 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// Throw - fly vehicle after throwing it in the air
+#ifndef MODE_THROW_ENABLED
+# define MODE_THROW_ENABLED ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // Beacon support - support for local positioning systems
 #ifndef BEACON_ENABLED
-# define BEACON_ENABLED ENABLED
+# define BEACON_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -672,6 +684,10 @@
 
 #if AC_TERRAIN && !MODE_AUTO_ENABLED
   #error Terrain requires ModeAuto which is disabled
+#endif
+
+#if FRAME_CONFIG == HELI_FRAME && !MODE_ACRO_ENABLED
+  #error Helicopter frame requires acro mode support which is disabled
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
