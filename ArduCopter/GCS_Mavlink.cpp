@@ -316,7 +316,6 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
     case MSG_LOCATION:
         CHECK_PAYLOAD_SIZE(GLOBAL_POSITION_INT);
         copter.send_location(chan);
-		send_local_ekf_position(copter.g.sysid_this_mav);
         break;
 
     case MSG_NAV_CONTROLLER_OUTPUT:

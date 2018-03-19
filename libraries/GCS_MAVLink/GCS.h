@@ -174,7 +174,7 @@ public:
     void send_autopilot_version() const;
 	void send_local_position() const;
 	//send vehicle position relative ekf origin
-	void send_local_ekf_position(uint8_t sys_id) const;
+	void send_local_ekf_position() const;
     void send_vibration(const AP_InertialSensor &ins) const;
     void send_home(const Location &home) const;
     void send_ekf_origin(const Location &ekf_origin) const;

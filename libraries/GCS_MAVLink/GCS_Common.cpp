@@ -1467,7 +1467,7 @@ void GCS_MAVLINK::send_local_position() const
 /*
 	send local positon relative ekf origin by command packet
 */
-void GCS_MAVLINK::send_local_ekf_position(uint8_t sys_id) const
+void GCS_MAVLINK::send_local_ekf_position() const
 {
 	const AP_AHRS &ahrs = AP::ahrs();
 	Vector3f local_position_ekf, velocity_ekf;
@@ -1477,7 +1477,7 @@ void GCS_MAVLINK::send_local_ekf_position(uint8_t sys_id) const
         return;
     }
 	mavlink_msg_command_long_send( chan,
-        sys_id,
+        0,
         0,
         MAV_CMD_USER_1,
         0,
@@ -2399,6 +2399,8 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
     case MSG_LOCAL_POSITION:
         CHECK_PAYLOAD_SIZE(LOCAL_POSITION_NED);
         send_local_position();
+		CHECK_PAYLOAD_SIZE(LOCAL_POSITION_NED);
+		send_local_ekf_position();
         break;
 
     case MSG_AHRS:
