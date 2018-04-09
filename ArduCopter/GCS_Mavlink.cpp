@@ -928,7 +928,17 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             }
             break;
         }
-
+		
+		//trigger into guide loiter mode
+		case MAV_CMD_USER_2 :{
+			if(copter.control_mode != GUIDED){
+				result = MAV_RESULT_ACCEPTED;
+				break;
+			}
+			copter.mode_guided.loiter_control_start();
+			result = MAV_RESULT_ACCEPTED;
+			break;
+		}
 
         case MAV_CMD_NAV_LOITER_UNLIM:
             if (copter.set_mode(LOITER, MODE_REASON_GCS_COMMAND)) {
