@@ -177,9 +177,10 @@ void Copter::ModeGuided::loiter_control_start()
 	// set guided_mode to Loiter controller
     guided_mode = Guided_Loiter;
 	
-	const Vector3f curr_pos=inertial_nav.get_position();
+	Vector3f stop_pos;
+	pos_control->get_stopping_point_xy(stop_pos);
 	// set target to current position
-    wp_nav->init_loiter_target(curr_pos);
+    wp_nav->init_loiter_target(stop_pos);
 
     // initialize vertical speed and acceleration
     pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
