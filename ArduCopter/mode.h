@@ -722,16 +722,25 @@ private:
     void pos_control_start();
     void vel_control_start();
     void posvel_control_start();
+	void loiter_control_start();
     void takeoff_run();
     void pos_control_run();
     void vel_control_run();
     void posvel_control_run();
+	void loiter_control_run();
+#if PRECISION_LANDING == ENABLED
+	bool do_precision_loiter();
+	void precision_loiter_xy();
+#endif
     void set_desired_velocity_with_accel_and_fence_limits(const Vector3f& vel_des);
     void set_yaw_state(bool use_yaw, float yaw_cd, bool use_yaw_rate, float yaw_rate_cds, bool relative_angle);
 
     // controls which controller is run (pos or vel):
     GuidedMode guided_mode = Guided_TakeOff;
-
+	
+#if PRECISION_LANDING == ENABLED
+    bool _precision_loiter_enabled;
+#endif
 };
 
 

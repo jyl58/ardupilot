@@ -171,7 +171,26 @@ void Copter::ModeGuided::angle_control_start()
     // pilot always controls yaw
     set_auto_yaw_mode(AUTO_YAW_HOLD);
 }
+// initialise guided mode's loiter controller
+void Copter::ModeGuided::loiter_control_start()
+{
+	// set guided_mode to Loiter controller
+    guided_mode = Guided_Loiter;
+	// set target to current position
+    wp_nav->init_loiter_target();
 
+    // initialize vertical speed and acceleration
+    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_accel_z(g.pilot_accel_z);
+
+    // initialise position and desired velocity
+    if (!pos_control->is_active_z()) {
+        pos_control->set_alt_target_to_current_alt();
+        pos_control->set_desired_velocity_z(inertial_nav.get_velocity_z());
+    }
+	//enabale the precision
+	_precision_loiter_enabled=true;
+}
 // guided_set_destination - sets guided mode's target destination
 // Returns true if the fence is enabled and guided waypoint is within the fence
 // else return false if the waypoint is outside the fence
@@ -347,7 +366,10 @@ void Copter::ModeGuided::run()
         // run position-velocity controller
         posvel_control_run();
         break;
-
+	case Guided_Loiter:
+		//run loiter controller
+		loiter_control_run();
+		break;
     case Guided_Angle:
         // run angle controller
         angle_control_run();
@@ -564,7 +586,49 @@ void Copter::ModeGuided::posvel_control_run()
         attitude_control->input_euler_angle_roll_pitch_yaw(pos_control->get_roll(), pos_control->get_pitch(), get_auto_heading(), true);
     }
 }
+void Copter::ModeGuided::loiter_control_run(){
+	float target_yaw_rate=0;
+	float target_climb_rate=0;
+	// initialize vertical speed and acceleration
+    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_accel_z(g.pilot_accel_z);
+	if (!motors->armed() || !motors->get_interlock()) {
+		motors->set_desired_spool_state(AP_Motors::DESIRED_SHUT_DOWN);
+		wp_nav->init_loiter_target();
+        attitude_control->reset_rate_controller_I_terms();
+        attitude_control->set_yaw_target_to_current_heading();
+        pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
+		wp_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
+        attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), target_yaw_rate);
+        pos_control->update_z_controller();
+		return;
+	}
+	// set motors to full range
+    motors->set_desired_spool_state(AP_Motors::DESIRED_THROTTLE_UNLIMITED);
+#if PRECISION_LANDING == ENABLED
+    if (do_precision_loiter()) {
+        precision_loiter_xy();
+    }
+#endif
+	// run loiter controller
+    wp_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
 
+    // call attitude controller
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), target_yaw_rate);
+
+    // adjust climb rate using rangefinder
+    if (copter.rangefinder_alt_ok()) {
+        // if rangefinder is ok, use surface tracking
+        target_climb_rate = get_surface_tracking_climb_rate(target_climb_rate, pos_control->get_alt_target(), G_Dt);
+    }
+
+    // get avoidance adjusted climb rate
+    target_climb_rate = get_avoidance_adjusted_climbrate(target_climb_rate);
+
+    // update altitude target and call position controller
+    pos_control->set_alt_target_from_climb_rate_ff(target_climb_rate, G_Dt, false);
+    pos_control->update_z_controller();
+}
 // guided_angle_control_run - runs the guided angle controller
 // called from guided_run
 void Copter::ModeGuided::angle_control_run()
@@ -761,3 +825,34 @@ int32_t Copter::ModeGuided::wp_bearing() const
         return 0;
     }
 }
+#if PRECISION_LANDING == ENABLED
+bool Copter::ModeGuided::do_precision_loiter()
+{
+    if (!_precision_loiter_enabled) {
+        return false;
+    }
+    if (ap.land_complete_maybe) {
+        return false;        // don't move on the ground
+    }
+    if (!copter.precland.target_acquired()) {
+        return false; // we don't have a good vector
+    }
+    return true;
+}
+
+void Copter::ModeGuided::precision_loiter_xy()
+{
+    wp_nav->clear_pilot_desired_acceleration();
+    Vector2f target_pos, target_vel_rel;
+    if (!copter.precland.get_target_position_cm(target_pos)) {
+        target_pos.x = inertial_nav.get_position().x;
+        target_pos.y = inertial_nav.get_position().y;
+    }
+    if (!copter.precland.get_target_velocity_relative_cms(target_vel_rel)) {
+        target_vel_rel.x = -inertial_nav.get_velocity().x;
+        target_vel_rel.y = -inertial_nav.get_velocity().y;
+    }
+    pos_control->set_xy_target(target_pos.x, target_pos.y);
+    pos_control->override_vehicle_velocity_xy(-target_vel_rel);
+}
+#endif
