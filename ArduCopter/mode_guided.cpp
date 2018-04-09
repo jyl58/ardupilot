@@ -189,7 +189,7 @@ void Copter::ModeGuided::loiter_control_start()
         pos_control->set_desired_velocity_z(inertial_nav.get_velocity_z());
     }
 	//enabale the precision
-	_precision_loiter_enabled=true;
+	_guide_precision_loiter_enabled=true;
 }
 // guided_set_destination - sets guided mode's target destination
 // Returns true if the fence is enabled and guided waypoint is within the fence
@@ -587,8 +587,8 @@ void Copter::ModeGuided::posvel_control_run()
     }
 }
 void Copter::ModeGuided::loiter_control_run(){
-	float target_yaw_rate=0;
-	float target_climb_rate=0;
+	float target_yaw_rate=0.0;
+	float target_climb_rate=0.0;
 	// initialize vertical speed and acceleration
     pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
     pos_control->set_accel_z(g.pilot_accel_z);
@@ -600,6 +600,16 @@ void Copter::ModeGuided::loiter_control_run(){
         pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
 		wp_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
         attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), target_yaw_rate);
+        pos_control->update_z_controller();
+		return;
+	}
+	if(ap.land_complete){
+		motors->set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
+		wp_nav->init_loiter_target();
+        attitude_control->reset_rate_controller_I_terms();
+        attitude_control->set_yaw_target_to_current_heading();
+        attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(0, 0, 0);
+        pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
         pos_control->update_z_controller();
 		return;
 	}
@@ -828,7 +838,7 @@ int32_t Copter::ModeGuided::wp_bearing() const
 #if PRECISION_LANDING == ENABLED
 bool Copter::ModeGuided::do_precision_loiter()
 {
-    if (!_precision_loiter_enabled) {
+    if (!_guide_precision_loiter_enabled) {
         return false;
     }
     if (ap.land_complete_maybe) {

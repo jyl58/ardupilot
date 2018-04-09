@@ -703,6 +703,7 @@ public:
     bool limit_check();
 
     bool takeoff_start(float final_alt_above_home);
+	void loiter_control_start();
 
     GuidedMode mode() const { return guided_mode; }
 
@@ -722,7 +723,6 @@ private:
     void pos_control_start();
     void vel_control_start();
     void posvel_control_start();
-	void loiter_control_start();
     void takeoff_run();
     void pos_control_run();
     void vel_control_run();
@@ -739,7 +739,7 @@ private:
     GuidedMode guided_mode = Guided_TakeOff;
 	
 #if PRECISION_LANDING == ENABLED
-    bool _precision_loiter_enabled;
+    bool _guide_precision_loiter_enabled;
 #endif
 };
 
