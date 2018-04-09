@@ -739,7 +739,7 @@ private:
     GuidedMode guided_mode = Guided_TakeOff;
 	
 #if PRECISION_LANDING == ENABLED
-    bool _guide_precision_loiter_enabled;
+    bool _guide_precision_loiter_enabled=false;
 #endif
 };
 
