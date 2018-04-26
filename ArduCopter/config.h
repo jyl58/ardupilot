@@ -353,6 +353,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 // Beacon support - support for local positioning systems
+#define BEACON_ENABLED ENABLED
 #ifndef BEACON_ENABLED
 # define BEACON_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
