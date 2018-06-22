@@ -863,7 +863,7 @@ bool Copter::ModeGuided::do_precision_loiter()
 
 void Copter::ModeGuided::precision_loiter_xy()
 {
-    wp_nav->clear_pilot_desired_acceleration();
+    loiter_nav->clear_pilot_desired_acceleration();
     Vector2f target_pos, target_vel_rel;
     if (!copter.precland.get_target_position_cm(target_pos)) {
         target_pos.x = inertial_nav.get_position().x;
