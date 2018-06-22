@@ -605,18 +605,18 @@ void Copter::ModeGuided::loiter_control_run(){
     pos_control->set_accel_z(g.pilot_accel_z);
 	if (!motors->armed() || !motors->get_interlock()) {
 		motors->set_desired_spool_state(AP_Motors::DESIRED_SHUT_DOWN);
-		wp_nav->init_loiter_target();
+		loiter_nav->init_loiter_target();
         attitude_control->reset_rate_controller_I_terms();
         attitude_control->set_yaw_target_to_current_heading();
         pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
-		wp_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
-        attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), target_yaw_rate);
+		loiter_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
+        attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(loiter_nav->get_roll(), loiter_nav->get_pitch(), target_yaw_rate);
         pos_control->update_z_controller();
 		return;
 	}
 	if(ap.land_complete){
 		motors->set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
-		wp_nav->init_loiter_target();
+		loiter_nav->init_loiter_target();
         attitude_control->reset_rate_controller_I_terms();
         attitude_control->set_yaw_target_to_current_heading();
         attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(0, 0, 0);
@@ -632,10 +632,10 @@ void Copter::ModeGuided::loiter_control_run(){
     }
 #endif
 	// run loiter controller
-    wp_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
+    loiter_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
 
     // call attitude controller
-    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), target_yaw_rate);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(loiter_nav->get_roll(), loiter_nav->get_pitch(), target_yaw_rate);
 
     // adjust climb rate using rangefinder
     if (copter.rangefinder_alt_ok()) {
