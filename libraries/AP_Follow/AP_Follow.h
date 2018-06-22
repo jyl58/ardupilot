@@ -36,7 +36,7 @@ public:
     };
 
     // constructor
-    AP_Follow(const AP_AHRS &ahrs);
+    AP_Follow();
 
     // set which target to follow
     void set_target_sysid(uint8_t sysid) { _sysid = sysid; }
@@ -87,9 +87,6 @@ private:
     // get offsets in meters in NED frame
     bool get_offsets_ned(Vector3f &offsets) const;
 
-    // references
-    const AP_AHRS &_ahrs;
-
     // parameters
     AP_Int8     _enabled;           // 1 if this subsystem is enabled
     AP_Int16    _sysid;             // target's mavlink system id (0 to use first sysid seen)
@@ -97,6 +94,7 @@ private:
     AP_Int8     _offset_type;       // offset frame type (0:North-East-Down, 1:RelativeToLeadVehicleHeading)
     AP_Vector3f _offset;            // offset from lead vehicle in meters
     AP_Int8     _yaw_behave;        // following vehicle's yaw/heading behaviour
+    AP_Int8     _alt_type;          // altitude source for follow mode
     AC_P        _p_pos;             // position error P controller
 
     // local variables

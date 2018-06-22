@@ -95,9 +95,8 @@ void Copter::read_radio()
 {
     uint32_t tnow_ms = millis();
 
-    if (hal.rcin->new_input()) {
+    if (RC_Channels::read_input()) {
         ap.new_radio_frame = true;
-        RC_Channels::set_pwm_all();
 
         set_throttle_and_failsafe(channel_throttle->get_radio_in());
         set_throttle_zero_flag(channel_throttle->get_control_in());
@@ -179,7 +178,9 @@ void Copter::set_throttle_zero_flag(int16_t throttle_control)
     // if not using throttle interlock and non-zero throttle and not E-stopped,
     // or using motor interlock and it's enabled, then motors are running, 
     // and we are flying. Immediately set as non-zero
-    if ((!ap.using_interlock && (throttle_control > 0) && !ap.motor_emergency_stop) || (ap.using_interlock && motors->get_interlock())) {
+    if ((!ap.using_interlock && (throttle_control > 0) && !ap.motor_emergency_stop) ||
+        (ap.using_interlock && motors->get_interlock()) ||
+        ap.armed_with_switch) {
         last_nonzero_throttle_ms = tnow_ms;
         ap.throttle_zero = false;
     } else if (tnow_ms - last_nonzero_throttle_ms > THROTTLE_ZERO_DEBOUNCE_TIME_MS) {

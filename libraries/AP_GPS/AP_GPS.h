@@ -22,6 +22,7 @@
 #include <AP_Vehicle/AP_Vehicle.h>
 #include "GPS_detect_state.h"
 #include <AP_SerialManager/AP_SerialManager.h>
+#include <AP_RTC/AP_RTC.h>
 
 /**
    maximum number of GPS instances available on this platform. If more
@@ -55,7 +56,6 @@ class AP_GPS
     friend class AP_GPS_NMEA;
     friend class AP_GPS_NOVA;
     friend class AP_GPS_PX4;
-    friend class AP_GPS_QURT;
     friend class AP_GPS_SBF;
     friend class AP_GPS_SBP;
     friend class AP_GPS_SBP2;
@@ -88,7 +88,6 @@ public:
         GPS_TYPE_UAVCAN = 9,
         GPS_TYPE_SBF   = 10,
         GPS_TYPE_GSOF  = 11,
-        GPS_TYPE_QURT  = 12,
         GPS_TYPE_ERB = 13,
         GPS_TYPE_MAV = 14,
         GPS_TYPE_NOVA = 15
@@ -482,11 +481,9 @@ private:
         uint8_t current_baud;
         bool auto_detected_baud;
         struct UBLOX_detect_state ublox_detect_state;
-#if !HAL_MINIMIZE_FEATURES
         struct MTK_detect_state mtk_detect_state;
         struct MTK19_detect_state mtk19_detect_state;
         struct SIRF_detect_state sirf_detect_state;
-#endif // !HAL_MINIMIZE_FEATURES
         struct NMEA_detect_state nmea_detect_state;
         struct SBP_detect_state sbp_detect_state;
         struct SBP2_detect_state sbp2_detect_state;
@@ -551,12 +548,13 @@ private:
     // calculate the blended state
     void calc_blended_state(void);
 
+    bool should_df_log() const;
+
     // Auto configure types
     enum GPS_AUTO_CONFIG {
         GPS_AUTO_CONFIG_DISABLE = 0,
         GPS_AUTO_CONFIG_ENABLE  = 1
     };
-
 };
 
 namespace AP {

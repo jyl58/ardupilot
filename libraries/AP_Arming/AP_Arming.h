@@ -40,7 +40,7 @@ public:
 
     // these functions should not be used by Copter which holds the armed state in the motors library
     ArmingRequired arming_required();
-    virtual bool arm(uint8_t method);
+    virtual bool arm(uint8_t method, bool do_arming_checks=true);
     bool disarm();
     bool is_armed();
 
@@ -104,8 +104,12 @@ protected:
 
     bool manual_transmitter_checks(bool report);
 
-    virtual enum HomeState home_status() const = 0;
-
+    bool servo_checks(bool report) const;
     bool rc_checks_copter_sub(bool display_failure, const RC_Channel *channels[4], const bool check_min_max = true) const;
+
+private:
+
+    bool ins_accels_consistent(const AP_InertialSensor &ins);
+    bool ins_gyros_consistent(const AP_InertialSensor &ins);
 
 };

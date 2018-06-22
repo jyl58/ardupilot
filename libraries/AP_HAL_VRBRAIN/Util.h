@@ -4,7 +4,7 @@
 #include "AP_HAL_VRBRAIN_Namespace.h"
 #include "Semaphores.h"
 
-class VRBRAIN::NSHShellStream : public AP_HAL::Stream {
+class VRBRAIN::NSHShellStream : public AP_HAL::BetterStream {
 public:
     size_t write(uint8_t);
     size_t write(const uint8_t *buffer, size_t size);
@@ -35,11 +35,6 @@ public:
     enum safety_state safety_switch_state(void);
 
     /*
-      set system clock in UTC microseconds
-     */
-    void set_system_clock(uint64_t time_utc_usec);
-
-    /*
       get system identifier (STM32 serial number)
      */
     bool get_system_id(char buf[40]);
@@ -49,7 +44,7 @@ public:
     /*
       return a stream for access to nsh shell
      */
-    AP_HAL::Stream *get_shell_stream() { return &_shell_stream; }
+    AP_HAL::BetterStream *get_shell_stream() { return &_shell_stream; }
     perf_counter_t perf_alloc(perf_counter_type t, const char *name) override;
     void perf_begin(perf_counter_t ) override;
     void perf_end(perf_counter_t) override;

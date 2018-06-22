@@ -131,14 +131,6 @@
 //////////////////////////////////////////////////////////////////////////////
 // Battery monitoring
 //
-#ifndef FS_BATT_VOLTAGE_DEFAULT
- # define FS_BATT_VOLTAGE_DEFAULT       10.5f       // default battery voltage below which failsafe will be triggered
-#endif
-
-#ifndef FS_BATT_MAH_DEFAULT
- # define FS_BATT_MAH_DEFAULT             0         // default battery capacity (in mah) below which failsafe will be triggered
-#endif
-
 #ifndef BOARD_VOLTAGE_MIN
  # define BOARD_VOLTAGE_MIN             4.3f        // min board voltage in volts for pre-arm checks
 #endif
@@ -227,8 +219,8 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //  Crop Sprayer - enabled only on larger firmwares
-#ifndef SPRAYER
- # define SPRAYER  !HAL_MINIMIZE_FEATURES
+#ifndef SPRAYER_ENABLED
+ # define SPRAYER_ENABLED  !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -247,6 +239,12 @@
 // winch support - enabled only on larger firmwares
 #ifndef WINCH_ENABLED
 # define WINCH_ENABLED !HAL_MINIMIZE_FEATURES
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
+// rotations per minute sensor support
+#ifndef RPM_ENABLED
+# define RPM_ENABLED ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -342,7 +340,7 @@
 //////////////////////////////////////////////////////////////////////////////
 // Sport - fly vehicle in rate-controlled (earth-frame) mode
 #ifndef MODE_SPORT_ENABLED
-# define MODE_SPORT_ENABLED ENABLED
+# define MODE_SPORT_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -671,6 +669,10 @@
   #error AC_Avoidance relies on AC_FENCE which is disabled
 #endif
 
+#if MODE_FOLLOW_ENABLED && !AC_AVOID_ENABLED
+  #error Follow Mode relies on AC_AVOID which is disabled
+#endif
+
 #if MODE_AUTO_ENABLED && !MODE_GUIDED_ENABLED
   #error ModeAuto requires ModeGuided which is disabled
 #endif
@@ -718,4 +720,12 @@
 
 #ifndef STATS_ENABLED
  # define STATS_ENABLED ENABLED
+#endif
+
+#ifndef DEVO_TELEM_ENABLED
+#if HAL_MINIMIZE_FEATURES
+ #define DEVO_TELEM_ENABLED DISABLED
+#else
+ #define DEVO_TELEM_ENABLED ENABLED
+#endif
 #endif
