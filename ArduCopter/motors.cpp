@@ -127,7 +127,7 @@ void Copter::auto_disarm_check()
 
 // init_arm_motors - performs arming process including initialisation of barometer and gyros
 //  returns false if arming failed because of pre-arm checks, arming checks or a gyro calibration failure
-bool Copter::init_arm_motors(bool arming_from_gcs)
+bool Copter::init_arm_motors(const bool arming_from_gcs, const bool do_arming_checks)
 {
     static bool in_arm_motors = false;
 
@@ -144,7 +144,7 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
     }
 
     // run pre-arm-checks and display failures
-    if (!arming.all_checks_passing(arming_from_gcs)) {
+    if (do_arming_checks && !arming.all_checks_passing(arming_from_gcs)) {
         AP_Notify::events.arming_failed = true;
         in_arm_motors = false;
         return false;
@@ -155,9 +155,6 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
 
     // disable cpu failsafe because initialising everything takes a while
     failsafe_disable();
-
-    // reset battery failsafe
-    set_failsafe_battery(false);
 
     // notify that arming will occur (we do this early to give plenty of warning)
     AP_Notify::flags.armed = true;
@@ -176,14 +173,14 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
 
     initial_armed_bearing = ahrs.yaw_sensor;
 
-    if (ap.home_state == HOME_UNSET) {
+    if (!ahrs.home_is_set()) {
         // Reset EKF altitude if home hasn't been set yet (we use EKF altitude as substitute for alt above home)
         ahrs.resetHeightDatum();
         Log_Write_Event(DATA_EKF_ALT_RESET);
 
         // we have reset height, so arming height is zero
         arming_altitude_m = 0;        
-    } else if (ap.home_state == HOME_SET_NOT_LOCKED) {
+    } else if (!ahrs.home_is_locked()) {
         // Reset home position if it has already been set before (but not locked)
         set_home_to_current_location(false);
 
@@ -201,7 +198,7 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
     ahrs.set_correct_centrifugal(true);
     hal.util->set_soft_armed(true);
 
-#if SPRAYER == ENABLED
+#if SPRAYER_ENABLED == ENABLED
     // turn off sprayer's test if on
     sprayer.test_pump(false);
 #endif
@@ -233,6 +230,9 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
     // Start the arming delay
     ap.in_arming_delay = true;
 
+    // assumed armed without a arming, switch. Overridden in switches.cpp
+    ap.armed_with_switch = false;
+    
     // return success
     return true;
 }
