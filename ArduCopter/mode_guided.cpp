@@ -609,7 +609,7 @@ void Copter::ModeGuided::loiter_control_run(){
         attitude_control->reset_rate_controller_I_terms();
         attitude_control->set_yaw_target_to_current_heading();
         pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
-		loiter_nav->update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
+		loiter_nav->update(ekfGndSpdLimit, ekfNavVelGainScaler);
         attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(loiter_nav->get_roll(), loiter_nav->get_pitch(), target_yaw_rate);
         pos_control->update_z_controller();
 		return;
