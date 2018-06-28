@@ -90,6 +90,10 @@ MAV_STATE GCS_MAVLINK_Copter::system_status() const
         return MAV_STATE_CRITICAL;
     }
 
+	if(AP_Notify::flags.pre_arm_gps_check==false||AP_Notify::flags.pre_arm_check==false){
+		return MAV_STATE_EMERGENCY;
+	}
+	
     if (copter.ap.land_complete) {
         return MAV_STATE_STANDBY;
     }
