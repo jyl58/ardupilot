@@ -28,7 +28,7 @@
 extern const AP_HAL::HAL& hal;
 
 #define PX4FLOW_BASE_I2C_ADDR   0x42
-#define PX4FLOW_INIT_RETRIES    10      // attempt to initialise the sensor up to 10 times at startup
+#define PX4FLOW_INIT_RETRIES    15     // attempt to initialise the sensor up to 10 times at startup
 
 // constructor
 AP_OpticalFlow_PX4Flow::AP_OpticalFlow_PX4Flow(OpticalFlow &_frontend) :
