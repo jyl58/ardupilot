@@ -378,6 +378,10 @@ protected:
     AC_PID      _pid_accel_z;
     AC_P        _p_pos_xy;
     AC_PID_2D   _pid_vel_xy;
+	//pos pid controller 
+	AC_PID_2D   _pid_pos_xy;
+	AP_Int8     _pos_pid_enable;
+	uint32_t    _pos_pid_last_update_ms;
 
     // internal variables
     float       _dt;                    // time difference (in seconds) between calls from the main program

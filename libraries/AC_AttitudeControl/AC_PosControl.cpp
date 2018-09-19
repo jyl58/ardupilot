@@ -56,6 +56,9 @@ extern const AP_HAL::HAL& hal;
  # define POSCONTROL_VEL_XY_IMAX                1000.0f // horizontal velocity controller IMAX gain default
  # define POSCONTROL_VEL_XY_FILT_HZ             5.0f    // horizontal velocity controller input filter
  # define POSCONTROL_VEL_XY_FILT_D_HZ           5.0f    // horizontal velocity controller input filter for D
+ # define POSCONTROL_POS_XY_PID_P               1.0     // horizontal position pid controller P gain default
+ # define POSCONTROL_POS_XY_PID_I			    0.5	    // horizontal position pid controller I gain default
+ # define POSCONTROL_POS_XY_PID_D               0.1     // horizontal position pid controller D gain default
 #endif
 
 const AP_Param::GroupInfo AC_PosControl::var_info[] = {
@@ -178,6 +181,10 @@ const AP_Param::GroupInfo AC_PosControl::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("_ANGLE_MAX",  7, AC_PosControl, _lean_angle_max, 0.0f),
 
+	AP_SUBGROUPINFO(_pid_pos_xy, "_XYPID_", 8, AC_PosControl, AC_PID_2D),
+	
+	AP_GROUPINFO("_XY_ENABLE",  9, AC_PosControl, _pos_pid_enable, 0.0f),
+
     AP_GROUPEND
 };
 
@@ -196,7 +203,8 @@ AC_PosControl::AC_PosControl(const AP_AHRS_View& ahrs, const AP_InertialNav& ina
     _pid_accel_z(POSCONTROL_ACC_Z_P, POSCONTROL_ACC_Z_I, POSCONTROL_ACC_Z_D, POSCONTROL_ACC_Z_IMAX, POSCONTROL_ACC_Z_FILT_HZ, POSCONTROL_ACC_Z_DT),
     _p_pos_xy(POSCONTROL_POS_XY_P),
     _pid_vel_xy(POSCONTROL_VEL_XY_P, POSCONTROL_VEL_XY_I, POSCONTROL_VEL_XY_D, POSCONTROL_VEL_XY_IMAX, POSCONTROL_VEL_XY_FILT_HZ, POSCONTROL_VEL_XY_FILT_D_HZ, POSCONTROL_DT_50HZ),
-    _dt(POSCONTROL_DT_400HZ),
+	_pid_pos_xy(POSCONTROL_POS_XY_PID_P,POSCONTROL_POS_XY_PID_I,POSCONTROL_POS_XY_PID_D,500,5.0,5.0,0.02),
+	_dt(POSCONTROL_DT_400HZ),
     _last_update_xy_ms(0),
     _last_update_z_ms(0),
     _speed_down_cms(POSCONTROL_SPEED_DOWN),
@@ -245,6 +253,9 @@ void AC_PosControl::set_dt(float delta_sec)
     _pid_accel_z.set_dt(_dt);
     _pid_vel_xy.set_dt(_dt);
 
+	//PID controller for pos used in pos err < 10cm
+	_pid_pos_xy.set_dt(_dt);
+	
     // update rate z-axis velocity error and accel error filters
     _vel_error_filter.set_cutoff_frequency(POSCONTROL_VEL_ERROR_CUTOFF_FREQ);
 }
@@ -1069,6 +1080,34 @@ void AC_PosControl::run_xy_controller(float dt, float ekfNavVelGainScaler)
     accel_target.x = (vel_xy_p.x + vel_xy_i.x + vel_xy_d.x) * ekfNavVelGainScaler;
     accel_target.y = (vel_xy_p.y + vel_xy_i.y + vel_xy_d.y) * ekfNavVelGainScaler;
 
+	// is distance to target is < 10 cm, then use the pos pid control, 		
+	if(_distance_to_target < 10 &&  _pos_pid_enable > 1.0){		
+		Vector2f pos_xy_p, pos_xy_i, pos_xy_d;				
+
+		if(AP_HAL::millis() - _pos_pid_last_update_ms > 200){ //200 ms			
+			_pid_pos_xy.reset_filter();			
+			_pid_pos_xy.set_integrator(_accel_target);			
+			_pos_pid_last_update_ms=AP_HAL::millis();		
+		}
+		
+		//input the pos err vector
+		_pid_pos_xy.set_input(_pos_error);				
+		//get the p 
+		pos_xy_p = _pid_pos_xy.get_p();			
+
+		if (!_limit.accel_xy && !_motors.limit.throttle_upper) {			
+			pos_xy_i = _pid_pos_xy.get_i();		
+		}else{			
+			pos_xy_i = _pid_pos_xy.get_i_shrink();		
+		}		
+
+		pos_xy_d = _pid_pos_xy.get_d();				
+
+		// acceleration to correct for velocity error and scale PID output to compensate for optical flow measurement induced EKF noise    	
+		accel_target.x = (pos_xy_p.x + pos_xy_i.x + pos_xy_d.x) * ekfNavVelGainScaler;    	
+		accel_target.y = (pos_xy_p.y + pos_xy_i.y + pos_xy_d.y) * ekfNavVelGainScaler;	
+	}
+	
     // reset accel to current desired acceleration
      if (_flags.reset_accel_to_lean_xy) {
          _accel_target_filter.reset(Vector2f(accel_target.x, accel_target.y));
