@@ -101,7 +101,7 @@ void show_stack_usage(void)
 void memory_flush_all(void)
 {
 #if defined(STM32F7) && STM32_DMA_CACHE_HANDLING == TRUE
-    dmaBufferFlush(HAL_RAM_BASE_ADDRESS, HAL_RAM_SIZE_KB * 1024U);
+    cacheBufferFlush(HAL_RAM_BASE_ADDRESS, HAL_RAM_SIZE_KB * 1024U);
 #endif
 }
 
@@ -110,7 +110,7 @@ void memory_flush_all(void)
  */
 void stm32_set_utc_usec(uint64_t time_utc_usec)
 {
-    uint64_t now = hrt_micros();
+    uint64_t now = hrt_micros64();
     if (now <= time_utc_usec) {
         utc_time_offset = time_utc_usec - now;
     }
@@ -121,7 +121,7 @@ void stm32_set_utc_usec(uint64_t time_utc_usec)
 */
 uint64_t stm32_get_utc_usec()
 {
-    return hrt_micros() + utc_time_offset;
+    return hrt_micros64() + utc_time_offset;
 }
 
 struct utc_tm {
@@ -217,4 +217,65 @@ uint32_t get_fattime()
     fattime |= (uint32_t)((tm.tm_year-80) << 25U);
     
     return fattime;
+}
+
+#if !defined(NO_FASTBOOT)
+// get RTC backup register 0
+static uint32_t get_rtc_backup0(void)
+{
+	return RTC->BKP0R;
+}
+
+// set RTC backup register 0
+static void set_rtc_backup0(uint32_t v)
+{
+    if ((RCC->BDCR & RCC_BDCR_RTCEN) == 0) {
+        RCC->BDCR |= STM32_RTCSEL;
+        RCC->BDCR |= RCC_BDCR_RTCEN;
+    }
+#ifdef PWR_CR_DBP
+    PWR->CR |= PWR_CR_DBP;
+#else
+    PWR->CR1 |= PWR_CR1_DBP;
+#endif
+    RTC->BKP0R = v;
+}
+
+// see if RTC registers is setup for a fast reboot
+enum rtc_boot_magic check_fast_reboot(void)
+{
+    return (enum rtc_boot_magic)get_rtc_backup0();
+}
+
+// set RTC register for a fast reboot
+void set_fast_reboot(enum rtc_boot_magic v)
+{
+    set_rtc_backup0(v);
+}
+
+#endif //NO_FASTBOOT
+
+/*
+  enable peripheral power if needed This is done late to prevent
+  problems with CTS causing SiK radios to stay in the bootloader. A
+  SiK radio will stay in the bootloader if CTS is held to GND on boot
+*/
+void peripheral_power_enable(void)
+{
+#if defined(HAL_GPIO_PIN_nVDD_5V_PERIPH_EN) || defined(HAL_GPIO_PIN_nVDD_5V_HIPOWER_EN)
+    // we don't know what state the bootloader had the CTS pin in, so
+    // wait here with it pulled up from the PAL table for enough time
+    // for the radio to be definately powered down
+    uint8_t i;
+    for (i=0; i<100; i++) {
+        // use a loop as this may be a 16 bit timer
+        chThdSleep(chTimeMS2I(1));
+    }
+#ifdef HAL_GPIO_PIN_nVDD_5V_PERIPH_EN
+    palWriteLine(HAL_GPIO_PIN_nVDD_5V_PERIPH_EN, 0);
+#endif
+#ifdef HAL_GPIO_PIN_nVDD_5V_HIPOWER_EN
+    palWriteLine(HAL_GPIO_PIN_nVDD_5V_HIPOWER_EN, 0);
+#endif
+#endif
 }

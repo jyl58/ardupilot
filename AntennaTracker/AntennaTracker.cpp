@@ -41,7 +41,6 @@ const AP_Scheduler::Task Tracker::scheduler_tasks[] = {
     SCHED_TASK_CLASS(AP_Baro,          &tracker.barometer,  update,         10,   1500),
     SCHED_TASK(gcs_update,             50,   1700),
     SCHED_TASK(gcs_data_stream_send,   50,   3000),
-    SCHED_TASK(compass_accumulate,     50,   1500),
     SCHED_TASK_CLASS(AP_Baro,           &tracker.barometer, accumulate,     50,  900),
     SCHED_TASK(ten_hz_logging_loop,    10,    300),
 #if LOGGING_ENABLED == ENABLED
@@ -94,6 +93,9 @@ void Tracker::one_second_loop()
     // sync MAVLink system ID
     mavlink_system.sysid = g.sysid_this_mav;
 
+    // update assigned functions and enable auxiliary servos
+    SRV_Channels::enable_aux_servos();
+
     // updated armed/disarmed status LEDs
     update_armed_disarmed();
 
@@ -112,8 +114,11 @@ void Tracker::one_second_loop()
         if (ahrs.get_location(temp_loc)) {
             set_home(temp_loc);
         }
-        return;
     }
+
+    // need to set "likely flying" when armed to allow for compass
+    // learning to run
+    ahrs.set_likely_flying(hal.util->get_soft_armed());
 }
 
 void Tracker::ten_hz_logging_loop()

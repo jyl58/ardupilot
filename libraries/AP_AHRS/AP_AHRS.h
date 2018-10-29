@@ -29,6 +29,7 @@
 #include <AP_InertialSensor/AP_InertialSensor.h>
 #include <AP_Baro/AP_Baro.h>
 #include <AP_Param/AP_Param.h>
+#include <AP_Common/Semaphore.h>
 
 class OpticalFlow;
 #define AP_AHRS_TRIM_LIMIT 10.0f        // maximum trim angle in degrees
@@ -263,6 +264,9 @@ public:
     const Matrix3f& get_rotation_autopilot_body_to_vehicle_body(void) const { return _rotation_autopilot_body_to_vehicle_body; }
     const Matrix3f& get_rotation_vehicle_body_to_autopilot_body(void) const { return _rotation_vehicle_body_to_autopilot_body; }
 
+    // get rotation matrix specifically from DCM backend (used for compass calibrator)
+    virtual const Matrix3f &get_DCM_rotation_body_to_ned(void) const = 0;
+    
     // get our current position estimate. Return true if a position is available,
     // otherwise false. This call fills in lat, lng and alt
     virtual bool get_position(struct Location &loc) const = 0;
@@ -568,7 +572,16 @@ public:
     // Write position and quaternion data from an external navigation system
     virtual void writeExtNavData(const Vector3f &sensOffset, const Vector3f &pos, const Quaternion &quat, float posErr, float angErr, uint32_t timeStamp_ms, uint32_t resetTime_ms) { }
 
+    // allow threads to lock against AHRS update
+    HAL_Semaphore &get_semaphore(void) {
+        return _rsem;
+    }
+    
 protected:
+    
+    // multi-thread access support
+    HAL_Semaphore_Recursive _rsem;
+    
     AHRS_VehicleClass _vehicle_class;
 
     // settable parameters

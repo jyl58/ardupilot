@@ -45,25 +45,26 @@ Rover rover;
 const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     //         Function name,          Hz,     us,
     SCHED_TASK(read_radio,             50,    200),
-    SCHED_TASK(ahrs_update,            50,   1500),
+    SCHED_TASK(ahrs_update,           400,    400),
     SCHED_TASK(read_rangefinders,      50,    200),
-    SCHED_TASK(update_current_mode,    50,    200),
-    SCHED_TASK(set_servos,             50,    200),
+    SCHED_TASK(update_current_mode,   400,    200),
+    SCHED_TASK(set_servos,            400,    200),
     SCHED_TASK(update_GPS,             50,    300),
     SCHED_TASK_CLASS(AP_Baro,             &rover.barometer,        update,         10,  200),
     SCHED_TASK_CLASS(AP_Beacon,           &rover.g2.beacon,        update,         50,  200),
     SCHED_TASK_CLASS(AP_Proximity,        &rover.g2.proximity,     update,         50,  200),
+    SCHED_TASK_CLASS(AP_WindVane,         &rover.g2.windvane,      update,         20,  100),
     SCHED_TASK(update_visual_odom,     50,    200),
-    SCHED_TASK(update_wheel_encoder,   20,    200),
+    SCHED_TASK(update_wheel_encoder,   50,    200),
     SCHED_TASK(update_compass,         10,    200),
     SCHED_TASK(update_mission,         50,    200),
     SCHED_TASK(update_logging1,        10,    200),
     SCHED_TASK(update_logging2,        10,    200),
-    SCHED_TASK(gcs_retry_deferred,     50,   1000),
-    SCHED_TASK(gcs_update,             50,   1000),
-    SCHED_TASK(gcs_data_stream_send,   50,   3000),
-    SCHED_TASK(read_control_switch,     7,    200),
-    SCHED_TASK(read_aux_switch,        10,    200),
+    SCHED_TASK(gcs_retry_deferred,     50,    500),
+    SCHED_TASK(gcs_update,             50,    500),
+    SCHED_TASK(gcs_data_stream_send,   50,   1000),
+    SCHED_TASK(read_mode_switch,        7,    200),
+    SCHED_TASK(read_aux_all,           10,    200),
     SCHED_TASK_CLASS(AP_BattMonitor,      &rover.battery,          read,           10,  300),
     SCHED_TASK_CLASS(AP_ServoRelayEvents, &rover.ServoRelayEvents, update_events,  50,  200),
 #if MOUNT == ENABLED
@@ -74,16 +75,17 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
 #endif
     SCHED_TASK(gcs_failsafe_check,     10,    200),
     SCHED_TASK(fence_check,            10,    200),
-    SCHED_TASK(compass_accumulate,     50,    200),
     SCHED_TASK_CLASS(ModeSmartRTL,        &rover.mode_smartrtl,    save_position,   3,  200),
     SCHED_TASK_CLASS(AP_Notify,           &rover.notify,           update,         50,  300),
     SCHED_TASK(one_second_loop,         1,   1500),
+    SCHED_TASK_CLASS(AC_Sprayer,          &rover.g2.sprayer,           update,      3,  90),
     SCHED_TASK(compass_cal_update,     50,    200),
+    SCHED_TASK(compass_save,           0.1,   200),
     SCHED_TASK(accel_cal_update,       10,    200),
 #if LOGGING_ENABLED == ENABLED
     SCHED_TASK_CLASS(DataFlash_Class,     &rover.DataFlash,        periodic_tasks, 50,  300),
 #endif
-    SCHED_TASK_CLASS(AP_InertialSensor,   &rover.ins,              periodic,       50,  200),
+    SCHED_TASK_CLASS(AP_InertialSensor,   &rover.ins,              periodic,      400,  200),
     SCHED_TASK_CLASS(AP_Scheduler,        &rover.scheduler,        update_logging, 0.1, 200),
     SCHED_TASK_CLASS(AP_Button,           &rover.button,           update,          5,  200),
 #if STATS_ENABLED == ENABLED
@@ -95,6 +97,16 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK(afs_fs_check,           10,    200),
 #endif
 };
+
+void Rover::read_mode_switch()
+{
+    rover.g2.rc_channels.read_mode_switch();
+}
+
+void Rover::read_aux_all()
+{
+    rover.g2.rc_channels.read_aux_all();
+}
 
 constexpr int8_t Rover::_failsafe_priorities[7];
 
@@ -170,6 +182,7 @@ void Rover::ahrs_update()
 
     if (should_log(MASK_LOG_ATTITUDE_FAST)) {
         Log_Write_Attitude();
+        Log_Write_Sail();
     }
 
     if (should_log(MASK_LOG_IMU)) {
@@ -196,7 +209,7 @@ void Rover::update_compass(void)
         ahrs.set_compass(&compass);
         // update offsets
         if (should_log(MASK_LOG_COMPASS)) {
-            DataFlash.Log_Write_Compass(compass);
+            DataFlash.Log_Write_Compass();
         }
     }
 }
@@ -208,6 +221,7 @@ void Rover::update_logging1(void)
 {
     if (should_log(MASK_LOG_ATTITUDE_MED) && !should_log(MASK_LOG_ATTITUDE_FAST)) {
         Log_Write_Attitude();
+        Log_Write_Sail();
     }
 
     if (should_log(MASK_LOG_THR)) {
@@ -273,18 +287,6 @@ void Rover::one_second_loop(void)
     // cope with changes to mavlink system ID
     mavlink_system.sysid = g.sysid_this_mav;
 
-    static uint8_t counter;
-
-    counter++;
-
-    // save compass offsets once a minute
-    if (counter >= 60) {
-        if (g.compass_enabled) {
-            compass.save_offsets();
-        }
-        counter = 0;
-    }
-
     // update home position if not soft armed and gps position has
     // changed. Update every 1s at most
     if (!hal.util->get_soft_armed() &&
@@ -292,11 +294,18 @@ void Rover::one_second_loop(void)
         update_home();
     }
 
+    // init compass location for declination
+    init_compass_location();
+
     // update error mask of sensors and subsystems. The mask uses the
     // MAV_SYS_STATUS_* values from mavlink. If a bit is set then it
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
     update_sensor_status_flags();
+
+    // need to set "likely flying" when armed to allow for compass
+    // learning to run
+    ahrs.set_likely_flying(hal.util->get_soft_armed());
 }
 
 void Rover::update_GPS(void)

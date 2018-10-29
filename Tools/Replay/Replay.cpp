@@ -950,7 +950,10 @@ const struct AP_Param::GroupInfo        GCS_MAVLINK::var_info[] = {
 GCS_Dummy _gcs;
 
 // dummy methods to avoid linking with these libraries
+AP_Camera *AP::camera() { return nullptr; }
 void AP_Camera::send_feedback(mavlink_channel_t) {}
+void AP_Camera::control(float, float, float, float, float, float) {}
+void AP_Camera::configure(float, float, float, float, float, float, float) {}
 bool AP_AdvancedFailsafe::gcs_terminate(bool should_terminate, const char *reason) { return false; }
 
 AP_HAL_MAIN_CALLBACKS(&replay);

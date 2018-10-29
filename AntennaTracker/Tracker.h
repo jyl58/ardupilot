@@ -34,7 +34,6 @@
 #include <AP_Baro/AP_Baro.h>        // ArduPilot barometer library
 #include <AP_Compass/AP_Compass.h>     // ArduPilot Mega Magnetometer Library
 #include <AP_Math/AP_Math.h>        // ArduPilot Mega Vector/Matrix math Library
-#include <AP_ADC/AP_ADC.h>         // ArduPilot Mega Analog to Digital Converter Library
 #include <AP_InertialSensor/AP_InertialSensor.h> // Inertial Sensor Library
 #include <AP_AccelCal/AP_AccelCal.h>                // interface and maths for accelerometer calibration
 #include <AP_AHRS/AP_AHRS.h>         // ArduPilot Mega DCM Library
@@ -56,7 +55,6 @@
 #include <AP_Notify/AP_Notify.h>      // Notify library
 #include <AP_BattMonitor/AP_BattMonitor.h> // Battery monitor library
 #include <AP_Airspeed/AP_Airspeed.h>
-#include <RC_Channel/RC_Channel.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 #include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include <AP_OpticalFlow/AP_OpticalFlow.h>
@@ -67,6 +65,7 @@
 #include "config.h"
 #include "defines.h"
 
+#include "RC_Channel.h"
 #include "Parameters.h"
 #include "GCS_Mavlink.h"
 #include "GCS_Tracker.h"
@@ -128,7 +127,7 @@ private:
     /**
        antenna control channels
     */
-    RC_Channels rc_channels;
+    RC_Channels_Tracker rc_channels;
     SRV_Channels servo_channels;
 
     LowPassFilterFloat yaw_servo_out_filt;
@@ -140,6 +139,11 @@ private:
     AP_SerialManager serial_manager;
     GCS_Tracker _gcs; // avoid using this; use gcs()
     GCS_Tracker &gcs() { return _gcs; }
+
+    // variables for extended status MAVLink messages
+    uint32_t control_sensors_present;
+    uint32_t control_sensors_enabled;
+    uint32_t control_sensors_health;
 
     AP_BoardConfig BoardConfig;
 
@@ -195,37 +199,70 @@ private:
     static const AP_Param::Info var_info[];
     static const struct LogStructure log_structure[];
 
+    // AntennaTracker.cpp
     void one_second_loop();
     void ten_hz_logging_loop();
-    void send_extended_status1(mavlink_channel_t chan);
-    void send_nav_controller_output(mavlink_channel_t chan);
-    void gcs_data_stream_send(void);
-    void gcs_update(void);
-    void gcs_retry_deferred(void);
-    void load_parameters(void);
+
+    // capabilities.cpp
+    void init_capabilities(void);
+
+    // control_auto.cpp
     void update_auto(void);
     void calc_angle_error(float pitch, float yaw, bool direction_reversed);
     void convert_ef_to_bf(float pitch, float yaw, float& bf_pitch, float& bf_yaw);
     bool convert_bf_to_ef(float pitch, float yaw, float& ef_pitch, float& ef_yaw);
     bool get_ef_yaw_direction();
+
+    // control_manual.cpp
     void update_manual(void);
+
+    // control_scan.cpp
     void update_scan(void);
+
+    // control_servo_test.cpp
     bool servo_test_set_servo(uint8_t servo_num, uint16_t pwm);
+
+    // GCS_Mavlink.cpp
+    void send_extended_status1(mavlink_channel_t chan);
+    void send_nav_controller_output(mavlink_channel_t chan);
+    void gcs_data_stream_send(void);
+    void gcs_update(void);
+    void gcs_retry_deferred(void);
+
+    // Log.cpp
+    void Log_Write_Attitude();
+    void Log_Write_Vehicle_Baro(float pressure, float altitude);
+    void Log_Write_Vehicle_Pos(int32_t lat,int32_t lng,int32_t alt, const Vector3f& vel);
+    void Log_Write_Vehicle_Startup_Messages();
+    void log_init(void);
+
+    // Parameters.cpp
+    void load_parameters(void);
+
+    // radio.cpp
     void read_radio();
+
+    // sensors.cpp
     void update_ahrs();
     void update_compass(void);
-    void compass_accumulate(void);
+    void compass_cal_update();
     void accel_cal_update(void);
     void update_GPS(void);
+    void handle_battery_failsafe(const char* type_str, const int8_t action);
+    void update_sensor_status_flags();
+
+    // servos.cpp
     void init_servos();
     void update_pitch_servo(float pitch);
     void update_pitch_position_servo(void);
-    void update_pitch_cr_servo(float pitch);
     void update_pitch_onoff_servo(float pitch);
+    void update_pitch_cr_servo(float pitch);
     void update_yaw_servo(float yaw);
     void update_yaw_position_servo(void);
-    void update_yaw_cr_servo(float yaw);
     void update_yaw_onoff_servo(float yaw);
+    void update_yaw_cr_servo(float yaw);
+
+    // system.cpp
     void init_tracker();
     bool get_home_eeprom(struct Location &loc);
     void set_home_eeprom(struct Location temp);
@@ -234,6 +271,9 @@ private:
     void disarm_servos();
     void prepare_servos();
     void set_mode(enum ControlMode mode, mode_reason_t reason);
+    bool should_log(uint32_t mask);
+
+    // tracking.cpp
     void update_vehicle_pos_estimate();
     void update_tracker_position();
     void update_bearing_and_distance();
@@ -242,15 +282,6 @@ private:
     void tracking_update_pressure(const mavlink_scaled_pressure_t &msg);
     void tracking_manual_control(const mavlink_manual_control_t &msg);
     void update_armed_disarmed();
-    void init_capabilities(void);
-    void compass_cal_update();
-    void Log_Write_Attitude();
-    void Log_Write_Vehicle_Pos(int32_t lat,int32_t lng,int32_t alt, const Vector3f& vel);
-    void Log_Write_Vehicle_Baro(float pressure, float altitude);
-    void Log_Write_Vehicle_Startup_Messages();
-    void log_init(void);
-    bool should_log(uint32_t mask);
-    void handle_battery_failsafe(const char* type_str, const int8_t action);
 
 public:
     void mavlink_delay_cb();

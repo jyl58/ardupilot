@@ -50,9 +50,6 @@ public:
     void perf_end(perf_counter_t) override;
     void perf_count(perf_counter_t) override;
     
-    // create a new semaphore
-    AP_HAL::Semaphore *new_semaphore(void) override { return new PX4::Semaphore; }
-
     void set_imu_temp(float current) override;
     void set_imu_target_temp(int8_t *target) override;
 
@@ -60,6 +57,11 @@ public:
     void *malloc_type(size_t size, AP_HAL::Util::Memory_Type mem_type) override;
     void free_type(void *ptr, size_t size, AP_HAL::Util::Memory_Type mem_type) override;
 
+    bool flash_bootloader() override;
+
+    bool toneAlarm_init() override;
+    void toneAlarm_set_buzzer_tone(float frequency, float volume, uint32_t duration_ms) override;
+    
 private:
     int _safety_handle;
     PX4::NSHShellStream _shell_stream;
@@ -72,4 +74,6 @@ private:
         uint32_t last_update_ms;
         int fd = -1;
     } _heater;
+
+    int _tonealarm_fd = -1;
 };

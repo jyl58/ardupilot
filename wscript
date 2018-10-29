@@ -67,6 +67,11 @@ def options(opt):
         default=False,
         help='Configure as debug variant.')
 
+    g.add_option('--enable-asserts',
+        action='store_true',
+        default=False,
+        help='enable OS level asserts.')
+    
     g.add_option('--bootloader',
         action='store_true',
         default=False,
@@ -96,6 +101,11 @@ submodules at specific revisions.
     g.add_option('--default-parameters',
         default=None,
         help='set default parameters to embed in the firmware')
+
+    g.add_option('--enable-math-check-indexes',
+                 action='store_true',
+                 default=False,
+                 help="Enable checking of math indexes")
 
     g = opt.ap_groups['linux']
 
@@ -138,6 +148,14 @@ configuration in order to save typing.
         default=False,
         help="Disable compilation and test execution")
 
+    g.add_option('--enable-sfml', action='store_true',
+                 default=False,
+                 help="Enable SFML graphics library")
+
+    g.add_option('--enable-scripting', action='store_true',
+                 default=False,
+                 help="Enable onboard scripting engine")
+
     g.add_option('--static',
         action='store_true',
         default=False,
@@ -146,11 +164,12 @@ configuration in order to save typing.
 def _collect_autoconfig_files(cfg):
     for m in sys.modules.values():
         paths = []
-        if hasattr(m, '__file__'):
+        if hasattr(m, '__file__') and m.__file__ is not None:
             paths.append(m.__file__)
         elif hasattr(m, '__path__'):
             for p in m.__path__:
-                paths.append(p)
+                if p is not None:
+                    paths.append(p)
 
         for p in paths:
             if p in cfg.files or not os.path.isfile(p):
@@ -172,6 +191,7 @@ def configure(cfg):
 
     cfg.env.BOARD = cfg.options.board
     cfg.env.DEBUG = cfg.options.debug
+    cfg.env.ENABLE_ASSERTS = cfg.options.enable_asserts
     cfg.env.BOOTLOADER = cfg.options.bootloader
 
     # Allow to differentiate our build from the make build
@@ -219,6 +239,12 @@ def configure(cfg):
 
     cfg.start_msg('Unit tests')
     if cfg.env.HAS_GTEST:
+        cfg.end_msg('enabled')
+    else:
+        cfg.end_msg('disabled', color='YELLOW')
+
+    cfg.start_msg('Scripting')
+    if cfg.options.enable_scripting:
         cfg.end_msg('enabled')
     else:
         cfg.end_msg('disabled', color='YELLOW')
@@ -291,18 +317,19 @@ def _build_cmd_tweaks(bld):
         bld.options.clear_failed_tests = True
 
 def _build_dynamic_sources(bld):
-    bld(
-        features='mavgen',
-        source='modules/mavlink/message_definitions/v1.0/ardupilotmega.xml',
-        output_dir='libraries/GCS_MAVLink/include/mavlink/v2.0/',
-        name='mavlink',
-        # this below is not ideal, mavgen tool should set this, but that's not
-        # currently possible
-        export_includes=[
+    if not bld.env.BOOTLOADER:
+        bld(
+            features='mavgen',
+            source='modules/mavlink/message_definitions/v1.0/ardupilotmega.xml',
+            output_dir='libraries/GCS_MAVLink/include/mavlink/v2.0/',
+            name='mavlink',
+            # this below is not ideal, mavgen tool should set this, but that's not
+            # currently possible
+            export_includes=[
             bld.bldnode.make_node('libraries').abspath(),
             bld.bldnode.make_node('libraries/GCS_MAVLink').abspath(),
-        ],
-    )
+            ],
+            )
 
     if bld.get_board().with_uavcan or bld.env.HAL_WITH_UAVCAN==True:
         bld(
@@ -378,7 +405,9 @@ def _build_recursion(bld):
         common_dirs_patterns,
         excl=common_dirs_excl,
     )
-
+    if bld.env.IOMCU_FW is not None:
+        if bld.env.IOMCU_FW:
+            dirs_to_recurse.append('libraries/AP_IOMCU/iofirmware')
     for p in hal_dirs_patterns:
         dirs_to_recurse += collect_dirs_to_recurse(
             bld,
@@ -454,7 +483,7 @@ ardupilotwaf.build_command('check-all',
     doc='shortcut for `waf check --alltests`',
 )
 
-for name in ('antennatracker', 'copter', 'heli', 'plane', 'rover', 'sub', 'bootloader'):
+for name in ('antennatracker', 'copter', 'heli', 'plane', 'rover', 'sub', 'bootloader','iofirmware'):
     ardupilotwaf.build_command(name,
         program_group_list=name,
         doc='builds %s programs' % name,

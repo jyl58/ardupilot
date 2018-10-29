@@ -108,8 +108,8 @@ void AC_WPNav::init_brake_target(float accel_cmss)
     _pos_control.init_xy_controller();
 
     // initialise pos controller speed and acceleration
-    _pos_control.set_speed_xy(curr_vel.length());
-    _pos_control.set_accel_xy(accel_cmss);
+    _pos_control.set_max_speed_xy(curr_vel.length());
+    _pos_control.set_max_accel_xy(accel_cmss);
     _pos_control.calc_leash_length_xy();
 
     // set target position
@@ -118,11 +118,11 @@ void AC_WPNav::init_brake_target(float accel_cmss)
 }
 
 // update_brake - run the stop controller - gets called at 400hz
-void AC_WPNav::update_brake(float ekfGndSpdLimit, float ekfNavVelGainScaler)
+void AC_WPNav::update_brake()
 {
     // send adjusted feed forward velocity back to position controller
     _pos_control.set_desired_velocity_xy(0.0f, 0.0f);
-    _pos_control.update_xy_controller(ekfNavVelGainScaler);
+    _pos_control.update_xy_controller();
 }
 
 ///
@@ -148,10 +148,10 @@ void AC_WPNav::wp_and_spline_init()
     _pos_control.set_desired_velocity_xy(0.0f, 0.0f);
 
     // initialise position controller speed and acceleration
-    _pos_control.set_speed_xy(_wp_speed_cms);
-    _pos_control.set_accel_xy(_wp_accel_cmss);
-    _pos_control.set_speed_z(-_wp_speed_down_cms, _wp_speed_up_cms);
-    _pos_control.set_accel_z(_wp_accel_z_cmss);
+    _pos_control.set_max_speed_xy(_wp_speed_cms);
+    _pos_control.set_max_accel_xy(_wp_accel_cmss);
+    _pos_control.set_max_speed_z(-_wp_speed_down_cms, _wp_speed_up_cms);
+    _pos_control.set_max_accel_z(_wp_accel_z_cmss);
     _pos_control.calc_leash_length_xy();
     _pos_control.calc_leash_length_z();
 
@@ -165,10 +165,20 @@ void AC_WPNav::set_speed_xy(float speed_cms)
     // range check new target speed and update position controller
     if (speed_cms >= WPNAV_WP_SPEED_MIN) {
         _wp_speed_cms = speed_cms;
-        _pos_control.set_speed_xy(_wp_speed_cms);
+        _pos_control.set_max_speed_xy(_wp_speed_cms);
         // flag that wp leash must be recalculated
         _flags.recalc_wp_leash = true;
     }
+}
+
+/// set_speed_z - allows main code to pass target vertical velocity for wp navigation
+void AC_WPNav::set_speed_z(float speed_down_cms, float speed_up_cms)
+{
+    _wp_speed_down_cms = speed_down_cms;
+    _wp_speed_up_cms = speed_up_cms;
+    _pos_control.set_max_speed_z(_wp_speed_down_cms, _wp_speed_up_cms);
+    // flag that wp leash must be recalculated
+    _flags.recalc_wp_leash = true;
 }
 
 /// set_wp_destination waypoint using location class
@@ -356,7 +366,7 @@ bool AC_WPNav::advance_wp_target_along_track(float dt)
     track_error = curr_delta - track_covered_pos;
 
     // calculate the horizontal error
-    float track_error_xy = norm(track_error.x, track_error.y);
+    _track_error_xy = norm(track_error.x, track_error.y);
 
     // calculate the vertical error
     float track_error_z = fabsf(track_error.z);
@@ -369,7 +379,7 @@ bool AC_WPNav::advance_wp_target_along_track(float dt)
     //   track_error is the line from the vehicle to the closest point on the track.  It is the "opposite" side
     //   track_leash_slack is the line from the closest point on the track to the target point.  It is the "adjacent" side.  We adjust this so the track_desired_max is no longer than the leash
     float track_leash_length_abs = fabsf(_track_leash_length);
-    float track_error_max_abs = MAX(_track_leash_length*track_error_z/leash_z, _track_leash_length*track_error_xy/_pos_control.get_leash_xy());
+    float track_error_max_abs = MAX(_track_leash_length*track_error_z/leash_z, _track_leash_length*_track_error_xy/_pos_control.get_leash_xy());
     track_leash_slack = (track_leash_length_abs > track_error_max_abs) ? safe_sqrt(sq(_track_leash_length) - sq(track_error_max_abs)) : 0;
     track_desired_max = track_covered + track_leash_slack;
 
@@ -386,7 +396,7 @@ bool AC_WPNav::advance_wp_target_along_track(float dt)
     // calculate point at which velocity switches from linear to sqrt
     float linear_velocity = _wp_speed_cms;
     float kP = _pos_control.get_pos_xy_p().kP();
-    if (kP >= 0.0f) {   // avoid divide by zero
+    if (is_positive(kP)) {   // avoid divide by zero
         linear_velocity = _track_accel/kP;
     }
 
@@ -507,8 +517,8 @@ bool AC_WPNav::update_wpnav()
 
     // allow the accel and speed values to be set without changing
     // out of auto mode. This makes it easier to tune auto flight
-    _pos_control.set_accel_xy(_wp_accel_cmss);
-    _pos_control.set_accel_z(_wp_accel_z_cmss);
+    _pos_control.set_max_accel_xy(_wp_accel_cmss);
+    _pos_control.set_max_accel_z(_wp_accel_z_cmss);
 
     // advance the target if necessary
     if (!advance_wp_target_along_track(dt)) {
@@ -522,7 +532,7 @@ bool AC_WPNav::update_wpnav()
         _pos_control.freeze_ff_z();
     }
 
-    _pos_control.update_xy_controller(1.0f);
+    _pos_control.update_xy_controller();
     check_wp_leash_length();
 
     _wp_last_update = AP_HAL::millis();
@@ -814,7 +824,7 @@ bool AC_WPNav::update_spline()
     }
 
     // run horizontal position controller
-    _pos_control.update_xy_controller(1.0f);
+    _pos_control.update_xy_controller();
 
     _wp_last_update = AP_HAL::millis();
 
@@ -865,7 +875,7 @@ bool AC_WPNav::advance_spline_target_along_track(float dt)
         track_error.z -= terr_offset;
 
         // calculate the horizontal error
-        float track_error_xy = norm(track_error.x, track_error.y);
+        _track_error_xy = norm(track_error.x, track_error.y);
 
         // calculate the vertical error
         float track_error_z = fabsf(track_error.z);
@@ -880,7 +890,7 @@ bool AC_WPNav::advance_spline_target_along_track(float dt)
         }
 
         // calculate how far along the track we could move the intermediate target before reaching the end of the leash
-        float track_leash_slack = MIN(_track_leash_length*(leash_z-track_error_z)/leash_z, _track_leash_length*(leash_xy-track_error_xy)/leash_xy);
+        float track_leash_slack = MIN(_track_leash_length*(leash_z-track_error_z)/leash_z, _track_leash_length*(leash_xy-_track_error_xy)/leash_xy);
         if (track_leash_slack < 0.0f) {
             track_leash_slack = 0.0f;
         }

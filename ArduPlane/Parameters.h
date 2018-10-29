@@ -47,6 +47,7 @@ public:
         k_param_landing,
         k_param_NavEKF3,
         k_param_BoardConfig_CAN,
+        k_param_osd,
 
         // Misc
         //
@@ -214,7 +215,7 @@ public:
         k_param_pitch_limit_min_cd,
         k_param_airspeed_cruise_cm,
         k_param_RTL_altitude_cm,
-        k_param_inverted_flight_ch,
+        k_param_inverted_flight_ch_unused, // unused
         k_param_min_gndspeed_cm,
         k_param_crosstrack_use_wind, // unused
 
@@ -466,7 +467,6 @@ public:
     AP_Int8 flap_2_percent;
     AP_Int8 flap_2_speed;
     AP_Int8 takeoff_flap_percent;  
-    AP_Int8 inverted_flight_ch;             // 0=disabled, 1-8 is channel for inverted flight trigger
     AP_Int8 stick_mixing;
     AP_Float takeoff_throttle_min_speed;
     AP_Float takeoff_throttle_min_accel;
@@ -517,16 +517,18 @@ public:
     AP_ICEngine ice_control;
 
     // RC input channels
-    RC_Channels rc_channels;
+    RC_Channels_Plane rc_channels;
     
     // control over servo output ranges
     SRV_Channels servo_channels;
 
     // whether to enforce acceptance of packets only from sysid_my_gcs
     AP_Int8 sysid_enforce;
-    
+
+#if SOARING_ENABLED == ENABLED
     // ArduSoar parameters
     SoaringController soaring_controller;
+#endif
 
     // dual motor tailsitter rudder to differential thrust scaling: 0-100%
     AP_Int8 rudd_dt_gain;
@@ -542,6 +544,11 @@ public:
     AP_Gripper gripper;
 #endif
 
+    AP_Int32 flight_options;
+
+#ifdef ENABLE_SCRIPTING
+    AP_Scripting scripting;
+#endif // ENABLE_SCRIPTING
 };
 
 extern const AP_Param::Info var_info[];

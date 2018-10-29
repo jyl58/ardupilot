@@ -17,53 +17,6 @@
 
 extern const AP_HAL::HAL &hal;
 
-#define PKT_MAX_REGS 32
-
-//#define IOMCU_DEBUG
-
-struct PACKED IOPacket {
-	uint8_t 	count:6;
-	uint8_t 	code:2;
-	uint8_t 	crc;
-	uint8_t 	page;
-	uint8_t 	offset;
-	uint16_t	regs[PKT_MAX_REGS];
-
-    // get packet size in bytes
-    uint8_t get_size(void) const {
-        return count*2 + 4;
-    }
-};
-
-/*
-  values for pkt.code
- */
-enum iocode {
-    // read types
-    CODE_READ = 0,
-    CODE_WRITE = 1,
-
-    // reply codes
-    CODE_SUCCESS = 0,
-    CODE_CORRUPT = 1,
-    CODE_ERROR = 2
-};
-
-// IO pages
-enum iopage {
-    PAGE_CONFIG = 0,
-    PAGE_STATUS = 1,
-    PAGE_ACTUATORS = 2,
-    PAGE_SERVOS = 3,
-    PAGE_RAW_RCIN = 4,
-    PAGE_RCIN = 5,
-    PAGE_RAW_ADC = 6,
-    PAGE_PWM_INFO = 7,
-    PAGE_SETUP = 50,
-    PAGE_DIRECT_PWM = 54,
-    PAGE_DISARMED_PWM = 108,
-};
-
 // pending IO events to send, used as an event mask
 enum ioevents {
     IOEVENT_INIT=1,
@@ -80,37 +33,6 @@ enum ioevents {
     IOEVENT_SET_DEFAULT_RATE,
     IOEVENT_SET_SAFETY_MASK,
 };
-
-// setup page registers
-#define PAGE_REG_SETUP_FEATURES	0
-#define P_SETUP_FEATURES_SBUS1_OUT	1
-#define P_SETUP_FEATURES_SBUS2_OUT	2
-#define P_SETUP_FEATURES_PWM_RSSI   4
-#define P_SETUP_FEATURES_ADC_RSSI   8
-#define P_SETUP_FEATURES_ONESHOT   16
-
-#define PAGE_REG_SETUP_ARMING 1
-#define P_SETUP_ARMING_IO_ARM_OK (1<<0)
-#define P_SETUP_ARMING_FMU_ARMED (1<<1)
-#define P_SETUP_ARMING_RC_HANDLING_DISABLED (1<<6)
-#define P_SETUP_ARMING_SAFETY_DISABLE_ON	(1 << 11) // disable use of safety button for safety off->on
-#define P_SETUP_ARMING_SAFETY_DISABLE_OFF	(1 << 12) // disable use of safety button for safety on->off
-
-#define PAGE_REG_SETUP_PWM_RATE_MASK 2
-#define PAGE_REG_SETUP_DEFAULTRATE   3
-#define PAGE_REG_SETUP_ALTRATE       4
-#define PAGE_REG_SETUP_REBOOT_BL    10
-#define PAGE_REG_SETUP_CRC			11
-#define PAGE_REG_SETUP_SBUS_RATE    19
-#define PAGE_REG_SETUP_IGNORE_SAFETY 20 /* bitmask of surfaces to ignore the safety status */
-#define PAGE_REG_SETUP_HEATER_DUTY_CYCLE 21
-
-// magic value for rebooting to bootloader
-#define REBOOT_BL_MAGIC 14662
-
-#define PAGE_REG_SETUP_FORCE_SAFETY_OFF 12
-#define PAGE_REG_SETUP_FORCE_SAFETY_ON  14
-#define FORCE_SAFETY_MAGIC 22027
 
 AP_IOMCU::AP_IOMCU(AP_HAL::UARTDriver &_uart) :
     uart(_uart)
@@ -133,24 +55,11 @@ void AP_IOMCU::init(void)
     if (!boardconfig || boardconfig->io_enabled() == 1) {
         check_crc();
     }
-        
-    thread_ctx = chThdCreateFromHeap(NULL,
-                                     THD_WORKING_AREA_SIZE(1024),
-                                     "IOMCU",
-                                     183,
-                                     thread_start,
-                                     this);
-    if (thread_ctx == nullptr) {
+
+    if (!hal.scheduler->thread_create(FUNCTOR_BIND_MEMBER(&AP_IOMCU::thread_main, void), "IOMCU",
+                                      1024, AP_HAL::Scheduler::PRIORITY_BOOST, 1)) {
         AP_HAL::panic("Unable to allocate IOMCU thread");
     }
-}
-
-/*
-  static function to enter thread_main()
- */
-void AP_IOMCU::thread_start(void *ctx)
-{
-    ((AP_IOMCU *)ctx)->thread_main();
 }
 
 /*
@@ -177,7 +86,7 @@ void AP_IOMCU::thread_main(void)
     trigger_event(IOEVENT_INIT);
     
     while (true) {
-        eventmask_t mask = chEvtWaitAnyTimeout(~0, MS2ST(10));
+        eventmask_t mask = chEvtWaitAnyTimeout(~0, chTimeMS2I(10));
 
         // check for pending IO events
         if (mask & EVENT_MASK(IOEVENT_SEND_PWM_OUT)) {
@@ -291,8 +200,17 @@ void AP_IOMCU::thread_main(void)
         // update safety pwm
         if (pwm_out.safety_pwm_set != pwm_out.safety_pwm_sent) {
             uint8_t set = pwm_out.safety_pwm_set;
-            write_registers(PAGE_DISARMED_PWM, 0, IOMCU_MAX_CHANNELS, pwm_out.safety_pwm);            
-            pwm_out.safety_pwm_sent = set;
+            if (write_registers(PAGE_DISARMED_PWM, 0, IOMCU_MAX_CHANNELS, pwm_out.safety_pwm)) {
+                pwm_out.safety_pwm_sent = set;
+            }
+        }
+
+        // update failsafe pwm
+        if (pwm_out.failsafe_pwm_set != pwm_out.failsafe_pwm_sent) {
+            uint8_t set = pwm_out.failsafe_pwm_set;
+            if (write_registers(PAGE_FAILSAFE_PWM, 0, IOMCU_MAX_CHANNELS, pwm_out.failsafe_pwm)) {
+                pwm_out.failsafe_pwm_sent = set;
+            }
         }
     }
 }
@@ -302,6 +220,12 @@ void AP_IOMCU::thread_main(void)
  */
 void AP_IOMCU::send_servo_out()
 {
+#if 0
+    // simple method to test IO failsafe
+    if (AP_HAL::millis() > 30000) {
+        return;
+    }
+#endif
     if (pwm_out.num_channels > 0) {
         uint8_t n = pwm_out.num_channels;
         if (rate.sbus_rate_hz == 0) {
@@ -310,8 +234,9 @@ void AP_IOMCU::send_servo_out()
         uint32_t now = AP_HAL::micros();
         if (now - last_servo_out_us >= 2000) {
             // don't send data at more than 500Hz
-            write_registers(PAGE_DIRECT_PWM, 0, n, pwm_out.pwm);
-            last_servo_out_us = now;
+            if (write_registers(PAGE_DIRECT_PWM, 0, n, pwm_out.pwm)) {
+                last_servo_out_us = now;
+            }
         }
     }    
 }
@@ -324,7 +249,7 @@ void AP_IOMCU::read_rc_input()
     // read a min of 9 channels and max of IOMCU_MAX_CHANNELS
     uint8_t n = MIN(MAX(9, rc_input.count), IOMCU_MAX_CHANNELS);
     read_registers(PAGE_RAW_RCIN, 0, 6+n, (uint16_t *)&rc_input);
-    if (rc_input.flags_rc_ok) {
+    if (rc_input.flags_rc_ok && !rc_input.flags_failsafe) {
         rc_input.last_input_us = AP_HAL::micros();
     }
 }
@@ -336,6 +261,26 @@ void AP_IOMCU::read_status()
 {
     uint16_t *r = (uint16_t *)&reg_status;
     read_registers(PAGE_STATUS, 0, sizeof(reg_status)/2, r);
+
+    if (reg_status.flag_safety_off == 0) {
+        // if the IOMCU is indicating that safety is on, then force a
+        // re-check of the safety options. This copes with a IOMCU reset
+        last_safety_options = 0xFFFF;
+
+        // also check if the safety should be definately off.
+        AP_BoardConfig *boardconfig = AP_BoardConfig::get_instance();
+        if (!boardconfig) {
+            return;
+        }
+        uint16_t options = boardconfig->get_safety_button_options();
+        if (safety_forced_off && (options & AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_ON) == 0) {
+            // the safety has been forced off, and the user has asked
+            // that the button can never be used, so there should be
+            // no way for the safety to be on except a IOMCU
+            // reboot. Force safety off again
+            force_safety_off();
+        }
+    }
 }
 
 /*
@@ -532,6 +477,7 @@ AP_HAL::Util::safety_state AP_IOMCU::get_safety_switch_state(void) const
 bool AP_IOMCU::force_safety_on(void)
 {
     trigger_event(IOEVENT_FORCE_SAFETY_ON);
+    safety_forced_off = false;
     return true;
 }
 
@@ -539,6 +485,7 @@ bool AP_IOMCU::force_safety_on(void)
 void AP_IOMCU::force_safety_off(void)
 {
     trigger_event(IOEVENT_FORCE_SAFETY_OFF);
+    safety_forced_off = true;
 }
 
 // read from one channel
@@ -563,8 +510,15 @@ void AP_IOMCU::push(void)
 // set output frequency
 void AP_IOMCU::set_freq(uint16_t chmask, uint16_t freq)
 {
+    const uint8_t masks[] = { 0x03,0x0C,0xF0 };
+    // ensure mask is legal for the timer layout
+    for (uint8_t i=0; i<ARRAY_SIZE(masks); i++) {
+        if (chmask & masks[i]) {
+            chmask |= masks[i];
+        }
+    }
     rate.freq = freq;
-    rate.chmask = chmask;
+    rate.chmask |= chmask;
     trigger_event(IOEVENT_SET_RATES);
 }
 
@@ -656,20 +610,18 @@ bool AP_IOMCU::check_crc(void)
 {
     // flash size minus 4k bootloader
 	const uint32_t flash_size = 0x10000 - 0x1000;
-    uint32_t fw_size;
     
-    fw = AP_ROMFS::find_file(fw_name, fw_size);
+    fw = AP_ROMFS::find_decompress(fw_name, fw_size);
     if (!fw) {
         hal.console->printf("failed to find %s\n", fw_name);
         return false;
     }
     uint32_t crc = crc_crc32(0, fw, fw_size);
 
-    // pad to max size
-	while (fw_size < flash_size) {
+    // pad CRC to max size
+	for (uint32_t i=0; i<flash_size-fw_size; i++) {
 		uint8_t b = 0xff;
 		crc = crc_crc32(crc, &b, 1);
-		fw_size++;
 	}
 
     uint32_t io_crc = 0;
@@ -677,16 +629,24 @@ bool AP_IOMCU::check_crc(void)
         io_crc == crc) {
         hal.console->printf("IOMCU: CRC ok\n");
         crc_is_ok = true;
+        free(fw);
+        fw = nullptr;
         return true;
+    } else {
+        hal.console->printf("IOMCU: CRC mismatch expected: 0x%X got: 0x%X\n", (unsigned)crc, (unsigned)io_crc);
     }
 
     const uint16_t magic = REBOOT_BL_MAGIC;
     write_registers(PAGE_SETUP, PAGE_REG_SETUP_REBOOT_BL, 1, &magic);
 
-    if (!upload_fw(fw_name)) {
+    if (!upload_fw()) {
+        free(fw);
+        fw = nullptr;
         AP_BoardConfig::sensor_config_error("Failed to update IO firmware");
     }
     
+    free(fw);
+    fw = nullptr;
     return false;
 }
 
@@ -706,6 +666,25 @@ void AP_IOMCU::set_safety_pwm(uint16_t chmask, uint16_t period_us)
     }
     if (changed) {
         pwm_out.safety_pwm_set++;
+    }
+}
+
+/*
+  set the pwm to use when in FMU failsafe
+ */
+void AP_IOMCU::set_failsafe_pwm(uint16_t chmask, uint16_t period_us)
+{
+    bool changed = false;
+    for (uint8_t i=0; i<IOMCU_MAX_CHANNELS; i++) {
+        if (chmask & (1U<<i)) {
+            if (pwm_out.failsafe_pwm[i] != period_us) {
+                pwm_out.failsafe_pwm[i] = period_us;
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
+        pwm_out.failsafe_pwm_set++;
     }
 }
 

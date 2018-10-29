@@ -22,6 +22,7 @@
  */
 #include "AP_AHRS.h"
 #include <AP_HAL/AP_HAL.h>
+#include <GCS_MAVLink/GCS.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -49,6 +50,9 @@ AP_AHRS_DCM::reset_gyro_drift(void)
 void
 AP_AHRS_DCM::update(bool skip_ins_update)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     float delta_t;
 
     if (_last_startup_ms == 0) {
@@ -141,6 +145,9 @@ AP_AHRS_DCM::matrix_update(float _G_Dt)
 void
 AP_AHRS_DCM::reset(bool recover_eulers)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     // reset the integration terms
     _omega_I.zero();
     _omega_P.zero();
@@ -436,6 +443,11 @@ AP_AHRS_DCM::drift_correction_yaw(void)
 
     const AP_GPS &_gps = AP::gps();
 
+    if (_compass && _compass->is_calibrating()) {
+        // don't do any yaw correction while calibrating
+        return;
+    }
+    
     if (AP_AHRS_DCM::use_compass()) {
         /*
           we are using compass for yaw
@@ -663,8 +675,14 @@ AP_AHRS_DCM::drift_correction(float deltat)
 
         // keep last airspeed estimate for dead-reckoning purposes
         Vector3f airspeed = velocity - _wind;
-        airspeed.z = 0;
-        _last_airspeed = airspeed.length();
+
+        // rotate vector to body frame
+        const Matrix3f &rot = get_rotation_body_to_ned();
+        airspeed = rot.mul_transpose(airspeed);
+
+        // take positive component in X direction. This mimics a pitot
+        // tube
+        _last_airspeed = MAX(airspeed.x, 0);
     }
 
     if (have_gps()) {
@@ -1013,6 +1031,13 @@ void AP_AHRS_DCM::set_home(const Location &loc)
     _home = loc;
     _home.options = 0;
     _home_is_set = true;
+
+    // log ahrs home and ekf origin dataflash
+    Log_Write_Home_And_Origin();
+
+    // send new home and ekf origin to GCS
+    gcs().send_home();
+    gcs().send_ekf_origin();
 }
 
 //  a relative ground position to home in meters, Down

@@ -6,8 +6,9 @@ bool ModeGuided::_enter()
     // initialise waypoint speed
     set_desired_speed_to_default();
 
-    // when entering guided mode we set the target as the current location.
-    set_desired_location(rover.current_loc);
+    // set desired location to reasonable stopping point
+    calc_stopping_location(_destination);
+    set_desired_location(_destination);
 
     return true;
 }
@@ -27,8 +28,8 @@ void ModeGuided::update()
             // determine if we should keep navigating
             if (!_reached_destination || (rover.is_boat() && !near_wp)) {
                 // drive towards destination
-                calc_steering_to_waypoint(_reached_destination ? rover.current_loc : _origin, _destination);
-                calc_throttle(calc_reduced_speed_for_turn_or_distance(_desired_speed), true, true);
+                calc_steering_to_waypoint(_reached_destination ? rover.current_loc : _origin, _destination, _reversed);
+                calc_throttle(calc_reduced_speed_for_turn_or_distance(_reversed ? -_desired_speed : _desired_speed), true, true);
             } else {
                 stop_vehicle();
             }
@@ -44,11 +45,10 @@ void ModeGuided::update()
             }
             if (have_attitude_target) {
                 // run steering and throttle controllers
-                calc_steering_to_heading(_desired_yaw_cd, _desired_speed < 0);
-                calc_throttle(_desired_speed, true, true);
+                calc_steering_to_heading(_desired_yaw_cd);
+                calc_throttle(calc_reduced_speed_for_turn_or_distance(_desired_speed), true, true);
             } else {
                 stop_vehicle();
-                g2.motors.set_steering(0.0f);
             }
             break;
         }
@@ -70,7 +70,6 @@ void ModeGuided::update()
                 calc_throttle(_desired_speed, true, true);
             } else {
                 stop_vehicle();
-                g2.motors.set_steering(0.0f);
             }
             break;
         }

@@ -300,8 +300,8 @@ const AP_Param::Info Tracker::var_info[] = {
     // @Path: ../libraries/AP_Notify/AP_Notify.cpp
     GOBJECT(notify, "NTF_",  AP_Notify),
 
-    // @Path: ../libraries/RC_Channel/RC_Channels.cpp
-    GOBJECT(rc_channels,     "RC", RC_Channels),
+    // @Path: RC_Channels.cpp
+    GOBJECT(rc_channels,     "RC", RC_Channels_Tracker),
 
     // @Path: ../libraries/SRV_Channel/SRV_Channels.cpp
     GOBJECT(servo_channels,     "SERVO", SRV_Channels),
@@ -403,4 +403,11 @@ void Tracker::load_parameters(void)
     // Load all auto-loaded EEPROM variables
     AP_Param::load_all();
     hal.console->printf("load_all took %luus\n", (unsigned long)(AP_HAL::micros() - before));
+
+#if HAL_HAVE_SAFETY_SWITCH
+    // configure safety switch to allow stopping the motors while armed
+    AP_Param::set_default_by_name("BRD_SAFETYOPTION", AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_OFF|
+                                                      AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_ON|
+                                                      AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_ARMED);
+#endif
 }

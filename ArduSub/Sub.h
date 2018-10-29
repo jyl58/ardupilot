@@ -54,7 +54,6 @@
 #include <AC_PID/AC_PID_2D.h>          // PID library (2-axis)
 #include <AC_AttitudeControl/AC_AttitudeControl_Sub.h> // Attitude control library
 #include <AC_AttitudeControl/AC_PosControl_Sub.h>      // Position control library
-#include <RC_Channel/RC_Channel.h>         // RC Channel Library
 #include <AP_Motors/AP_Motors.h>          // AP Motors library
 #include <AP_RangeFinder/AP_RangeFinder.h>     // Range finder library
 #include <Filter/Filter.h>             // Filter library
@@ -82,6 +81,7 @@
 #include "defines.h"
 #include "config.h"
 #include "GCS_Mavlink.h"
+#include "RC_Channel.h"         // RC Channel Library
 #include "Parameters.h"
 #include "AP_Arming_Sub.h"
 #include "GCS_Sub.h"
@@ -130,6 +130,7 @@ public:
     friend class Parameters;
     friend class ParametersG2;
     friend class AP_Arming_Sub;
+    friend class RC_Channels_Sub;
 
     Sub(void);
 
@@ -205,12 +206,6 @@ private:
 #if OPTFLOW == ENABLED
     OpticalFlow optflow{ahrs};
 #endif
-
-    // gnd speed limit required to observe optical flow sensor limits
-    float ekfGndSpdLimit;
-
-    // scale factor applied to velocity controller gain to prevent optical flow noise causing excessive angle demand noise
-    float ekfNavVelGainScaler;
 
     // system time in milliseconds of last recorded yaw reset from ekf
     uint32_t ekfYawReset_ms = 0;
@@ -333,7 +328,7 @@ private:
                            FUNCTOR_BIND_MEMBER(&Sub::handle_battery_failsafe, void, const char*, const int8_t),
                            _failsafe_priorities};
 
-    AP_Arming_Sub arming{ahrs, compass, battery};
+    AP_Arming_Sub arming;
 
     // Altitude
     // The cm/s we are moving up or down based on filtered data - Positive = UP
@@ -449,13 +444,13 @@ private:
 
     uint32_t last_pilot_heading;
     uint32_t last_pilot_yaw_input_ms;
-    uint32_t fs_terrain_recover_start_ms = 0;
+    uint32_t fs_terrain_recover_start_ms;
 
     static const AP_Scheduler::Task scheduler_tasks[];
     static const AP_Param::Info var_info[];
     static const struct LogStructure log_structure[];
 
-    void compass_accumulate(void);
+    void init_compass_location();
     void compass_cal_update(void);
     void fast_loop();
     void fifty_hz_loop();
@@ -489,7 +484,7 @@ private:
 #endif
     void send_pid_tuning(mavlink_channel_t chan);
     void gcs_data_stream_send(void);
-    void gcs_check_input(void);
+    void gcs_update(void);
     void do_erase_logs(void);
     void Log_Write_Optflow();
     void Log_Write_Control_Tuning();
@@ -601,7 +596,7 @@ private:
     void update_surface_and_bottom_detector();
     void set_surfaced(bool at_surface);
     void set_bottomed(bool at_bottom);
-    bool init_arm_motors(bool arming_from_gcs);
+    bool init_arm_motors(AP_Arming::ArmingMethod method);
     void init_disarm_motors();
     void motors_output();
     Vector3f pv_location_to_vector(const Location& loc);
@@ -700,6 +695,12 @@ private:
     uint16_t get_pilot_speed_dn();
 
     void convert_old_parameters(void);
+    bool handle_do_motor_test(mavlink_command_long_t command);
+    bool init_motor_test();
+    bool verify_motor_test();
+
+    uint32_t last_do_motor_test_fail_ms = 0;
+    uint32_t last_do_motor_test_ms = 0;
 
     bool control_check_barometer();
 

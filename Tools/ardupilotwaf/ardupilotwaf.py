@@ -75,6 +75,7 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_Proximity',
     'AP_Gripper',
     'AP_RTC',
+    'AC_Sprayer',
 ]
 
 def get_legacy_defines(sketch_name):
@@ -86,10 +87,14 @@ def get_legacy_defines(sketch_name):
 
 IGNORED_AP_LIBRARIES = [
     'doc',
+    'AP_Scripting', # this gets explicitly included when it is needed and should otherwise never be globbed in
 ]
 
 @conf
 def ap_get_all_libraries(bld):
+    if bld.env.BOOTLOADER:
+        # we don't need the full set of libraries for the bootloader build
+        return ['AP_HAL']
     libraries = []
     for lib_node in bld.srcnode.ant_glob('libraries/*', dir=True, src=False):
         name = lib_node.name

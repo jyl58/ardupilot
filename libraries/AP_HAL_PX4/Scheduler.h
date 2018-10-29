@@ -10,6 +10,7 @@
 
 #define PX4_SCHEDULER_MAX_TIMER_PROCS 8
 
+#define APM_MAX_PRIORITY        243
 #define APM_MAIN_PRIORITY_BOOST 241
 #define APM_MAIN_PRIORITY       180
 #define APM_TIMER_PRIORITY      181
@@ -22,6 +23,7 @@
 #define APM_SHELL_PRIORITY       57
 #define APM_OVERTIME_PRIORITY    10
 #define APM_STARTUP_PRIORITY     10
+#define APM_SCRIPTING_PRIORITY    1
 
 /* how long to boost priority of the main thread for each main
    loop. This needs to be long enough for all interrupt-level drivers
@@ -59,8 +61,6 @@ public:
     void     system_initialized();
     void     hal_initialized() { _hal_initialized = true; }
 
-    void create_uavcan_thread() override;
-
     /*
       disable interrupts and return a context that can be used to
       restore the interrupt state. This can be used to protect
@@ -72,6 +72,11 @@ public:
       restore interrupt state from disable_interrupts_save()
      */
     void restore_interrupts(void *) override;
+
+    /*
+      create a new thread
+     */
+    bool thread_create(AP_HAL::MemberProc, const char *name, uint32_t stack_size, priority_base base, int8_t priority) override;
     
 private:
     bool _initialized;
@@ -93,18 +98,11 @@ private:
     pthread_t _io_thread_ctx;
     pthread_t _storage_thread_ctx;
     pthread_t _uart_thread_ctx;
-    pthread_t _uavcan_thread_ctx;
-
-    struct _uavcan_thread_arg {
-        PX4Scheduler *sched;
-        uint8_t uavcan_number;
-    };
 
     static void *_timer_thread(void *arg);
     static void *_io_thread(void *arg);
     static void *_storage_thread(void *arg);
     static void *_uart_thread(void *arg);
-    static void *_uavcan_thread(void *arg);
 
     void _run_timers();
     void _run_io(void);
@@ -115,5 +113,6 @@ private:
     perf_counter_t  _perf_io_timers;
     perf_counter_t  _perf_storage_timer;
     perf_counter_t  _perf_delay;
+    static void *thread_create_trampoline(void *ctx);    
 };
 #endif

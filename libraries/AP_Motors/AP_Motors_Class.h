@@ -95,6 +95,11 @@ public:
     float               get_lateral() const { return _lateral_in; }
     virtual float       get_throttle_hover() const = 0;
 
+    // motor failure handling
+    void                set_thrust_boost(bool enable) { _thrust_boost = enable; }
+    bool                get_thrust_boost() const { return _thrust_boost; }
+    virtual uint8_t     get_lost_motor() const { return 0; }
+
     // spool up states
     enum spool_up_down_desired {
         DESIRED_SHUT_DOWN = 0,              // all motors stop
@@ -136,10 +141,10 @@ public:
     // output_min - sends minimum values out to the motors
     virtual void        output_min() = 0;
 
-    // output_test - spin a motor at the pwm value specified
+    // output_test_seq - spin a motor at the pwm value specified
     //  motor_seq is the motor's sequence number from 1 to the number of motors on the frame
     //  pwm value is an actual pwm value that will be output, normally in the range of 1000 ~ 2000
-    virtual void        output_test(uint8_t motor_seq, int16_t pwm) = 0;
+    virtual void        output_test_seq(uint8_t motor_seq, int16_t pwm) = 0;
 
     // get_motor_mask - returns a bitmask of which outputs are being used for motors (1 means being used)
     //  this can be used to ensure other pwm outputs (i.e. for servos) do not conflict
@@ -178,12 +183,6 @@ protected:
     // save parameters as part of disarming
     virtual void save_params_on_disarm() {}
 
-    // convert input in -1 to +1 range to pwm output
-    int16_t calc_pwm_output_1to1(float input, const SRV_Channel *servo);
-
-    // convert input in 0 to +1 range to pwm output
-    int16_t calc_pwm_output_0to1(float input, const SRV_Channel *servo);
-
     // flag bitmask
     struct AP_Motors_flags {
         uint8_t armed              : 1;    // 0 if disarmed, 1 if armed
@@ -217,6 +216,11 @@ protected:
     float _yaw_radio_passthrough;      // yaw input from pilot in -1 ~ +1 range.  used for setup and providing servo feedback while landed
 
     AP_Int8             _pwm_type;            // PWM output type
+
+    // motor failure handling
+    bool                _thrust_boost;          // true if thrust boost is enabled to handle motor failure
+    bool                _thrust_balanced;       // true when output thrust is well balanced
+    float               _thrust_boost_ratio;    // choice between highest and second highest motor output for output mixing (0 ~ 1). Zero is normal operation
 
 private:
     static AP_Motors *_instance;

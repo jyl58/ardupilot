@@ -18,17 +18,10 @@ void Rover::init_compass()
 }
 
 /*
-  if the compass is enabled then try to accumulate a reading
-  also update initial location used for declination
+  initialise compass's location used for declination
  */
-void Rover::compass_accumulate(void)
+void Rover::init_compass_location(void)
 {
-    if (!g.compass_enabled) {
-        return;
-    }
-
-    compass.accumulate();
-
     // update initial location used for declination
     if (!compass_init_location) {
         Location loc;
@@ -37,11 +30,6 @@ void Rover::compass_accumulate(void)
             compass_init_location = true;
         }
     }
-}
-
-void Rover::init_rangefinder(void)
-{
-    rangefinder.init();
 }
 
 // init beacons used for non-gps position estimates
@@ -149,6 +137,15 @@ void Rover::update_wheel_encoder()
 void Rover::compass_cal_update() {
     if (!hal.util->get_soft_armed()) {
         compass.compass_cal_update();
+    }
+}
+
+// Save compass offsets
+void Rover::compass_save() {
+    if (g.compass_enabled &&
+        compass.get_learn_type() >= Compass::LEARN_INTERNAL &&
+        !arming.is_armed()) {
+        compass.save_offsets();
     }
 }
 

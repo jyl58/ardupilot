@@ -2,6 +2,7 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include "AP_HAL_SITL_Namespace.h"
+#include "AP_HAL_SITL.h"
 #include "Semaphores.h"
 
 class HALSITL::Util : public AP_HAL::Util {
@@ -20,9 +21,6 @@ public:
         // SITL is assumed to always have plenty of memory. Return 128k for now
         return 0x20000;
     }
-
-    // create a new semaphore
-    AP_HAL::Semaphore *new_semaphore(void) override { return new HALSITL::Semaphore; }
 
     // get path to custom defaults file for AP_Param
     const char* get_custom_defaults_file() const override {

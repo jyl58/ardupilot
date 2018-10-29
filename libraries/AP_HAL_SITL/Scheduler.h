@@ -4,8 +4,9 @@
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
 #include "AP_HAL_SITL_Namespace.h"
 #include <sys/time.h>
+#include <pthread.h>
 
-#define SITL_SCHEDULER_MAX_TIMER_PROCS 4
+#define SITL_SCHEDULER_MAX_TIMER_PROCS 8
 
 /* Scheduler implementation: */
 class HALSITL::Scheduler : public AP_HAL::Scheduler {
@@ -26,7 +27,7 @@ public:
 
     void register_timer_failsafe(AP_HAL::Proc, uint32_t period_us);
 
-    bool in_main_thread() const override { return !_in_timer_proc && !_in_io_proc; };
+    bool in_main_thread() const override;
     void system_initialized();
 
     void reboot(bool hold_in_bootloader);
@@ -49,6 +50,12 @@ public:
 
     static void _run_io_procs();
     static bool _should_reboot;
+
+    /*
+      create a new thread
+     */
+    bool thread_create(AP_HAL::MemberProc, const char *name,
+                       uint32_t stack_size, priority_base base, int8_t priority) override;
     
 private:
     SITL_State *_sitlState;
@@ -67,8 +74,25 @@ private:
 
     void stop_clock(uint64_t time_usec);
 
+    static void *thread_create_trampoline(void *ctx);
+    static void check_thread_stacks(void);
+    
     bool _initialized;
     uint64_t _stopped_clock_usec;
     uint64_t _last_io_run;
+    pthread_t _main_ctx;
+
+    static HAL_Semaphore _thread_sem;
+    struct thread_attr {
+        struct thread_attr *next;
+        AP_HAL::MemberProc *f;
+        pthread_attr_t attr;
+        uint32_t stack_size;
+        void *stack;
+        const uint8_t *stack_min;
+        const char *name;
+    };
+    static struct thread_attr *threads;
+    static const uint8_t stackfill = 0xEB;
 };
 #endif  // CONFIG_HAL_BOARD

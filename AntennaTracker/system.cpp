@@ -33,17 +33,16 @@ void Tracker::init_tracker()
     // Register mavlink_delay_cb, which will run anytime you have
     // more than 5ms remaining in your call to hal.scheduler->delay
     hal.scheduler->register_delay_callback(mavlink_delay_cb_static, 5);
-    
+
     BoardConfig.init();
 #if HAL_WITH_UAVCAN
     BoardConfig_CAN.init();
 #endif
 
     // initialise notify
-    notify.init(false);
+    notify.init();
     AP_Notify::flags.pre_arm_check = true;
     AP_Notify::flags.pre_arm_gps_check = true;
-    AP_Notify::flags.failsafe_battery = false;
 
     // init baro before we start the GCS, so that the CLI baro test works
     barometer.set_log_baro_bit(MASK_LOG_IMU);
@@ -159,9 +158,6 @@ void Tracker::set_home(struct Location temp)
     if (ahrs.get_origin(ekf_origin)) {
         ahrs.set_home(temp);
     }
-
-    gcs().send_home();
-    gcs().send_ekf_origin();
 }
 
 void Tracker::arm_servos()

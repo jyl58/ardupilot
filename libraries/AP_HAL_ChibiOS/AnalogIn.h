@@ -50,14 +50,13 @@ private:
     float _sum_ratiometric;
     void _add_value(float v, float vcc5V);
     float _pin_scaler();
-    AP_HAL::Semaphore *_semaphore;
+    HAL_Semaphore _semaphore;
 };
 
 class ChibiOS::AnalogIn : public AP_HAL::AnalogIn {
 public:
     friend class AnalogSource;
     
-    AnalogIn();
     void init() override;
     AP_HAL::AnalogSource* channel(int16_t pin) override;
     void _timer_tick(void);
@@ -80,6 +79,7 @@ private:
     uint32_t _last_run;
     float _board_voltage;
     float _servorail_voltage;
+    float _rssi_voltage;
     uint16_t _power_flags;
     ADCConversionGroup adcgrpcfg;
 

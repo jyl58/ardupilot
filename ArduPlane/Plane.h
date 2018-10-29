@@ -37,11 +37,9 @@
 #include <AP_Baro/AP_Baro.h>        // ArduPilot barometer library
 #include <AP_Compass/AP_Compass.h>     // ArduPilot Mega Magnetometer Library
 #include <AP_Math/AP_Math.h>        // ArduPilot Mega Vector/Matrix math Library
-#include <AP_ADC/AP_ADC.h>         // ArduPilot Mega Analog to Digital Converter Library
 #include <AP_InertialSensor/AP_InertialSensor.h> // Inertial Sensor Library
 #include <AP_AccelCal/AP_AccelCal.h>                // interface and maths for accelerometer calibration
 #include <AP_AHRS/AP_AHRS.h>         // ArduPilot Mega DCM Library
-#include <RC_Channel/RC_Channel.h>     // RC Channel Library
 #include <SRV_Channel/SRV_Channel.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>     // Range finder library
 #include <Filter/Filter.h>                     // Filter library
@@ -85,6 +83,7 @@
 #include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include <AP_Frsky_Telem/AP_Frsky_Telem.h>
 #include <AP_Devo_Telem/AP_Devo_Telem.h>
+#include <AP_OSD/AP_OSD.h>
 #include <AP_ServoRelayEvents/AP_ServoRelayEvents.h>
 
 #include <AP_Rally/AP_Rally.h>
@@ -109,6 +108,11 @@
 // Local modules
 #include "defines.h"
 
+#ifdef ENABLE_SCRIPTING
+#include <AP_Scripting/AP_Scripting.h>
+#endif
+
+#include "RC_Channel.h"     // RC Channel Library
 #include "Parameters.h"
 #include "avoidance_adsb.h"
 #include "AP_Arming.h"
@@ -150,6 +154,8 @@ public:
     friend class AP_AdvancedFailsafe_Plane;
     friend class AP_Avoidance_Plane;
     friend class GCS_Plane;
+    friend class RC_Channel_Plane;
+    friend class RC_Channels_Plane;
 
     Plane(void);
 
@@ -221,7 +227,7 @@ private:
     AP_AHRS_DCM ahrs;
 #endif
 
-    AP_TECS TECS_controller{ahrs, aparm, landing, g2.soaring_controller};
+    AP_TECS TECS_controller{ahrs, aparm, landing};
     AP_L1_Control L1_controller{ahrs, &TECS_controller};
 
     // Attitude to servo controllers
@@ -289,6 +295,10 @@ private:
     // RSSI
     AP_RSSI rssi;
 
+#if OSD_ENABLED == ENABLED
+    AP_OSD osd;
+#endif
+    
     // This is the state of the flight control system
     // There are multiple states defined such as MANUAL, FBW-A, AUTO
     enum FlightMode control_mode = INITIALISING;
@@ -585,9 +595,6 @@ private:
     // The instantaneous desired pitch angle.  Hundredths of a degree
     int32_t nav_pitch_cd;
 
-    // we separate out rudder input to allow for RUDDER_ONLY=1
-    int16_t rudder_input;
-
     // the aerodymamic load factor. This is calculated from the demanded
     // roll before the roll is clipped, using 1/sqrt(cos(nav_roll))
     float aerodynamic_load_factor = 1.0f;
@@ -742,7 +749,7 @@ private:
 #endif
 
     // Arming/Disarming mangement class
-    AP_Arming_Plane arming{ahrs, compass, battery};
+    AP_Arming_Plane arming;
 
     AP_Param param_loader {var_info};
 
@@ -904,16 +911,13 @@ private:
     void init_rc_out_aux();
     void rudder_arm_disarm_check();
     void read_radio();
+    int16_t rudder_input(void);
     void control_failsafe();
     bool trim_radio();
-    bool rc_failsafe_active(void);
-    void init_rangefinder(void);
+    bool rc_failsafe_active(void) const;
     void read_rangefinder(void);
     void read_airspeed(void);
     void rpm_update(void);
-    void button_update(void);
-    void stats_update();
-    void ice_update(void);
     void init_ardupilot();
     void startup_ground(void);
     enum FlightMode get_previous_mode();
@@ -941,18 +945,13 @@ private:
     void update_compass(void);
     void update_alt(void);
     void afs_fs_check(void);
-    void compass_accumulate(void);
     void compass_cal_update();
-    void barometer_accumulate(void);
     void update_optical_flow(void);
     void one_second_loop(void);
     void airspeed_ratio_update(void);
-    void update_mount(void);
-    void update_trigger(void);    
     void compass_save(void);
     void update_logging1(void);
     void update_logging2(void);
-    void terrain_update(void);
     void avoidance_adsb_update(void);
     void update_flight_mode(void);
     void stabilize();
@@ -969,7 +968,6 @@ private:
     void servos_twin_engine_mix();
     void throttle_watt_limiter(int8_t &min_throttle, int8_t &max_throttle);
     bool allow_reverse_thrust(void);
-    void update_aux();
     void update_is_flying_5Hz(void);
     void crash_detection_update(void);
     bool in_preLaunch_flight_stage(void);
@@ -1025,17 +1023,22 @@ private:
     void notify_flight_mode(enum FlightMode mode);
     void log_init();
     void init_capabilities(void);
-    void ins_periodic();
-    void dataflash_periodic(void);
     void parachute_check();
 #if PARACHUTE == ENABLED
     void do_parachute(const AP_Mission::Mission_Command& cmd);
     void parachute_release();
     bool parachute_manual_release();
 #endif
+#if OSD_ENABLED == ENABLED
+    void publish_osd_info();
+#endif
     void accel_cal_update(void);
     void update_soft_armed();
+#if SOARING_ENABLED == ENABLED
     void update_soaring();
+#endif
+
+    void read_aux_all();
 
     // support for AP_Avoidance custom flight mode, AVOID_ADSB
     bool avoid_adsb_init(bool ignore_checks);

@@ -1,7 +1,7 @@
 #include "Sub.h"
 
 // return barometric altitude in centimeters
-void Sub::read_barometer(void)
+void Sub::read_barometer()
 {
     barometer.update();
 
@@ -10,7 +10,7 @@ void Sub::read_barometer(void)
     }
 }
 
-void Sub::init_rangefinder(void)
+void Sub::init_rangefinder()
 {
 #if RANGEFINDER_ENABLED == ENABLED
     rangefinder.init();
@@ -20,7 +20,7 @@ void Sub::init_rangefinder(void)
 }
 
 // return rangefinder altitude in centimeters
-void Sub::read_rangefinder(void)
+void Sub::read_rangefinder()
 {
 #if RANGEFINDER_ENABLED == ENABLED
     rangefinder.update();
@@ -93,17 +93,10 @@ void Sub::init_compass()
 }
 
 /*
-  if the compass is enabled then try to accumulate a reading
-  also update initial location used for declination
+  initialise compass's location used for declination
  */
-void Sub::compass_accumulate(void)
+void Sub::init_compass_location()
 {
-    if (!g.compass_enabled) {
-        return;
-    }
-
-    compass.accumulate();
-
     // update initial location used for declination
     if (!ap.compass_init_location) {
         Location loc;

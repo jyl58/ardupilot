@@ -131,8 +131,8 @@ protected:
     DataFlash_Class &_front;
 
     virtual void periodic_10Hz(const uint32_t now);
-    virtual void periodic_1Hz(const uint32_t now);
-    virtual void periodic_fullrate(const uint32_t now);
+    virtual void periodic_1Hz();
+    virtual void periodic_fullrate();
 
     bool ShouldLog(bool is_critical);
     virtual bool WritesOK() const = 0;
@@ -141,8 +141,6 @@ protected:
     /*
       read a block
     */
-    virtual bool ReadBlock(void *pkt, uint16_t size) = 0;
-
     virtual bool WriteBlockCheckStartupMessages();
     virtual void WriteMoreStartupMessages();
     virtual void push_log_blocks();
@@ -165,4 +163,6 @@ private:
     uint32_t _last_periodic_1Hz;
     uint32_t _last_periodic_10Hz;
     bool have_logged_armed;
+
+    void validate_WritePrioritisedBlock(const void *pBuffer, uint16_t size);
 };

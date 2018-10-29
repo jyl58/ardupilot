@@ -25,7 +25,8 @@ void Rover::Log_Write_Arm_Disarm()
 // Write an attitude packet
 void Rover::Log_Write_Attitude()
 {
-    const Vector3f targets(0.0f, 0.0f, 0.0f);  // Rover does not have attitude targets, use place-holder for commonality with Dataflash Log_Write_Attitude message
+    float desired_pitch_cd = degrees(g2.attitude_control.get_desired_pitch()) * 100.0f;
+    const Vector3f targets(0.0f, desired_pitch_cd, 0.0f);
 
     DataFlash.Log_Write_Attitude(ahrs, targets);
 
@@ -38,6 +39,16 @@ void Rover::Log_Write_Attitude()
     // log steering rate controller
     DataFlash.Log_Write_PID(LOG_PIDS_MSG, g2.attitude_control.get_steering_rate_pid().get_pid_info());
     DataFlash.Log_Write_PID(LOG_PIDA_MSG, g2.attitude_control.get_throttle_speed_pid().get_pid_info());
+
+    // log pitch control for balance bots
+    if (is_balancebot()) {
+        DataFlash.Log_Write_PID(LOG_PIDP_MSG, g2.attitude_control.get_pitch_to_throttle_pid().get_pid_info());
+    }
+
+    // log heel to sail control for sailboats
+    if (g2.motors.has_sail()) {
+        DataFlash.Log_Write_PID(LOG_PIDR_MSG, g2.attitude_control.get_sailboat_heel_pid().get_pid_info());
+    }
 }
 
 // Write a range finder depth message
@@ -50,9 +61,16 @@ void Rover::Log_Write_Depth()
 
     // get position
     Location loc;
-    if (!rover.ahrs.get_position(loc)) {
+    if (!ahrs.get_position(loc)) {
         return;
     }
+
+    // check if new sensor reading has arrived
+    uint32_t reading_ms = rangefinder.last_reading_ms(ROTATION_PITCH_270);
+    if (reading_ms == rangefinder_last_reading_ms) {
+        return;
+    }
+    rangefinder_last_reading_ms = reading_ms;
 
     DataFlash.Log_Write("DPTH", "TimeUS,Lat,Lng,Depth",
                         "sDUm", "FGG0", "QLLf",
@@ -139,6 +157,26 @@ void Rover::Log_Write_Nav_Tuning()
 void Rover::Log_Write_Proximity()
 {
     DataFlash.Log_Write_Proximity(g2.proximity);
+}
+
+void Rover::Log_Write_Sail()
+{
+    // only log sail if present
+    if (!g2.motors.has_sail()) {
+        return;
+    }
+
+    // get wind direction
+    float wind_dir_rel = 0.0f;
+    if (rover.g2.windvane.enabled()) {
+        wind_dir_rel = degrees(g2.windvane.get_apparent_wind_direction_rad());
+    }
+    DataFlash.Log_Write("SAIL", "TimeUS,WindDirRel,SailOut,VMG",
+                        "sh%n", "F000", "Qfff",
+                        AP_HAL::micros64(),
+                        (double)wind_dir_rel,
+                        (double)g2.motors.get_mainsail(),
+                        (double)sailboat_get_VMG());
 }
 
 struct PACKED log_Steering {
@@ -343,6 +381,7 @@ void Rover::Log_Write_Error(uint8_t sub_system, uint8_t error_code) {}
 void Rover::Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target) {}
 void Rover::Log_Write_Nav_Tuning() {}
 void Rover::Log_Write_Proximity() {}
+void Rover::Log_Write_Sail() {}
 void Rover::Log_Write_Startup(uint8_t type) {}
 void Rover::Log_Write_Throttle() {}
 void Rover::Log_Write_Rangefinder() {}

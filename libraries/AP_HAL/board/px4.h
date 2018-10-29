@@ -52,8 +52,8 @@
 #define HAL_GPIO_A_LED_PIN        27
 #define HAL_GPIO_B_LED_PIN        26
 #define HAL_GPIO_C_LED_PIN        25
-#define HAL_GPIO_LED_ON           0
-#define HAL_GPIO_LED_OFF          1
+#define HAL_GPIO_LED_ON           1
+#define HAL_GPIO_LED_OFF          0
 
 #define HAL_BARO_MS5611_NAME "ms5611"
 #define HAL_BARO_MS5611_SPI_INT_NAME "ms5611_int"
@@ -140,3 +140,12 @@
 #ifndef AP_FEATURE_SBUS_OUT
 #define AP_FEATURE_SBUS_OUT 1
 #endif
+
+#ifndef HAL_WITH_UAVCAN
+#define HAL_WITH_UAVCAN	0
+#endif
+
+#include <AP_HAL_PX4/Semaphores.h>
+#define HAL_Semaphore PX4::Semaphore
+#define HAL_Semaphore_Recursive PX4::Semaphore_Recursive
+

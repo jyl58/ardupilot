@@ -114,7 +114,7 @@ bool AP_RangeFinder_Benewake::get_reading(uint16_t &reading_cm, bool &signal_ok)
                     uint16_t dist = ((uint16_t)linebuf[3] << 8) | linebuf[2];
                     if (dist != 0xFFFF) {
                         // TFmini has short distance mode (mm)
-                        if ((model_type == BENEWAKE_TFmini)) {
+                        if (model_type == BENEWAKE_TFmini) {
                             if (linebuf[6] == 0x02) {
                                 dist *= 0.1f;
                             }
@@ -152,14 +152,14 @@ void AP_RangeFinder_Benewake::update(void)
     bool signal_ok;
     if (get_reading(state.distance_cm, signal_ok)) {
         // update range_valid state based on distance measured
-        last_reading_ms = AP_HAL::millis();
+        state.last_reading_ms = AP_HAL::millis();
         if (signal_ok) {
             update_status();
         } else {
             // if signal is weak set status to out-of-range
             set_status(RangeFinder::RangeFinder_OutOfRangeHigh);
         }
-    } else if (AP_HAL::millis() - last_reading_ms > 200) {
+    } else if (AP_HAL::millis() - state.last_reading_ms > 200) {
         set_status(RangeFinder::RangeFinder_NoData);
     }
 }

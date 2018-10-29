@@ -86,9 +86,20 @@ void UARTDriver::begin(uint32_t b, uint16_t rxS, uint16_t txS)
 
     _device->set_speed(b);
 
-    _baudrate = b;
+    bool clear_buffers = false;
+    if (b != 0) {
+        if (_baudrate != b && hal.console != this) {
+            clear_buffers = true;
+        }
+        _baudrate = b;
+    }
 
     _allocate_buffers(rxS, txS);
+
+    if (clear_buffers) {
+        _readbuf.clear();
+        _writebuf.clear();
+    }
 }
 
 void UARTDriver::_allocate_buffers(uint16_t rxS, uint16_t txS)
@@ -285,14 +296,20 @@ size_t UARTDriver::write(uint8_t c)
     if (!_initialised) {
         return 0;
     }
+    if (!_write_mutex.take_nonblocking()) {
+        return 0;
+    }
 
     while (_writebuf.space() == 0) {
         if (_nonblocking_writes) {
+            _write_mutex.give();
             return 0;
         }
         hal.scheduler->delay(1);
     }
-    return _writebuf.write(&c, 1);
+    size_t ret = _writebuf.write(&c, 1);
+    _write_mutex.give();
+    return ret;
 }
 
 /*
@@ -301,6 +318,9 @@ size_t UARTDriver::write(uint8_t c)
 size_t UARTDriver::write(const uint8_t *buffer, size_t size)
 {
     if (!_initialised) {
+        return 0;
+    }
+    if (!_write_mutex.take_nonblocking()) {
         return 0;
     }
     if (!_nonblocking_writes) {
@@ -312,10 +332,13 @@ size_t UARTDriver::write(const uint8_t *buffer, size_t size)
             if (write(*buffer++) != 1) break;
             ret++;
         }
+        _write_mutex.give();
         return ret;
     }
 
-    return _writebuf.write(buffer, size);
+    size_t ret = _writebuf.write(buffer, size);
+    _write_mutex.give();
+    return ret;
 }
 
 /*

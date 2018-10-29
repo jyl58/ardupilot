@@ -181,8 +181,8 @@ bool Copter::ModeAutoTune::start(bool ignore_checks)
     }
 
     // initialize vertical speeds and leash lengths
-    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_accel_z(g.pilot_accel_z);
+    pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_max_accel_z(g.pilot_accel_z);
 
     // initialise position and desired velocity
     if (!pos_control->is_active_z()) {
@@ -319,8 +319,8 @@ void Copter::ModeAutoTune::run()
     int16_t target_climb_rate;
 
     // initialize vertical speeds and acceleration
-    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_accel_z(g.pilot_accel_z);
+    pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_max_accel_z(g.pilot_accel_z);
 
     // if not auto armed or motor interlock not enabled set throttle to zero and exit immediately
     // this should not actually be possible because of the init() checks
@@ -431,18 +431,18 @@ bool Copter::ModeAutoTune::check_level(const LEVEL_ISSUE issue, const float curr
 bool Copter::ModeAutoTune::currently_level()
 {
     if (!check_level(LEVEL_ISSUE_ANGLE_ROLL,
-                     labs(ahrs.roll_sensor - roll_cd),
+                     fabsf(ahrs.roll_sensor - roll_cd),
                      AUTOTUNE_LEVEL_ANGLE_CD)) {
         return false;
     }
 
     if (!check_level(LEVEL_ISSUE_ANGLE_PITCH,
-                     labs(ahrs.pitch_sensor - pitch_cd),
+                     fabsf(ahrs.pitch_sensor - pitch_cd),
                      AUTOTUNE_LEVEL_ANGLE_CD)) {
         return false;
     }
     if (!check_level(LEVEL_ISSUE_ANGLE_YAW,
-                     labs(wrap_180_cd(ahrs.yaw_sensor-(int32_t)desired_yaw)),
+                     fabsf(wrap_180_cd(ahrs.yaw_sensor-(int32_t)desired_yaw)),
                      AUTOTUNE_LEVEL_ANGLE_CD)) {
         return false;
     }
@@ -515,11 +515,6 @@ void Copter::ModeAutoTune::autotune_attitude_control()
             start_rate = ToDeg(ahrs.get_gyro().x) * 100.0f;
             start_angle = ahrs.roll_sensor;
             rotation_rate_filt.set_cutoff_frequency(attitude_control->get_rate_roll_pid().filt_hz()*2.0f);
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate_filt.reset(start_rate);
-            } else {
-                rotation_rate_filt.reset(0);
-            }
         break;
         case PITCH:
             target_rate = constrain_float(ToDeg(attitude_control->max_rate_step_bf_pitch())*100.0f, AUTOTUNE_TARGET_MIN_RATE_RLLPIT_CDS, AUTOTUNE_TARGET_RATE_RLLPIT_CDS);
@@ -527,11 +522,6 @@ void Copter::ModeAutoTune::autotune_attitude_control()
             start_rate = ToDeg(ahrs.get_gyro().y) * 100.0f;
             start_angle = ahrs.pitch_sensor;
             rotation_rate_filt.set_cutoff_frequency(attitude_control->get_rate_pitch_pid().filt_hz()*2.0f);
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate_filt.reset(start_rate);
-            } else {
-                rotation_rate_filt.reset(0);
-            }
             break;
         case YAW:
             target_rate = constrain_float(ToDeg(attitude_control->max_rate_step_bf_yaw()*0.75f)*100.0f, AUTOTUNE_TARGET_MIN_RATE_YAW_CDS, AUTOTUNE_TARGET_RATE_YAW_CDS);
@@ -539,16 +529,16 @@ void Copter::ModeAutoTune::autotune_attitude_control()
             start_rate = ToDeg(ahrs.get_gyro().z) * 100.0f;
             start_angle = ahrs.yaw_sensor;
             rotation_rate_filt.set_cutoff_frequency(AUTOTUNE_Y_FILT_FREQ);
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate_filt.reset(start_rate);
-            } else {
-                rotation_rate_filt.reset(0);
-            }
             break;
+        }
+        if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
+            rotation_rate_filt.reset(start_rate);
+        } else {
+            rotation_rate_filt.reset(0);
         }
         break;
 
-    case TWITCHING:
+    case TWITCHING: {
         // Run the twitching step
         // Note: we should be using intra-test gains (which are very close to the original gains but have lower I)
 
@@ -598,33 +588,35 @@ void Copter::ModeAutoTune::autotune_attitude_control()
         }
 
         // capture this iterations rotation rate and lean angle
-        // Add filter to measurements
+        float gyro_reading = 0;
         switch (axis) {
         case ROLL:
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().x) * 100.0f), copter.scheduler.get_loop_period_s());
-            } else {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().x) * 100.0f - start_rate), copter.scheduler.get_loop_period_s());
-            }
+            gyro_reading = ahrs.get_gyro().x;
             lean_angle = direction_sign * (ahrs.roll_sensor - (int32_t)start_angle);
             break;
         case PITCH:
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().y) * 100.0f), copter.scheduler.get_loop_period_s());
-            } else {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().y) * 100.0f - start_rate), copter.scheduler.get_loop_period_s());
-            }
+            gyro_reading = ahrs.get_gyro().y;
             lean_angle = direction_sign * (ahrs.pitch_sensor - (int32_t)start_angle);
             break;
         case YAW:
-            if ((tune_type == SP_DOWN) || (tune_type == SP_UP)) {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().z) * 100.0f), copter.scheduler.get_loop_period_s());
-            } else {
-                rotation_rate = rotation_rate_filt.apply(direction_sign * (ToDeg(ahrs.get_gyro().z) * 100.0f - start_rate), copter.scheduler.get_loop_period_s());
-            }
+            gyro_reading = ahrs.get_gyro().z;
             lean_angle = direction_sign * wrap_180_cd(ahrs.yaw_sensor-(int32_t)start_angle);
             break;
         }
+
+        // Add filter to measurements
+        float filter_value;
+        switch (tune_type) {
+        case SP_DOWN:
+        case SP_UP:
+            filter_value = direction_sign * (ToDeg(gyro_reading) * 100.0f);
+            break;
+        default:
+            filter_value = direction_sign * (ToDeg(gyro_reading) * 100.0f - start_rate);
+            break;
+        }
+        rotation_rate = rotation_rate_filt.apply(filter_value,
+                                                 copter.scheduler.get_loop_period_s());
 
         switch (tune_type) {
         case RD_UP:
@@ -655,7 +647,7 @@ void Copter::ModeAutoTune::autotune_attitude_control()
         copter.DataFlash.Log_Write_Rate(ahrs, *motors, *attitude_control, *pos_control);
 #endif
         break;
-
+    }
     case UPDATE_GAINS:
 
         // re-enable rate limits
@@ -1159,13 +1151,13 @@ void Copter::ModeAutoTune::update_gcs(uint8_t message_id)
             gcs().send_text(MAV_SEVERITY_INFO,"AutoTune: Stopped");
             break;
         case AUTOTUNE_MESSAGE_SUCCESS:
-            gcs().send_text(MAV_SEVERITY_INFO,"AutoTune: Success");
+            gcs().send_text(MAV_SEVERITY_NOTICE,"AutoTune: Success");
             break;
         case AUTOTUNE_MESSAGE_FAILED:
             gcs().send_text(MAV_SEVERITY_NOTICE,"AutoTune: Failed");
             break;
         case AUTOTUNE_MESSAGE_SAVED_GAINS:
-            gcs().send_text(MAV_SEVERITY_INFO,"AutoTune: Saved gains");
+            gcs().send_text(MAV_SEVERITY_NOTICE,"AutoTune: Saved gains");
             break;
     }
 }

@@ -35,11 +35,10 @@ const AP_Scheduler::Task Sub::scheduler_tasks[] = {
     SCHED_TASK(update_altitude,       10,    100),
     SCHED_TASK(three_hz_loop,          3,     75),
     SCHED_TASK(update_turn_counter,   10,     50),
-    SCHED_TASK(compass_accumulate,   100,    100),
     SCHED_TASK_CLASS(AP_Baro,             &sub.barometer,    accumulate,          50,  90),
     SCHED_TASK_CLASS(AP_Notify,           &sub.notify,       update,              50,  90),
     SCHED_TASK(one_hz_loop,            1,    100),
-    SCHED_TASK(gcs_check_input,      400,    180),
+    SCHED_TASK(gcs_update,           400,    180),
     SCHED_TASK(gcs_send_heartbeat,     1,    110),
     SCHED_TASK(gcs_send_deferred,     50,    550),
     SCHED_TASK(gcs_data_stream_send,  50,    550),
@@ -158,13 +157,13 @@ void Sub::fifty_hz_loop()
     failsafe_sensors_check();
 
     // Update rc input/output
-    RC_Channels::read_input();
+    rc().read_input();
     SRV_Channels::output_ch_all();
 }
 
 // update_batt_compass - read battery and compass
 // should be called at 10hz
-void Sub::update_batt_compass(void)
+void Sub::update_batt_compass()
 {
     // read battery before compass because it may be used for motor interference compensation
     battery.read();
@@ -175,7 +174,7 @@ void Sub::update_batt_compass(void)
         compass.read();
         // log compass information
         if (should_log(MASK_LOG_COMPASS) && !ahrs.have_ekf_logging()) {
-            DataFlash.Log_Write_Compass(compass);
+            DataFlash.Log_Write_Compass();
         }
     }
 }
@@ -289,10 +288,17 @@ void Sub::one_hz_loop()
 
     // log terrain data
     terrain_logging();
+
+    // init compass location for declination
+    init_compass_location();
+
+    // need to set "likely flying" when armed to allow for compass
+    // learning to run
+    ahrs.set_likely_flying(hal.util->get_soft_armed());
 }
 
 // called at 50hz
-void Sub::update_GPS(void)
+void Sub::update_GPS()
 {
     static uint32_t last_gps_reading[GPS_MAX_INSTANCES];   // time of last gps message
     bool gps_updated = false;
@@ -315,7 +321,7 @@ void Sub::update_GPS(void)
     }
 }
 
-void Sub::read_AHRS(void)
+void Sub::read_AHRS()
 {
     // Perform IMU calculations and get attitude info
     //-----------------------------------------------
