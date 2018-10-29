@@ -66,7 +66,7 @@ AP_Baro_Backend *AP_Baro_BMP280::probe(AP_Baro &baro,
 
 bool AP_Baro_BMP280::_init()
 {
-    if (!_dev | !_dev->get_semaphore()->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
+    if (!_dev || !_dev->get_semaphore()->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
         return false;
     }
 
