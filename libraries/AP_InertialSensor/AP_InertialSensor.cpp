@@ -870,7 +870,10 @@ AP_InertialSensor::detect_backends(void)
     #error Unrecognised HAL_INS_TYPE setting
 #endif
 
-    _enable_mask.set(found_mask);
+#ifdef HAL_BOARD_QAIIFLY
+	ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.i2c_mgr->get_device(HAL_INS_MPU60x0_I2C_BUS, HAL_INS_MPU60x0_I2C_ADDR)));
+#endif
+	_enable_mask.set(found_mask);
 
     if (_backend_count == 0) {
         AP_BoardConfig::sensor_config_error("INS: unable to initialise driver");
