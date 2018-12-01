@@ -692,6 +692,11 @@ AP_InertialSensor::detect_backends(void)
         ADD_BACKEND(AP_InertialSensor_HIL::detect(*this));
         return;
     }
+//first imu	
+#ifdef HAL_BOARD_QAIIFLY
+		ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.i2c_mgr->get_device(HAL_INS_MPU60x0_I2C_BUS, HAL_INS_MPU60x0_I2C_ADDR)));
+#endif
+
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     ADD_BACKEND(AP_InertialSensor_SITL::detect(*this));
 #elif HAL_INS_DEFAULT == HAL_INS_HIL
@@ -868,10 +873,6 @@ AP_InertialSensor::detect_backends(void)
     // no INS device
 #else
     #error Unrecognised HAL_INS_TYPE setting
-#endif
-
-#ifdef HAL_BOARD_QAIIFLY
-	ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.i2c_mgr->get_device(HAL_INS_MPU60x0_I2C_BUS, HAL_INS_MPU60x0_I2C_ADDR)));
 #endif
 	_enable_mask.set(found_mask);
 
