@@ -88,13 +88,6 @@ bool Sub::set_home(const Location& loc, bool lock)
         ahrs.lock_home();
     }
 
-    // log ahrs home and ekf origin dataflash
-    ahrs.Log_Write_Home_And_Origin();
-
-    // send new home and ekf origin to GCS
-    gcs().send_home();
-    gcs().send_ekf_origin();
-
     // return success
     return true;
 }
@@ -105,10 +98,5 @@ bool Sub::far_from_EKF_origin(const Location& loc)
 {
     // check distance to EKF origin
     const struct Location &ekf_origin = inertial_nav.get_origin();
-    if (get_distance(ekf_origin, loc) > EKF_ORIGIN_MAX_DIST_M) {
-        return true;
-    }
-
-    // close enough to origin
-    return false;
+    return (get_distance(ekf_origin, loc) > EKF_ORIGIN_MAX_DIST_M);
 }

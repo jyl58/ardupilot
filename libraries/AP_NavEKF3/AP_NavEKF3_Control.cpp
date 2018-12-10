@@ -367,9 +367,6 @@ void NavEKF3_core::setAidingMode()
             lastVelPassTime_ms = imuSampleTime_ms;
             lastRngBcnPassTime_ms = imuSampleTime_ms;
             break;
-
-        default:
-            break;
         }
 
         // Always reset the position and velocity when changing mode
@@ -562,6 +559,7 @@ void  NavEKF3_core::updateFilterStatus(void)
     filterStatus.flags.touchdown = expectGndEffectTouchdown; // The EKF has been told to detect touchdown and is in a ground effect mitigation mode
     filterStatus.flags.using_gps = ((imuSampleTime_ms - lastPosPassTime_ms) < 4000) && (PV_AidingMode == AID_ABSOLUTE);
     filterStatus.flags.gps_glitching = !gpsAccuracyGood && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_fusionModeGPS != 3); // GPS glitching is affecting navigation accuracy
+    filterStatus.flags.gps_quality_good = gpsGoodToAlign;
 }
 
 #endif // HAL_CPU_CLASS

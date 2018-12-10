@@ -39,8 +39,6 @@ struct Guided_Limit {
 bool Copter::ModeGuided::init(bool ignore_checks)
 {
     if (copter.position_ok() || ignore_checks) {
-        // initialise yaw
-        auto_yaw.set_mode_to_default(false);
         // start in position control mode
         pos_control_start();
         return true;
@@ -50,8 +48,8 @@ bool Copter::ModeGuided::init(bool ignore_checks)
 }
 
 
-// guided_takeoff_start - initialises waypoint controller to implement take-off
-bool Copter::ModeGuided::takeoff_start(float final_alt_above_home)
+// do_user_takeoff_start - initialises waypoint controller to implement take-off
+bool Copter::ModeGuided::do_user_takeoff_start(float final_alt_above_home)
 {
     guided_mode = Guided_TakeOff;
 
@@ -73,7 +71,7 @@ bool Copter::ModeGuided::takeoff_start(float final_alt_above_home)
     set_throttle_takeoff();
 
     // get initial alt for WP_NAVALT_MIN
-    copter.auto_takeoff_set_start_alt();
+    auto_takeoff_set_start_alt();
 
     return true;
 }
@@ -105,12 +103,12 @@ void Copter::ModeGuided::vel_control_start()
     guided_mode = Guided_Velocity;
 
     // initialise horizontal speed, acceleration
-    pos_control->set_speed_xy(wp_nav->get_speed_xy());
-    pos_control->set_accel_xy(wp_nav->get_wp_acceleration());
+    pos_control->set_max_speed_xy(wp_nav->get_speed_xy());
+    pos_control->set_max_accel_xy(wp_nav->get_wp_acceleration());
 
     // initialize vertical speeds and acceleration
-    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_accel_z(g.pilot_accel_z);
+    pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_max_accel_z(g.pilot_accel_z);
 
     // initialise velocity controller
     pos_control->init_vel_controller_xyz();
@@ -125,8 +123,8 @@ void Copter::ModeGuided::posvel_control_start()
     pos_control->init_xy_controller();
 
     // set speed and acceleration from wpnav's speed and acceleration
-    pos_control->set_speed_xy(wp_nav->get_speed_xy());
-    pos_control->set_accel_xy(wp_nav->get_wp_acceleration());
+    pos_control->set_max_speed_xy(wp_nav->get_speed_xy());
+    pos_control->set_max_accel_xy(wp_nav->get_wp_acceleration());
 
     const Vector3f& curr_pos = inertial_nav.get_position();
     const Vector3f& curr_vel = inertial_nav.get_velocity();
@@ -136,8 +134,8 @@ void Copter::ModeGuided::posvel_control_start()
     pos_control->set_desired_velocity_xy(curr_vel.x, curr_vel.y);
 
     // set vertical speed and acceleration
-    pos_control->set_speed_z(wp_nav->get_speed_down(), wp_nav->get_speed_up());
-    pos_control->set_accel_z(wp_nav->get_accel_z());
+    pos_control->set_max_speed_z(wp_nav->get_speed_down(), wp_nav->get_speed_up());
+    pos_control->set_max_accel_z(wp_nav->get_accel_z());
 
     // pilot always controls yaw
     auto_yaw.set_mode(AUTO_YAW_HOLD);
@@ -150,8 +148,8 @@ void Copter::ModeGuided::angle_control_start()
     guided_mode = Guided_Angle;
 
     // set vertical speed and acceleration
-    pos_control->set_speed_z(wp_nav->get_speed_down(), wp_nav->get_speed_up());
-    pos_control->set_accel_z(wp_nav->get_accel_z());
+    pos_control->set_max_speed_z(wp_nav->get_speed_down(), wp_nav->get_speed_up());
+    pos_control->set_max_accel_z(wp_nav->get_accel_z());
 
     // initialise position and desired velocity
     if (!pos_control->is_active_z()) {
@@ -392,6 +390,15 @@ void Copter::ModeGuided::run()
 //      called by guided_run at 100hz or more
 void Copter::ModeGuided::takeoff_run()
 {
+    auto_takeoff_run();
+    if (wp_nav->reached_wp_destination()) {
+        const Vector3f target = wp_nav->get_wp_destination();
+        set_destination(target);
+    }
+}
+
+void Copter::Mode::auto_takeoff_run()
+{
     // if not auto armed or motor interlock not enabled set throttle to zero and exit immediately
     if (!motors->armed() || !ap.auto_armed || !motors->get_interlock()) {
         // initialise wpnav targets
@@ -431,7 +438,7 @@ void Copter::ModeGuided::takeoff_run()
     copter.pos_control->update_z_controller();
 
     // call attitude controller
-    copter.auto_takeoff_attitude_run(target_yaw_rate);
+    auto_takeoff_attitude_run(target_yaw_rate);
 }
 
 // guided_pos_control_run - runs the guided position controller
@@ -515,7 +522,7 @@ void Copter::ModeGuided::vel_control_run()
     }
 
     // call velocity controller which includes z axis controller
-    pos_control->update_vel_controller_xyz(ekfNavVelGainScaler);
+    pos_control->update_vel_controller_xyz();
 
     // call attitude controller
     if (auto_yaw.mode() == AUTO_YAW_HOLD) {
@@ -582,7 +589,7 @@ void Copter::ModeGuided::posvel_control_run()
     pos_control->set_desired_velocity_xy(guided_vel_target_cms.x, guided_vel_target_cms.y);
 
     // run position controllers
-    pos_control->update_xy_controller(ekfNavVelGainScaler);
+    pos_control->update_xy_controller();
     pos_control->update_z_controller();
 
     // call attitude controller
@@ -720,7 +727,7 @@ void Copter::ModeGuided::set_desired_velocity_with_accel_and_fence_limits(const 
 
     // limit xy change
     float vel_delta_xy = safe_sqrt(sq(vel_delta.x)+sq(vel_delta.y));
-    float vel_delta_xy_max = G_Dt * pos_control->get_accel_xy();
+    float vel_delta_xy_max = G_Dt * pos_control->get_max_accel_xy();
     float ratio_xy = 1.0f;
     if (!is_zero(vel_delta_xy) && (vel_delta_xy > vel_delta_xy_max)) {
         ratio_xy = vel_delta_xy_max / vel_delta_xy;
@@ -729,12 +736,12 @@ void Copter::ModeGuided::set_desired_velocity_with_accel_and_fence_limits(const 
     curr_vel_des.y += (vel_delta.y * ratio_xy);
 
     // limit z change
-    float vel_delta_z_max = G_Dt * pos_control->get_accel_z();
+    float vel_delta_z_max = G_Dt * pos_control->get_max_accel_z();
     curr_vel_des.z += constrain_float(vel_delta.z, -vel_delta_z_max, vel_delta_z_max);
 
 #if AC_AVOID_ENABLED
     // limit the velocity to prevent fence violations
-    copter.avoid.adjust_velocity(pos_control->get_pos_xy_p().kP(), pos_control->get_accel_xy(), curr_vel_des, G_Dt);
+    copter.avoid.adjust_velocity(pos_control->get_pos_xy_p().kP(), pos_control->get_max_accel_xy(), curr_vel_des, G_Dt);
     // get avoidance adjusted climb rate
     curr_vel_des.z = get_avoidance_adjusted_climbrate(curr_vel_des.z);    
 #endif
@@ -846,6 +853,7 @@ int32_t Copter::ModeGuided::wp_bearing() const
         return 0;
     }
 }
+
 #if PRECISION_LANDING == ENABLED
 bool Copter::ModeGuided::do_precision_loiter()
 {
@@ -877,3 +885,12 @@ void Copter::ModeGuided::precision_loiter_xy()
     pos_control->override_vehicle_velocity_xy(-target_vel_rel);
 }
 #endif
+
+float Copter::ModeGuided::crosstrack_error() const
+{
+    if (mode() == Guided_WP) {
+        return wp_nav->crosstrack_error();
+    } else {
+        return 0;
+    }
+}

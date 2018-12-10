@@ -15,7 +15,7 @@ void Copter::landinggear_update()
     // if we are doing an automatic landing procedure, force the landing gear to deploy.
     // To-Do: should we pause the auto-land procedure to give time for gear to come down?
     if (flightmode->landing_gear_should_be_deployed()) {
-        landinggear.set_position(AP_LandingGear::LandingGear_Deploy_And_Keep_Deployed);
+        landinggear.set_position(AP_LandingGear::LandingGear_Deploy);
     }
 
     // send event message to datalog if status has changed
@@ -28,4 +28,28 @@ void Copter::landinggear_update()
     }
 
     last_deploy_status = landinggear.deployed();
+
+    // support height based triggering using rangefinder or altitude above home
+    float height = current_loc.alt * 0.01;
+
+    // use rangefinder if available
+    switch (rangefinder.status_orient(ROTATION_PITCH_270)) {
+    case RangeFinder::RangeFinder_NotConnected:
+    case RangeFinder::RangeFinder_NoData:
+        // use altitude above home for non-functioning rangefinder
+        break;
+
+    case RangeFinder::RangeFinder_OutOfRangeLow:
+        // altitude is close to zero (gear should deploy)
+        height = 0.0f;
+        break;
+
+    case RangeFinder::RangeFinder_OutOfRangeHigh:
+    case RangeFinder::RangeFinder_Good:
+        // use last good reading
+        height = rangefinder_state.alt_cm_filt.get() * 0.01;
+        break;
+    }
+
+    landinggear.update(height);
 }

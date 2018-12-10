@@ -67,6 +67,7 @@ public:
 
     // initialisation
     void Init(const struct LogStructure *structure, uint8_t num_types);
+    void set_num_types(uint8_t num_types) { _num_types = num_types; }
 
     bool CardInserted(void);
 
@@ -120,19 +121,18 @@ public:
 #if AP_AHRS_NAVEKF_AVAILABLE
     void Log_Write_EKF(AP_AHRS_NavEKF &ahrs);
 #endif
-    bool Log_Write_MavCmd(uint16_t cmd_total, const mavlink_mission_item_t& mav_cmd);
     void Log_Write_Radio(const mavlink_radio_t &packet);
     void Log_Write_Message(const char *message);
     void Log_Write_MessageF(const char *fmt, ...);
-    void Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const Location &current_loc);
-    void Log_Write_Camera(const AP_AHRS &ahrs, const Location &current_loc);
+    void Log_Write_CameraInfo(enum LogMessages msg, const AP_AHRS &ahrs, const Location &current_loc, uint64_t timestamp_us=0);
+    void Log_Write_Camera(const AP_AHRS &ahrs, const Location &current_loc, uint64_t timestamp_us=0);
     void Log_Write_Trigger(const AP_AHRS &ahrs, const Location &current_loc);
     void Log_Write_ESC(void);
     void Log_Write_Airspeed(AP_Airspeed &airspeed);
     void Log_Write_Attitude(AP_AHRS &ahrs, const Vector3f &targets);
     void Log_Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets);
     void Log_Write_Current();
-    void Log_Write_Compass(const Compass &compass, uint64_t time_us=0);
+    void Log_Write_Compass(uint64_t time_us=0);
     void Log_Write_Mode(uint8_t mode, uint8_t reason);
 
     void Log_Write_EntireMission(const AP_Mission &mission);
@@ -158,11 +158,11 @@ public:
     // This structure provides information on the internal member data of a PID for logging purposes
     struct PID_Info {
         float desired;
+        float actual;
         float P;
         float I;
         float D;
         float FF;
-        float AFF;
     };
 
     void Log_Write_PID(uint8_t msg_type, const PID_Info &info);
@@ -185,7 +185,13 @@ public:
     uint32_t num_dropped(void) const;
 
     // accesss to public parameters
-    bool log_while_disarmed(void) const { return _params.log_disarmed != 0; }
+    void set_force_log_disarmed(bool force_logging) { _force_log_disarmed = force_logging; }
+    bool log_while_disarmed(void) const {
+        if (_force_log_disarmed) {
+            return true;
+        }
+        return _params.log_disarmed != 0;
+    }
     uint8_t log_replay(void) const { return _params.log_replay; }
     
     vehicle_startup_message_Log_Writer _vehicle_messages;
@@ -216,10 +222,13 @@ public:
     bool vehicle_is_armed() const { return _armed; }
 
     void handle_log_send();
-    bool in_log_download() const { return _in_log_download; }
+    bool in_log_download() const { return transfer_activity != IDLE; }
 
     float quiet_nanf() const { return nanf("0x4152"); } // "AR"
     double quiet_nan() const { return nan("0x4152445550490a"); } // "ARDUPI"
+
+    // returns true if msg_type is associated with a message
+    bool msg_type_in_use(uint8_t msg_type) const;
 
 protected:
 
@@ -266,9 +275,9 @@ private:
 
     // return (possibly allocating) a log_write_fmt for a name
     struct log_write_fmt *msg_fmt_for_name(const char *name, const char *labels, const char *units, const char *mults, const char *fmt);
+    const struct log_write_fmt *log_write_fmt_for_msg_type(uint8_t msg_type) const;
 
-    // returns true if msg_type is associated with a message
-    bool msg_type_in_use(uint8_t msg_type) const;
+    const struct LogStructure *structure_for_msg_type(uint8_t msg_type);
 
     // return a msg_type which is not currently in use (or -1 if none available)
     int16_t find_free_msg_type() const;
@@ -291,8 +300,7 @@ private:
     void Log_Write_IMU_instance(uint64_t time_us,
                                 uint8_t imu_instance,
                                 enum LogMessages type);
-    void Log_Write_Compass_instance(const Compass &compass,
-                                    uint64_t time_us,
+    void Log_Write_Compass_instance(uint64_t time_us,
                                     uint8_t mag_instance,
                                     enum LogMessages type);
     void Log_Write_Current_instance(uint64_t time_us,
@@ -305,7 +313,6 @@ private:
 
     void backend_starting_new_log(const DataFlash_Backend *backend);
 
-private:
     static DataFlash_Class *_instance;
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -330,13 +337,15 @@ private:
     void Prep();
 
     bool _writes_enabled:1;
+    bool _force_log_disarmed:1;
 
     /* support for retrieving logs via mavlink: */
-    uint8_t  _log_listing:1; // sending log list
-    uint8_t  _log_sending:1; // sending log data
 
-    // bolean replicating old vehicle in_log_download flag:
-    bool _in_log_download:1;
+    enum transfer_activity_t : uint8_t {
+        IDLE,    // not doing anything, all file descriptors closed
+        LISTING, // actively sending log_entry packets
+        SENDING, // actively sending log_sending packets
+    } transfer_activity = IDLE;
 
     // next log list entry to send
     uint16_t _log_next_list_entry;
@@ -371,8 +380,9 @@ private:
     void handle_log_request_data(class GCS_MAVLINK &, mavlink_message_t *msg);
     void handle_log_request_erase(class GCS_MAVLINK &, mavlink_message_t *msg);
     void handle_log_request_end(class GCS_MAVLINK &, mavlink_message_t *msg);
-    void handle_log_send_listing();
-    bool handle_log_send_data();
+    void handle_log_send_listing(); // handle LISTING state
+    void handle_log_sending(); // handle SENDING state
+    bool handle_log_send_data(); // send data chunk to client
 
     void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc);
 

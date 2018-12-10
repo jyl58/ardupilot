@@ -64,7 +64,7 @@ public:
     void init_brake_target(float accel_cmss);
     ///
     /// update_brake - run the brake controller - should be called at 400hz
-    void update_brake(float ekfGndSpdLimit, float ekfNavVelGainScaler);
+    void update_brake();
 
     ///
     /// waypoint controller
@@ -77,6 +77,9 @@ public:
 
     /// set_speed_xy - allows main code to pass target horizontal velocity for wp navigation
     void set_speed_xy(float speed_cms);
+
+    /// set_speed_z - allows main code to pass target vertical velocity for wp navigation
+    void set_speed_z(float speed_down_cms, float speed_up_cms);
 
     /// get_speed_xy - allows main code to retrieve target horizontal velocity for wp navigation
     float get_speed_xy() const { return _wp_speed_cms; }
@@ -138,6 +141,11 @@ public:
 
     /// reached_destination - true when we have come within RADIUS cm of the waypoint
     bool reached_wp_destination() const { return _flags.reached_destination; }
+
+    // reached_wp_destination_xy - true if within RADIUS_CM of waypoint in x/y
+    bool reached_wp_destination_xy() const {
+        return get_wp_distance_to_destination() < _wp_radius_cm;
+    }
 
     /// set_fast_waypoint - set to true to ignore the waypoint radius and consider the waypoint 'reached' the moment the intermediate point reaches it
     void set_fast_waypoint(bool fast) { _flags.fast_waypoint = fast; }
@@ -211,6 +219,9 @@ public:
     /// advance_wp_target_along_track - move target location along track from origin to destination
     bool advance_wp_target_along_track(float dt);
 
+    /// return the crosstrack_error - horizontal error of the actual position vs the desired position
+    float crosstrack_error() const { return _track_error_xy;}
+
     static const struct AP_Param::GroupInfo var_info[];
 
 protected:
@@ -283,6 +294,7 @@ protected:
     Vector3f    _origin;                // starting point of trip to next waypoint in cm from ekf origin
     Vector3f    _destination;           // target destination in cm from ekf origin
     Vector3f    _pos_delta_unit;        // each axis's percentage of the total track from origin to destination
+    float       _track_error_xy;        // horizontal error of the actual position vs the desired position
     float       _track_length;          // distance in cm between origin and destination
     float       _track_length_xy;       // horizontal distance in cm between origin and destination
     float       _track_desired;         // our desired distance along the track in cm

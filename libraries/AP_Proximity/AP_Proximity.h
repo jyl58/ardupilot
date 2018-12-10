@@ -47,7 +47,9 @@ public:
         Proximity_Type_TRTOWER = 3,
         Proximity_Type_RangeFinder = 4,
         Proximity_Type_RPLidarA2 = 5,
+        Proximity_Type_TRTOWEREVO = 6,
         Proximity_Type_SITL    = 10,
+        Proximity_Type_MorseSITL = 11,
     };
 
     enum Proximity_Status {
@@ -133,6 +135,12 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
     static AP_Proximity *get_singleton(void) { return _singleton; };
+
+    // methods for mavlink SYS_STATUS message (send_extended_status1)
+    // these methods cover only the primary instance
+    bool sensor_present() const;
+    bool sensor_enabled() const;
+    bool sensor_failed() const;
 
 private:
     static AP_Proximity *_singleton;

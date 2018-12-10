@@ -36,11 +36,6 @@ public:
      */
     void commandline_arguments(uint8_t &argc, char * const *&argv);
 
-    bool toneAlarm_init();
-    void toneAlarm_set_tune(uint8_t tune);
-
-    void _toneAlarm_timer_tick();
-
     /*
       set system clock in UTC microseconds
      */
@@ -61,6 +56,9 @@ public:
 
     uint32_t available_memory(void) override;
 
+    bool get_system_id(char buf[40]) override;
+    bool get_system_id_unformatted(uint8_t buf[], uint8_t &len) override;
+    
     /*
      * Write a string as specified by @fmt to the file in @path. Note this
      * should not be used on hot path since it will open, write and close the
@@ -95,10 +93,12 @@ public:
         return Perf::get_instance()->count(perf);
     }
 
-    // create a new semaphore
-    AP_HAL::Semaphore *new_semaphore(void) override { return new Semaphore; }
-
     int get_hw_arm32();
+
+    bool toneAlarm_init() override { return _toneAlarm.init(); }
+    void toneAlarm_set_buzzer_tone(float frequency, float volume, uint32_t duration_ms) override {
+        _toneAlarm.set_buzzer_tone(frequency, volume, duration_ms);
+    }
 
 private:
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_DISCO

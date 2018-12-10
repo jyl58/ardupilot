@@ -27,18 +27,13 @@ class Buzzer: public NotifyDevice
 {
 public:
     /// Constructor
-    Buzzer() :
-        _counter(0),
-        _pattern(NONE),
-        _pattern_counter(0),
-        _arming_buzz_start_ms(0)
-    {}
+    Buzzer() {}
 
     /// init - initialise the buzzer
-    bool init(void);
+    bool init(void) override;
 
     /// update - updates buzzer according to timed_updated.  Should be called at 50Hz
-    void update();
+    void update() override;
 
     /// on - turns the buzzer on or off
     void on(bool on_off);

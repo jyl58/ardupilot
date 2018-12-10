@@ -5,15 +5,19 @@ extern const AP_HAL::HAL& hal;
 /*
   send a text message to all GCS
  */
+void GCS::send_textv(MAV_SEVERITY severity, const char *fmt, va_list arg_list)
+{
+    char text[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
+    hal.util->vsnprintf(text, sizeof(text), fmt, arg_list);
+    send_statustext(severity, GCS_MAVLINK::active_channel_mask() | GCS_MAVLINK::streaming_channel_mask(), text);
+}
+
 void GCS::send_text(MAV_SEVERITY severity, const char *fmt, ...)
 {
-    char text[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1] {};
     va_list arg_list;
     va_start(arg_list, fmt);
-    hal.util->vsnprintf((char *)text, sizeof(text)-1, fmt, arg_list);
+    send_textv(severity, fmt, arg_list);
     va_end(arg_list);
-    text[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN] = 0;
-    send_statustext(severity, GCS_MAVLINK::active_channel_mask() | GCS_MAVLINK::streaming_channel_mask(), text);
 }
 
 #define FOR_EACH_ACTIVE_CHANNEL(methodcall)          \
@@ -54,7 +58,7 @@ bool GCS::install_alternative_protocol(mavlink_channel_t c, GCS_MAVLINK::protoco
     if (c >= num_gcs()) {
         return false;
     }
-    if (chan(c).alternative.handler) {
+    if (chan(c).alternative.handler && handler) {
         // already have one installed - we may need to add support for
         // multiple alternative handlers
         return false;
@@ -62,6 +66,5 @@ bool GCS::install_alternative_protocol(mavlink_channel_t c, GCS_MAVLINK::protoco
     chan(c).alternative.handler = handler;
     return true;
 }
-
 
 #undef FOR_EACH_ACTIVE_CHANNEL

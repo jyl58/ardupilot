@@ -424,7 +424,7 @@ void ToyMode::update()
         if (throttle_high_counter >= TOY_LAND_ARM_COUNT) {
             gcs().send_text(MAV_SEVERITY_INFO, "Tmode: throttle arm");
             arm_check_compass();
-            if (!copter.init_arm_motors(true) && (flags & FLAG_UPGRADE_LOITER) && copter.control_mode == LOITER) {
+            if (!copter.init_arm_motors(AP_Arming::ArmingMethod::MAVLINK) && (flags & FLAG_UPGRADE_LOITER) && copter.control_mode == LOITER) {
                 /*
                   support auto-switching to ALT_HOLD, then upgrade to LOITER once GPS available
                  */
@@ -433,7 +433,7 @@ void ToyMode::update()
 #if AC_FENCE == ENABLED
                     copter.fence.enable(false);
 #endif
-                    if (!copter.init_arm_motors(true)) {
+                    if (!copter.init_arm_motors(AP_Arming::ArmingMethod::MAVLINK)) {
                         // go back to LOITER
                         gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: ALT_HOLD arm failed");
                         set_and_remember_mode(LOITER, MODE_REASON_TMODE);
@@ -625,7 +625,7 @@ void ToyMode::update()
 #if AC_FENCE == ENABLED
             copter.fence.enable(false);
 #endif
-            if (copter.init_arm_motors(true)) {
+            if (copter.init_arm_motors(AP_Arming::ArmingMethod::MAVLINK)) {
                 load_test.running = true;
                 gcs().send_text(MAV_SEVERITY_INFO, "Tmode: load_test on");
             } else {
@@ -702,20 +702,20 @@ void ToyMode::trim_update(void)
     // get throttle mid from channel trim
     uint16_t throttle_trim = copter.channel_throttle->get_radio_trim();
     if (abs(throttle_trim - 1500) <= trim_auto) {
-        RC_Channel *ch = copter.channel_throttle;
-        uint16_t ch_min = ch->get_radio_min();
-        uint16_t ch_max = ch->get_radio_max();
+        RC_Channel *c = copter.channel_throttle;
+        uint16_t ch_min = c->get_radio_min();
+        uint16_t ch_max = c->get_radio_max();
         // remember the throttle midpoint
         int16_t new_value = 1000UL * (throttle_trim - ch_min) / (ch_max - ch_min);
         if (new_value != throttle_mid) {
             throttle_mid = new_value;
-            gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: thr mid %d\n",
+            gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: thr mid %d",
                                              throttle_mid);
         }
     }
     
     uint16_t chan[4];
-    if (RC_Channels::get_radio_in(chan, 4) != 4) {
+    if (rc().get_radio_in(chan, 4) != 4) {
         trim.start_ms = 0;
         return;
     }
@@ -758,8 +758,8 @@ void ToyMode::trim_update(void)
     
     uint8_t need_trim = 0;
     for (uint8_t i=0; i<4; i++) {
-        RC_Channel *ch = RC_Channels::rc_channel(i);
-        if (ch && abs(chan[i] - ch->get_radio_trim()) > noise_limit) {
+        RC_Channel *c = RC_Channels::rc_channel(i);
+        if (c && abs(chan[i] - c->get_radio_trim()) > noise_limit) {
             need_trim |= 1U<<i;
         }
     }
@@ -768,12 +768,12 @@ void ToyMode::trim_update(void)
     }
     for (uint8_t i=0; i<4; i++) {
         if (need_trim & (1U<<i)) {
-            RC_Channel *ch = RC_Channels::rc_channel(i);
-            ch->set_and_save_radio_trim(chan[i]);
+            RC_Channel *c = RC_Channels::rc_channel(i);
+            c->set_and_save_radio_trim(chan[i]);
         }
     }
 
-    gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: trim %u %u %u %u\n",
+    gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: trim %u %u %u %u",
                                      chan[0], chan[1], chan[2], chan[3]);
 }
 
@@ -792,7 +792,7 @@ void ToyMode::action_arm(void)
         copter.channel_yaw->get_control_in() == 0;
 
     if (!sticks_centered) {
-        gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: sticks not centered\n");
+        gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: sticks not centered");
         return;
     }
 
@@ -803,7 +803,7 @@ void ToyMode::action_arm(void)
         // we want GPS and checks are passing, arm and enable fence
         copter.fence.enable(true);
 #endif
-        copter.init_arm_motors(false);
+        copter.init_arm_motors(AP_Arming::ArmingMethod::RUDDER);
         if (!copter.motors->armed()) {
             AP_Notify::events.arming_failed = true;
             gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: GPS arming failed");
@@ -819,7 +819,7 @@ void ToyMode::action_arm(void)
         // non-GPS mode
         copter.fence.enable(false);
 #endif
-        copter.init_arm_motors(false);
+        copter.init_arm_motors(AP_Arming::ArmingMethod::RUDDER);
         if (!copter.motors->armed()) {
             AP_Notify::events.arming_failed = true;
             gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: non-GPS arming failed");

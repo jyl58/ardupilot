@@ -13,33 +13,39 @@ void Copter::arm_motors_check()
 {
     static int16_t arming_counter;
 
+    // check if arming/disarm using rudder is allowed
+    AP_Arming::ArmingRudder arming_rudder = arming.get_rudder_arming_type();
+    if (arming_rudder == AP_Arming::ARMING_RUDDER_DISABLED) {
+        return;
+    }
+
 #if TOY_MODE_ENABLED == ENABLED
     if (g2.toy_mode.enabled()) {
         // not armed with sticks in toy mode
         return;
     }
 #endif
-    
+
     // ensure throttle is down
     if (channel_throttle->get_control_in() > 0) {
         arming_counter = 0;
         return;
     }
 
-    int16_t tmp = channel_yaw->get_control_in();
+    int16_t yaw_in = channel_yaw->get_control_in();
 
     // full right
-    if (tmp > 4000) {
+    if (yaw_in > 4000) {
 
         // increase the arming counter to a maximum of 1 beyond the auto trim counter
-        if( arming_counter <= AUTO_TRIM_DELAY ) {
+        if (arming_counter <= AUTO_TRIM_DELAY) {
             arming_counter++;
         }
 
         // arm the motors and configure for flight
         if (arming_counter == ARM_DELAY && !motors->armed()) {
             // reset arming counter if arming fail
-            if (!init_arm_motors(false)) {
+            if (!init_arm_motors(AP_Arming::ArmingMethod::RUDDER)) {
                 arming_counter = 0;
             }
         }
@@ -51,15 +57,15 @@ void Copter::arm_motors_check()
             auto_disarm_begin = millis();
         }
 
-    // full left
-    }else if (tmp < -4000) {
+    // full left and rudder disarming is enabled
+    } else if ((yaw_in < -4000) && (arming_rudder == AP_Arming::ARMING_RUDDER_ARMDISARM)) {
         if (!flightmode->has_manual_throttle() && !ap.land_complete) {
             arming_counter = 0;
             return;
         }
 
         // increase the counter to a maximum of 1 beyond the disarm delay
-        if( arming_counter <= DISARM_DELAY ) {
+        if (arming_counter <= DISARM_DELAY) {
             arming_counter++;
         }
 
@@ -69,7 +75,7 @@ void Copter::arm_motors_check()
         }
 
     // Yaw is centered so reset arming counter
-    }else{
+    } else {
         arming_counter = 0;
     }
 }
@@ -127,7 +133,7 @@ void Copter::auto_disarm_check()
 
 // init_arm_motors - performs arming process including initialisation of barometer and gyros
 //  returns false if arming failed because of pre-arm checks, arming checks or a gyro calibration failure
-bool Copter::init_arm_motors(const bool arming_from_gcs, const bool do_arming_checks)
+bool Copter::init_arm_motors(const AP_Arming::ArmingMethod method, const bool do_arming_checks)
 {
     static bool in_arm_motors = false;
 
@@ -144,7 +150,7 @@ bool Copter::init_arm_motors(const bool arming_from_gcs, const bool do_arming_ch
     }
 
     // run pre-arm-checks and display failures
-    if (do_arming_checks && !arming.all_checks_passing(arming_from_gcs)) {
+    if (do_arming_checks && !arming.all_checks_passing(method)) {
         AP_Notify::events.arming_failed = true;
         in_arm_motors = false;
         return false;
@@ -276,7 +282,7 @@ void Copter::init_disarm_motors()
 
 #if MODE_AUTO_ENABLED == ENABLED
     // reset the mission
-    mission.reset();
+    mode_auto.mission.reset();
 #endif
 
     DataFlash_Class::instance()->set_vehicle_armed(false);
@@ -297,7 +303,10 @@ void Copter::motors_output()
     // OBC rules
     if (g2.afs.should_crash_vehicle()) {
         g2.afs.terminate_vehicle();
-        return;
+        if (!g2.afs.terminating_vehicle_via_landing()) {
+            return;
+        }
+        // landing must continue to run the motors output
     }
 #endif
 
@@ -342,7 +351,7 @@ void Copter::lost_vehicle_check()
     static uint8_t soundalarm_counter;
 
     // disable if aux switch is setup to vehicle alarm as the two could interfere
-    if (check_if_auxsw_mode_used(AUXSW_LOST_COPTER_SOUND)) {
+    if (rc().find_channel_for_option(RC_Channel::aux_func::LOST_VEHICLE_SOUND)) {
         return;
     }
 

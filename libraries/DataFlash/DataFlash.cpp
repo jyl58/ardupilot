@@ -15,6 +15,14 @@ DataFlash_Class *DataFlash_Class::_instance;
 
 extern const AP_HAL::HAL& hal;
 
+#ifndef HAL_DATAFLASH_FILE_BUFSIZE 
+#define HAL_DATAFLASH_FILE_BUFSIZE  16
+#endif 
+
+#ifndef HAL_DATAFLASH_MAV_BUFSIZE 
+#define HAL_DATAFLASH_MAV_BUFSIZE  8
+#endif 
+
 const AP_Param::GroupInfo DataFlash_Class::var_info[] = {
     // @Param: _BACKEND_TYPE
     // @DisplayName: DataFlash Backend Storage type
@@ -27,7 +35,7 @@ const AP_Param::GroupInfo DataFlash_Class::var_info[] = {
     // @DisplayName: Maximum DataFlash File Backend buffer size (in kilobytes)
     // @Description: The DataFlash_File backend uses a buffer to store data before writing to the block device.  Raising this value may reduce "gaps" in your SD card logging.  This buffer size may be reduced depending on available memory.  PixHawk requires at least 4 kilobytes.  Maximum value available here is 64 kilobytes.
     // @User: Standard
-    AP_GROUPINFO("_FILE_BUFSIZE",  1, DataFlash_Class, _params.file_bufsize,       16),
+    AP_GROUPINFO("_FILE_BUFSIZE",  1, DataFlash_Class, _params.file_bufsize,       HAL_DATAFLASH_FILE_BUFSIZE),
 
     // @Param: _DISARMED
     // @DisplayName: Enable logging while disarmed
@@ -55,7 +63,7 @@ const AP_Param::GroupInfo DataFlash_Class::var_info[] = {
     // @Description: Maximum amount of memory to allocate to DataFlash-over-mavlink
     // @User: Advanced
     // @Units: kB
-    AP_GROUPINFO("_MAV_BUFSIZE",  5, DataFlash_Class, _params.mav_bufsize,       8),
+    AP_GROUPINFO("_MAV_BUFSIZE",  5, DataFlash_Class, _params.mav_bufsize,       HAL_DATAFLASH_MAV_BUFSIZE),
 
     AP_GROUPEND
 };
@@ -340,10 +348,44 @@ void DataFlash_Class::validate_structures(const struct LogStructure *logstructur
     Debug("Validating structures");
     bool passed = true;
 
-    for (uint16_t i=0; i<num_types; i++) {
-        const struct LogStructure *logstructure = &logstructures[i];
-        passed = validate_structure(logstructure, i) && passed;
+    // ensure units are unique:
+    for (uint16_t i=0; i<ARRAY_SIZE(log_Units); i++) {
+        const struct UnitStructure &a = log_Units[i];
+        for (uint16_t j=i+1; j<ARRAY_SIZE(log_Units); j++) {
+            const struct UnitStructure &b = log_Units[j];
+            if (a.ID == b.ID) {
+                Debug("duplicate unit id=%c (%s/%s)", a.ID, a.unit, b.unit);
+                passed = false;
+            }
+            if (streq(a.unit, b.unit)) {
+                Debug("duplicate unit=%s (%c/%c)", a.unit, a.ID, b.ID);
+                passed = false;
+            }
+        }
     }
+
+    // ensure multipliers are unique:
+    for (uint16_t i=0; i<ARRAY_SIZE(log_Multipliers); i++) {
+        const struct MultiplierStructure &a = log_Multipliers[i];
+        for (uint16_t j=i+1; j<ARRAY_SIZE(log_Multipliers); j++) {
+            const struct MultiplierStructure &b = log_Multipliers[j];
+            if (a.ID == b.ID) {
+                Debug("duplicate multiplier id=%c (%f/%f)",
+                      a.ID, a.multiplier, b.multiplier);
+                passed = false;
+            }
+            if (is_equal(a.multiplier, b.multiplier)) {
+                if (a.ID == '?' && b.ID == '0') {
+                    // special case
+                    continue;
+                }
+                Debug("duplicate multiplier=%f (%c/%c)",
+                      a.multiplier, a.ID, b.ID);
+                passed = false;
+            }
+        }
+    }
+
     if (!passed) {
         Debug("Log structures are invalid");
         abort();
@@ -389,7 +431,7 @@ bool DataFlash_Class::logging_failed() const
 
 void DataFlash_Class::Log_Write_MessageF(const char *fmt, ...)
 {
-    char msg[64] {};
+    char msg[65] {}; // sizeof(log_Message.msg) + null-termination
 
     va_list ap;
     va_start(ap, fmt);
@@ -793,6 +835,30 @@ DataFlash_Class::log_write_fmt *DataFlash_Class::msg_fmt_for_name(const char *na
 
     return f;
 }
+
+const struct LogStructure *DataFlash_Class::structure_for_msg_type(const uint8_t msg_type)
+{
+    for (uint16_t i=0; i<_num_types;i++) {
+        const struct LogStructure *s = structure(i);
+        if (s->msg_type == msg_type) {
+            // in use
+            return s;
+        }
+    }
+    return nullptr;
+}
+
+const struct DataFlash_Class::log_write_fmt *DataFlash_Class::log_write_fmt_for_msg_type(const uint8_t msg_type) const
+{
+    struct log_write_fmt *f;
+    for (f = log_write_fmts; f; f=f->next) {
+        if (f->msg_type == msg_type) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
 
 // returns true if the msg_type is already taken
 bool DataFlash_Class::msg_type_in_use(const uint8_t msg_type) const

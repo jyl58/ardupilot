@@ -1,11 +1,6 @@
 #include "Plane.h"
 #include <AP_RSSI/AP_RSSI.h>
 
-void Plane::init_rangefinder(void)
-{
-    rangefinder.init();
-}
-
 /*
   read the rangefinder and update height estimate
  */
@@ -70,19 +65,7 @@ void Plane::accel_cal_update() {
  */
 void Plane::read_airspeed(void)
 {
-    if (airspeed.enabled()) {
-        airspeed.read();
-        if (should_log(MASK_LOG_IMU)) {
-            DataFlash.Log_Write_Airspeed(airspeed);
-        }
-
-        // supply a new temperature to the barometer from the digital
-        // airspeed sensor if we can
-        float temperature;
-        if (airspeed.get_temperature(temperature)) {
-            barometer.set_external_temperature(temperature);
-        }
-    }
+    airspeed.update(should_log(MASK_LOG_IMU));
 
     // we calculate airspeed errors (and thus target_airspeed_cm) even
     // when airspeed is disabled as TECS may be using synthetic
@@ -109,21 +92,6 @@ void Plane::rpm_update(void)
     }
 }
 
-/*
-  update AP_Button
- */
-void Plane::button_update(void)
-{
-    g2.button.update();
-}
-
-/*
-  update AP_ICEngine
- */
-void Plane::ice_update(void)
-{
-    g2.ice_control.update();
-}
 // update error mask of sensors and subsystems. The mask
 // uses the MAV_SYS_STATUS_* values from mavlink. If a bit is set
 // then it indicates that the sensor or subsystem is present but
@@ -153,7 +121,7 @@ void Plane::update_sensor_status_flags(void)
         control_sensors_present |= MAV_SYS_STATUS_GEOFENCE;
     }
 
-    if (aparm.throttle_min < 0) {
+    if (have_reverse_thrust()) {
         control_sensors_present |= MAV_SYS_STATUS_REVERSE_MOTOR;
     }
     if (plane.DataFlash.logging_present()) { // primary logging only (usually File)
@@ -315,7 +283,7 @@ void Plane::update_sensor_status_flags(void)
         }
     }
 
-    if (aparm.throttle_min < 0 && SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) < 0) {
+    if (have_reverse_thrust() && SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) < 0) {
         control_sensors_enabled |= MAV_SYS_STATUS_REVERSE_MOTOR;
         control_sensors_health |= MAV_SYS_STATUS_REVERSE_MOTOR;
     }

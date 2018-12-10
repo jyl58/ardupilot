@@ -10,6 +10,7 @@ from pymavlink import mavutil
 from pysim import util
 
 from common import AutoTest
+from common import NotAchievedException
 
 # get location of scripts
 testdir = os.path.dirname(os.path.realpath(__file__))
@@ -25,6 +26,7 @@ class AutoTestSub(AutoTest):
                  frame=None,
                  params=None,
                  gdbserver=False,
+                 breakpoints=[],
                  **kwargs):
         super(AutoTestSub, self).__init__(**kwargs)
         self.binary = binary
@@ -33,6 +35,7 @@ class AutoTestSub(AutoTest):
         self.frame = frame
         self.params = params
         self.gdbserver = gdbserver
+        self.breakpoints = breakpoints
 
         self.home = "%f,%f,%u,%u" % (HOME.lat,
                                      HOME.lng,
@@ -40,7 +43,6 @@ class AutoTestSub(AutoTest):
                                      HOME.heading)
         self.homeloc = None
         self.speedup = speedup
-        self.speedup_default = 10
 
         self.sitl = None
         self.hasInit = False
@@ -51,30 +53,23 @@ class AutoTestSub(AutoTest):
         if self.frame is None:
             self.frame = 'vectored'
 
-        self.apply_parameters_using_sitl()
-
         self.sitl = util.start_SITL(self.binary,
                                     model=self.frame,
                                     home=self.home,
                                     speedup=self.speedup,
                                     valgrind=self.valgrind,
                                     gdb=self.gdb,
-                                    gdbserver=self.gdbserver)
+                                    gdbserver=self.gdbserver,
+                                    breakpoints=self.breakpoints,
+                                    wipe=True)
         self.mavproxy = util.start_MAVProxy_SITL(
             'ArduSub', options=self.mavproxy_options())
         self.mavproxy.expect('Telemetry log: (\S+)\r\n')
-        logfile = self.mavproxy.match.group(1)
-        self.progress("LOGFILE %s" % logfile)
+        self.logfile = self.mavproxy.match.group(1)
+        self.progress("LOGFILE %s" % self.logfile)
+        self.try_symlink_tlog()
 
-        buildlog = self.buildlogs_path("ArduSub-test.tlog")
-        self.progress("buildlog=%s" % buildlog)
-        if os.path.exists(buildlog):
-            os.unlink(buildlog)
-        try:
-            os.link(logfile, buildlog)
-        except Exception:
-            pass
-
+        self.progress("WAITING FOR PARAMETERS")
         self.mavproxy.expect('Received [0-9]+ parameters')
 
         util.expect_setup_callback(self.mavproxy, self.expect_callback)
@@ -84,18 +79,12 @@ class AutoTestSub(AutoTest):
 
         self.progress("Started simulator")
 
-        # get a mavlink connection going
-        connection_string = '127.0.0.1:19550'
-        try:
-            self.mav = mavutil.mavlink_connection(connection_string,
-                                                  robust_parsing=True)
-        except Exception as msg:
-            self.progress("Failed to start mavlink connection on %s: %s" %
-                          (connection_string, msg,))
-            raise
-        self.mav.message_hooks.append(self.message_hook)
-        self.mav.idle_hooks.append(self.idle_hook)
+        self.get_mavlink_connection_going()
+
         self.hasInit = True
+
+        self.apply_defaultfile_parameters()
+
         self.progress("Ready to start testing!")
 
     def dive_manual(self):
@@ -125,10 +114,7 @@ class AutoTestSub(AutoTest):
 
     def dive_mission(self, filename):
         self.progress("Executing mission %s" % filename)
-        self.mavproxy.send('wp load %s\n' % filename)
-        self.mavproxy.expect('Flight plan received')
-        self.mavproxy.send('wp list\n')
-        self.mavproxy.expect('Saved [0-9]+ waypoints')
+        self.load_mission(filename)
         self.set_rc_default()
 
         self.arm_vehicle()
@@ -142,8 +128,34 @@ class AutoTestSub(AutoTest):
 
         self.progress("Mission OK")
 
+    def test_gripper_mission(self):
+        self.context_push()
+        ex = None
+        try:
+            try:
+                self.get_parameter("GRIP_ENABLE", timeout=5)
+            except NotAchievedException as e:
+                self.progress("Skipping; Gripper not enabled in config?")
+                return
+
+            self.load_mission("sub-gripper-mission.txt")
+            self.mavproxy.send('mode loiter\n')
+            self.wait_ready_to_arm()
+            self.arm_vehicle()
+            self.mavproxy.send('mode auto\n')
+            self.wait_mode('AUTO')
+            self.mavproxy.expect("Gripper Grabbed")
+            self.mavproxy.expect("Gripper Released")
+        except Exception as e:
+            self.progress("Exception caught")
+            ex = e
+        self.context_pop()
+        if ex is not None:
+            raise ex
+
     def autotest(self):
         """Autotest ArduSub in SITL."""
+        self.check_test_syntax(test_file=os.path.realpath(__file__))
         if not self.hasInit:
             self.init()
 
@@ -152,12 +164,15 @@ class AutoTestSub(AutoTest):
             self.progress("Waiting for a heartbeat with mavlink protocol %s"
                           % self.mav.WIRE_PROTOCOL_VERSION)
             self.mav.wait_heartbeat()
-            self.mavproxy.send('param set FS_GCS_ENABLE 0\n')
+            self.set_parameter("FS_GCS_ENABLE", 0)
             self.progress("Waiting for GPS fix")
             self.mav.wait_gps_fix()
 
             # wait for EKF and GPS checks to pass
-            self.mavproxy.expect('IMU0 is using GPS')
+            self.progress("Waiting for ready-to-arm")
+            self.wait_ready_to_arm()
+            self.run_test("Arm features", self.test_arm_feature)
+            self.arm_vehicle()
 
             self.homeloc = self.mav.location()
             self.progress("Home location: %s" % self.homeloc)
@@ -168,14 +183,17 @@ class AutoTestSub(AutoTest):
             self.run_test("Dive manual", self.dive_manual)
 
             self.run_test("Dive mission",
-                          lambda: self.dive_mission(
-                              os.path.join(testdir, "sub_mission.txt")))
+                          lambda: self.dive_mission("sub_mission.txt"))
+
+            self.run_test("Test gripper mission items",
+                          self.test_gripper_mission)
 
             self.run_test("Log download",
                           lambda: self.log_download(
-                              self.buildlogs_path("ArduSub-log.bin")))
+                              self.buildlogs_path("ArduSub-log.bin"),
+                              upload_logs=len(self.fail_list) > 0))
 
-        except pexpect.TIMEOUT as e:
+        except pexpect.TIMEOUT:
             self.progress("Failed with timeout")
             self.fail_list.append("Failed with timeout")
 

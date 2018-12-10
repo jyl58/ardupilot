@@ -10,7 +10,7 @@ ModeAuto::ModeAuto(ModeRTL& mode_rtl) :
 bool ModeAuto::_enter()
 {
     // fail to enter auto if no mission commands
-    if (mission.num_commands() == 0) {
+    if (mission.num_commands() <= 1) {
         gcs().send_text(MAV_SEVERITY_NOTICE, "No Mission. Can't set AUTO.");
         return false;
     }
@@ -65,7 +65,7 @@ void ModeAuto::update()
         {
             if (!_reached_heading) {
                 // run steering and throttle controllers
-                calc_steering_to_heading(_desired_yaw_cd, _desired_speed < 0);
+                calc_steering_to_heading(_desired_yaw_cd);
                 calc_throttle(_desired_speed, true, false);
                 // check if we have reached within 5 degrees of target
                 _reached_heading = (fabsf(_desired_yaw_cd - ahrs.yaw_sensor) < 500);
@@ -137,14 +137,6 @@ void ModeAuto::start_RTL()
 {
     if (_mode_rtl.enter()) {
         _submode = Auto_RTL;
-    }
-}
-
-// execute the mission in reverse (i.e. backing up)
-void ModeAuto::set_reversed(bool value)
-{
-    if (_reversed != value) {
-        _reversed = value;
     }
 }
 

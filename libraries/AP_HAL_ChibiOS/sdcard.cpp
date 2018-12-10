@@ -22,6 +22,7 @@ extern const AP_HAL::HAL& hal;
 
 #ifdef USE_POSIX
 static FATFS SDC_FS; // FATFS object
+static bool sdcard_init_done;
 #endif
 
 #if HAL_USE_MMC_SPI
@@ -39,11 +40,13 @@ static bool sdcard_running;
 void sdcard_init()
 {
 #ifdef USE_POSIX
+    if (sdcard_init_done) {
+        return;
+    }
+    sdcard_init_done = true;
 #if HAL_USE_SDC
 
-#if defined(STM32_SDC_USE_SDMMC1) && STM32_SDC_USE_SDMMC1 == TRUE
-    bouncebuffer_init(&SDCD1.bouncebuffer);
-#endif
+    bouncebuffer_init(&SDCD1.bouncebuffer, 512);
     
     sdcStart(&SDCD1, NULL);
 
@@ -75,9 +78,23 @@ void sdcard_init()
     mmcconfig.hscfg = &highspeed;
     mmcconfig.lscfg = &lowspeed;
 
-    mmcStart(&MMCD1, &mmcconfig);
+    /*
+      try up to 3 times to init microSD interface
+     */
+    const uint8_t tries = 3;
+    bool start_ok = false;
+    for (uint8_t i=0; i<tries; i++) {
+        mmcStart(&MMCD1, &mmcconfig);
 
-    if (mmcConnect(&MMCD1) == HAL_FAILED) {
+        if (mmcConnect(&MMCD1) != HAL_FAILED) {
+            start_ok = true;
+            break;
+        }
+        mmcStop(&MMCD1);
+        hal.scheduler->delay(100);
+    }
+
+    if (!start_ok) {
         printf("Err: Failed to initialize SDCARD_SPI!\n");
         sdcard_running = false;
     } else {

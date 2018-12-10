@@ -12,7 +12,7 @@ public:
     static AP_RangeFinder_Backend *detect(RangeFinder::RangeFinder_State &_state, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev);
 
     // update state
-    void update(void);
+    void update(void) override;
 
 protected:
 
@@ -24,7 +24,7 @@ private:
     // constructor
     AP_RangeFinder_VL53L0X(RangeFinder::RangeFinder_State &_state, AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev);
 
-    void init();
+    bool init();
     void timer();
 
     // check sensor ID

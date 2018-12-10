@@ -70,6 +70,9 @@ const Vector3f &AP_AHRS_NavEKF::get_gyro_drift(void) const
 //  should be called if gyro offsets are recalculated
 void AP_AHRS_NavEKF::reset_gyro_drift(void)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     // update DCM
     AP_AHRS_DCM::reset_gyro_drift();
 
@@ -80,6 +83,9 @@ void AP_AHRS_NavEKF::reset_gyro_drift(void)
 
 void AP_AHRS_NavEKF::update(bool skip_ins_update)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     // drop back to normal priority if we were boosted by the INS
     // calling delay_microseconds_boost()
     hal.scheduler->boost_end();
@@ -88,7 +94,6 @@ void AP_AHRS_NavEKF::update(bool skip_ins_update)
     if (_ekf_type == 1) {
         _ekf_type.set(2);
     }
-
 
     update_DCM(skip_ins_update);
 
@@ -291,13 +296,14 @@ void AP_AHRS_NavEKF::update_EKF3(void)
 void AP_AHRS_NavEKF::update_SITL(void)
 {
     if (_sitl == nullptr) {
-        _sitl = (SITL::SITL *)AP_Param::find_object("SIM_");
+        _sitl = AP::sitl();
         if (_sitl == nullptr) {
             return;
         }
     }
 
     const struct SITL::sitl_fdm &fdm = _sitl->state;
+    const AP_InertialSensor &_ins = AP::ins();
 
     if (active_EKF_type() == EKF_TYPE_SITL) {
         roll  = radians(fdm.rollDeg);
@@ -311,14 +317,10 @@ void AP_AHRS_NavEKF::update_SITL(void)
 
         _gyro_drift.zero();
 
-        _gyro_estimate = Vector3f(radians(fdm.rollRate),
-                                  radians(fdm.pitchRate),
-                                  radians(fdm.yawRate));
+        _gyro_estimate = _ins.get_gyro();
 
         for (uint8_t i=0; i<INS_MAX_INSTANCES; i++) {
-            const Vector3f accel(fdm.xAccel,
-                           fdm.yAccel,
-                           fdm.zAccel);
+            const Vector3f &accel = _ins.get_accel(i);
             _accel_ef_ekf[i] = _dcm_matrix * get_rotation_autopilot_body_to_vehicle_body() * accel;
         }
         _accel_ef_ekf_blended = _accel_ef_ekf[0];
@@ -334,9 +336,8 @@ void AP_AHRS_NavEKF::update_SITL(void)
             const float delTime = 0.001f * (timeStamp_ms - _last_body_odm_update_ms);
             _last_body_odm_update_ms = timeStamp_ms;
             timeStamp_ms -= (timeStamp_ms - _last_body_odm_update_ms)/2; // correct for first order hold average delay
-            Vector3f delAng(radians(fdm.rollRate),
-                                       radians(fdm.pitchRate),
-                                       radians(fdm.yawRate));
+            Vector3f delAng = _ins.get_gyro();
+            
             delAng *= delTime;
             // rotate earth velocity into body frame and calculate delta position
             Matrix3f Tbn;
@@ -370,6 +371,9 @@ const Vector3f &AP_AHRS_NavEKF::get_accel_ef_blended(void) const
 
 void AP_AHRS_NavEKF::reset(bool recover_eulers)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     AP_AHRS_DCM::reset(recover_eulers);
     _dcm_attitude(roll, pitch, yaw);
     if (_ekf2_started) {
@@ -383,6 +387,9 @@ void AP_AHRS_NavEKF::reset(bool recover_eulers)
 // reset the current attitude, used on new IMU calibration
 void AP_AHRS_NavEKF::reset_attitude(const float &_roll, const float &_pitch, const float &_yaw)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     AP_AHRS_DCM::reset_attitude(_roll, _pitch, _yaw);
     _dcm_attitude(roll, pitch, yaw);
     if (_ekf2_started) {
@@ -396,24 +403,18 @@ void AP_AHRS_NavEKF::reset_attitude(const float &_roll, const float &_pitch, con
 // dead-reckoning support
 bool AP_AHRS_NavEKF::get_position(struct Location &loc) const
 {
-    Vector3f ned_pos;
-    Location origin;
     switch (active_EKF_type()) {
     case EKF_TYPE_NONE:
         return AP_AHRS_DCM::get_position(loc);
 
     case EKF_TYPE2:
-        if (EKF2.getLLH(loc) && EKF2.getPosD(-1,ned_pos.z) && EKF2.getOriginLLH(-1,origin)) {
-            // fixup altitude using relative position from EKF origin
-            loc.alt = origin.alt - ned_pos.z*100;
+        if (EKF2.getLLH(loc)) {
             return true;
         }
         break;
 
     case EKF_TYPE3:
-        if (EKF3.getLLH(loc) && EKF3.getPosD(-1,ned_pos.z) && EKF3.getOriginLLH(-1,origin)) {
-            // fixup altitude using relative position from EKF origin
-            loc.alt = origin.alt - ned_pos.z*100;
+        if (EKF3.getLLH(loc)) {
             return true;
         }
         break;
@@ -1050,8 +1051,7 @@ AP_AHRS_NavEKF::EKF_TYPE AP_AHRS_NavEKF::active_EKF_type(void) const
                   accept EKF as healthy to allow arming. Once we reach
                   speed the EKF should get yaw alignment
                 */
-                if (filt_state.flags.pred_horiz_pos_abs &&
-                    filt_state.flags.pred_horiz_pos_rel) {
+                if (filt_state.flags.gps_quality_good) {
                     return ret;
                 }
             }
@@ -1175,7 +1175,7 @@ bool AP_AHRS_NavEKF::get_filter_status(nav_filter_status &status) const
 }
 
 // write optical flow data to EKF
-void  AP_AHRS_NavEKF::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset)
+void  AP_AHRS_NavEKF::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset)
 {
     EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
     EKF3.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
@@ -1400,6 +1400,9 @@ uint32_t AP_AHRS_NavEKF::getLastPosDownReset(float &posDelta) const
 // If using a range finder for height no reset is performed and it returns false
 bool AP_AHRS_NavEKF::resetHeightDatum(void)
 {
+    // support locked access functions to AHRS data
+    WITH_SEMAPHORE(_rsem);
+    
     switch (ekf_type()) {
 
     case 2:

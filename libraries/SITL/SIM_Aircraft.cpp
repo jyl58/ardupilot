@@ -61,7 +61,7 @@ Aircraft::Aircraft(const char *home_str, const char *frame_str) :
 #endif
 {
     // make the SIM_* variables available to simulator backends
-    sitl = (SITL *)AP_Param::find_object("SIM_");
+    sitl = AP::sitl();
 
     if (!parse_home(home_str, home, home_yaw)) {
         ::printf("Failed to parse home string (%s).  Should be LAT,LON,ALT,HDG e.g. 37.4003371,-122.0800351,0,353\n", home_str);
@@ -84,8 +84,7 @@ Aircraft::Aircraft(const char *home_str, const char *frame_str) :
     // allow for orientation settings, such as with tailsitters
     enum ap_var_type ptype;
     ahrs_orientation = (AP_Int8 *)AP_Param::find("AHRS_ORIENTATION", &ptype);
-
-    terrain = (AP_Terrain *)AP_Param::find_object("TERRAIN_");
+    terrain = reinterpret_cast<AP_Terrain *>(AP_Param::find_object("TERRAIN_"));
 }
 
 
@@ -172,7 +171,7 @@ float Aircraft::hagl() const
 */
 bool Aircraft::on_ground() const
 {
-    return hagl() <= 0;
+    return hagl() <= 0.001f;  // prevent bouncing around ground
 }
 
 /*
@@ -215,6 +214,11 @@ void Aircraft::update_mag_field_bf()
 
     // calculate frame height above ground
     const float frame_height_agl = fmaxf((-position.z) + home.alt * 0.01f - ground_level, 0.0f);
+
+    if (!sitl) {
+        // running example program
+        return;
+    }
 
     // calculate scaling factor that varies from 1 at ground level to 1/8 at sitl->mag_anomaly_hgt
     // Assume magnetic anomaly strength scales with 1/R**3
@@ -260,7 +264,7 @@ void Aircraft::setup_frame_time(float new_rate, float new_speedup)
 /* adjust frame_time calculation */
 void Aircraft::adjust_frame_time(float new_rate)
 {
-    if (rate_hz != new_rate) {
+    if (!is_equal(rate_hz, new_rate)) {
         rate_hz = new_rate;
         frame_time_us = static_cast<uint64_t>(1.0e6f/rate_hz);
         scaled_frame_time_us = frame_time_us/target_speedup;
@@ -390,6 +394,10 @@ void Aircraft::fill_fdm(struct sitl_fdm &fdm)
     memcpy(fdm.rcin, rcin, rcin_chan_count * sizeof(float));
     fdm.bodyMagField = mag_bf;
 
+    // copy laser scanner results
+    fdm.scanner.points = scanner.points;
+    fdm.scanner.ranges = scanner.ranges;
+
     if (smoothing.enabled) {
         fdm.xAccel = smoothing.accel_body.x;
         fdm.yAccel = smoothing.accel_body.y;
@@ -422,7 +430,7 @@ void Aircraft::fill_fdm(struct sitl_fdm &fdm)
         }
     }
     
-    if (last_speedup != sitl->speedup && sitl->speedup > 0) {
+    if (!is_equal(last_speedup, float(sitl->speedup)) && sitl->speedup > 0) {
         set_speedup(sitl->speedup);
         last_speedup = sitl->speedup;
     }
@@ -737,4 +745,24 @@ void Aircraft::extrapolate_sensors(float delta_time)
     velocity_air_bf = dcm.transposed() * velocity_air_ef;
 }
 
+void Aircraft::update_external_payload(const struct sitl_input &input)
+{
+    external_payload_mass = 0;
 
+    // update sprayer
+    if (sprayer && sprayer->is_enabled()) {
+        sprayer->update(input);
+        external_payload_mass += sprayer->payload_mass();
+    }
+
+    // update grippers
+    if (gripper && gripper->is_enabled()) {
+        gripper->set_alt(hagl());
+        gripper->update(input);
+        external_payload_mass += gripper->payload_mass();
+    }
+    if (gripper_epm && gripper_epm->is_enabled()) {
+        gripper_epm->update(input);
+        external_payload_mass += gripper_epm->payload_mass();
+    }
+}
