@@ -17,6 +17,7 @@
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <errno.h>
 #include "GPIO.h"
+#include <AP_Common/Semaphore.h>
 
 #define ANLOGIN_DEBUGGING 0
 
@@ -93,16 +94,17 @@ void PX4AnalogSource::set_stop_pin(uint8_t p)
 
 float PX4AnalogSource::read_average() 
 {
+    WITH_SEMAPHORE(_semaphore);
+
     if (_sum_count == 0) {
         return _value;
     }
-    hal.scheduler->suspend_timer_procs();
     _value = _sum_value / _sum_count;
     _value_ratiometric = _sum_ratiometric / _sum_count;
     _sum_value = 0;
     _sum_ratiometric = 0;
     _sum_count = 0;
-    hal.scheduler->resume_timer_procs();
+
     return _value;
 }
 
@@ -158,7 +160,8 @@ void PX4AnalogSource::set_pin(uint8_t pin)
     if (_pin == pin) {
         return;
     }
-    hal.scheduler->suspend_timer_procs();
+
+    WITH_SEMAPHORE(_semaphore);
     _pin = pin;
     _sum_value = 0;
     _sum_ratiometric = 0;
@@ -166,7 +169,6 @@ void PX4AnalogSource::set_pin(uint8_t pin)
     _latest_value = 0;
     _value = 0;
     _value_ratiometric = 0;
-    hal.scheduler->resume_timer_procs();
 }
 
 /*
@@ -174,6 +176,8 @@ void PX4AnalogSource::set_pin(uint8_t pin)
  */
 void PX4AnalogSource::_add_value(float v, float vcc5V)
 {
+    WITH_SEMAPHORE(_semaphore);
+
     _latest_value = v;
     _sum_value += v;
     if (vcc5V < 3.0f) {

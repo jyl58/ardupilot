@@ -104,8 +104,9 @@ void AP_RangeFinder_analog::update(void)
     case RangeFinder::FUNCTION_HYPERBOLA:
         if (v <= offset) {
             dist_m = 0;
+        } else {
+            dist_m = scaling / (v - offset);
         }
-        dist_m = scaling / (v - offset);
         if (isinf(dist_m) || dist_m > _max_distance_cm * 0.01f) {
             dist_m = _max_distance_cm * 0.01f;
         }
@@ -114,7 +115,8 @@ void AP_RangeFinder_analog::update(void)
     if (dist_m < 0) {
         dist_m = 0;
     }
-    state.distance_cm = dist_m * 100.0f;  
+    state.distance_cm = dist_m * 100.0f;
+    state.last_reading_ms = AP_HAL::millis();
 
     // update range_valid state based on distance measured
     update_status();

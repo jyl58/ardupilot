@@ -47,6 +47,7 @@ private:
     float _sum_ratiometric;
     void _add_value(float v, float vcc5V);
     float _pin_scaler();
+    HAL_Semaphore _semaphore;
 };
 
 class PX4::PX4AnalogIn : public AP_HAL::AnalogIn {

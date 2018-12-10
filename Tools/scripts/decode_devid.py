@@ -9,6 +9,13 @@ the sensor library, such as libraries/AP_Compass/AP_Compass_Backend.h
 import sys
 import optparse
 
+def num(s):
+    try:
+        return int(s)
+    except ValueError:
+        return int(s, 16)
+
+
 parser = optparse.OptionParser("decode_devid.py")
 parser.add_option("-C", "--compass", action='store_true', help='decode compass IDs')
 parser.add_option("-I", "--imu", action='store_true', help='decode IMU IDs')
@@ -19,7 +26,7 @@ if len(args) == 0:
     print("Please supply a device ID")
     sys.exit(1)
 
-devid=int(args[0])
+devid=num(args[0])
 
 bus_type=devid & 0x07
 bus=(devid>>3) & 0x1F
@@ -29,7 +36,8 @@ devtype=(devid>>16)
 bustypes = {
     1: "I2C",
     2: "SPI",
-    3: "UAVCAN"
+    3: "UAVCAN",
+    4: "SITL"
 }
 
 compass_types = {
@@ -44,7 +52,10 @@ compass_types = {
     0x0A : "DEVTYPE_IST8310",
     0x0B : "DEVTYPE_ICM20948",
     0x0C : "DEVTYPE_MMC3416",
-    0x0D : "DEVTYPE_QMC5883L"
+    0x0D : "DEVTYPE_QMC5883L",
+    0x0E : "DEVTYPE_MAG3110",
+    0x0F : "DEVTYPE_SITL",
+    0x10 : "DEVTYPE_IST8308",
 }
 
 imu_types = {
@@ -58,7 +69,12 @@ imu_types = {
     0x21 : "DEVTYPE_GYR_MPU6000",
     0x22 : "DEVTYPE_GYR_L3GD20",
     0x24 : "DEVTYPE_GYR_MPU9250",
-    0x25 : "DEVTYPE_GYR_I3G4250D"
+    0x25 : "DEVTYPE_GYR_I3G4250D",
+    0x26 : "DEVTYPE_GYR_LSM9DS1",
+    0x27 : "DEVTYPE_INS_ICM20789",
+    0x28 : "DEVTYPE_INS_ICM20689",
+    0x29 : "DEVTYPE_INS_BMI055",
+    0x2A : "DEVTYPE_SITL",
 }
 
 decoded_devname = ""

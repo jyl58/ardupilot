@@ -1,6 +1,5 @@
 #pragma once
 
-#include <AP_ADC/AP_ADC.h>                 // ArduPilot Mega Analog to Digital Converter Library
 #include "AP_BattMonitor.h"
 #include "AP_BattMonitor_Backend.h"
 
@@ -70,14 +69,8 @@
  # define AP_BATT_CURR_AMP_PERVOLT_DEFAULT  17.0f
 
 #elif CONFIG_HAL_BOARD == HAL_BOARD_LINUX && CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_POCKET
- # define AP_BATT_VOLT_PIN                  0
- # define AP_BATT_CURR_PIN                  1
- # define AP_BATT_VOLTDIVIDER_DEFAULT       10.1f
- # define AP_BATT_CURR_AMP_PERVOLT_DEFAULT  17.0f
-
-#elif CONFIG_HAL_BOARD == HAL_BOARD_LINUX && CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_MINLURE
- # define AP_BATT_VOLT_PIN                  2
- # define AP_BATT_CURR_PIN                  3
+ # define AP_BATT_VOLT_PIN                  1
+ # define AP_BATT_CURR_PIN                  0
  # define AP_BATT_VOLTDIVIDER_DEFAULT       10.1f
  # define AP_BATT_CURR_AMP_PERVOLT_DEFAULT  17.0f
 
@@ -119,7 +112,7 @@ public:
     AP_BattMonitor_Analog(AP_BattMonitor &mon, AP_BattMonitor::BattMonitor_State &mon_state, AP_BattMonitor_Params &params);
 
     /// Read the battery voltage and current.  Should be called at 10hz
-    void read();
+    void read() override;
 
     /// returns true if battery monitor provides consumed energy info
     bool has_consumed_energy() const override { return has_current(); }

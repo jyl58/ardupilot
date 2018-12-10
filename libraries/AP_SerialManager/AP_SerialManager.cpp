@@ -36,6 +36,17 @@ extern const AP_HAL::HAL& hal;
 #define SERIAL5_BAUD AP_SERIALMANAGER_MAVLINK_BAUD/1000
 #endif
 
+#ifdef HAL_SERIAL2_PROTOCOL
+#define SERIAL2_PROTOCOL_DEFAULT HAL_SERIAL2_PROTOCOL
+#else
+#define SERIAL2_PROTOCOL_DEFAULT SerialProtocol_MAVLink
+#endif
+
+#ifndef HAL_SERIAL6_PROTOCOL
+#define SERIAL6_PROTOCOL SerialProtocol_None
+#define SERIAL6_BAUD AP_SERIALMANAGER_MAVLINK_BAUD/1000
+#endif
+
 const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Param: 0_BAUD
     // @DisplayName: Serial0 baud rate
@@ -50,12 +61,12 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Values: 1:MAVlink1, 2:MAVLink2
     // @User: Standard
     // @RebootRequired: True
-    AP_GROUPINFO("0_PROTOCOL",  11, AP_SerialManager, state[0].protocol, SerialProtocol_MAVLink),
+    AP_GROUPINFO("0_PROTOCOL",  11, AP_SerialManager, state[0].protocol, SerialProtocol_MAVLink2),
     
     // @Param: 1_PROTOCOL
     // @DisplayName: Telem1 protocol selection
     // @Description: Control what protocol to use on the Telem1 port. Note that the Frsky options require external converter hardware. See the wiki for details.
-    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("1_PROTOCOL",  1, AP_SerialManager, state[1].protocol, SerialProtocol_MAVLink),
@@ -70,10 +81,10 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Param: 2_PROTOCOL
     // @DisplayName: Telemetry 2 protocol selection
     // @Description: Control what protocol to use on the Telem2 port. Note that the Frsky options require external converter hardware. See the wiki for details.
-    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
     // @User: Standard
     // @RebootRequired: True
-    AP_GROUPINFO("2_PROTOCOL",  3, AP_SerialManager, state[2].protocol, SerialProtocol_MAVLink),
+    AP_GROUPINFO("2_PROTOCOL",  3, AP_SerialManager, state[2].protocol, SERIAL2_PROTOCOL_DEFAULT),
 
     // @Param: 2_BAUD
     // @DisplayName: Telemetry 2 Baud Rate
@@ -85,7 +96,7 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Param: 3_PROTOCOL
     // @DisplayName: Serial 3 (GPS) protocol selection
     // @Description: Control what protocol Serial 3 (GPS) should be used for. Note that the Frsky options require external converter hardware. See the wiki for details.
-    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("3_PROTOCOL",  5, AP_SerialManager, state[3].protocol, SerialProtocol_GPS),
@@ -100,7 +111,7 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Param: 4_PROTOCOL
     // @DisplayName: Serial4 protocol selection
     // @Description: Control what protocol Serial4 port should be used for. Note that the Frsky options require external converter hardware. See the wiki for details.
-    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("4_PROTOCOL",  7, AP_SerialManager, state[4].protocol, SerialProtocol_GPS),
@@ -115,7 +126,7 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @Param: 5_PROTOCOL
     // @DisplayName: Serial5 protocol selection
     // @Description: Control what protocol Serial5 port should be used for. Note that the Frsky options require external converter hardware. See the wiki for details.
-    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("5_PROTOCOL",  9, AP_SerialManager, state[5].protocol, SERIAL5_PROTOCOL),
@@ -128,7 +139,70 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     AP_GROUPINFO("5_BAUD", 10, AP_SerialManager, state[5].baud, SERIAL5_BAUD),
 
     // index 11 used by 0_PROTOCOL
-    
+        
+    // @Param: 6_PROTOCOL
+    // @DisplayName: Serial6 protocol selection
+    // @Description: Control what protocol Serial6 port should be used for. Note that the Frsky options require external converter hardware. See the wiki for details.
+    // @Values: -1:None, 1:MAVLink1, 2:MAVLink2, 3:Frsky D, 4:Frsky SPort, 5:GPS, 7:Alexmos Gimbal Serial, 8:SToRM32 Gimbal Serial, 9:Rangefinder, 10:FrSky SPort Passthrough (OpenTX), 11:Lidar360, 13:Beacon, 14:Volz servo out, 15:SBus servo out, 16:ESC Telemetry, 17:Devo Telemetry, 18:OpticalFlow
+    // @User: Standard
+    // @RebootRequired: True
+    AP_GROUPINFO("6_PROTOCOL",  12, AP_SerialManager, state[6].protocol, SERIAL6_PROTOCOL),
+
+    // @Param: 6_BAUD
+    // @DisplayName: Serial 6 Baud Rate
+    // @Description: The baud rate used for Serial6. The APM2 can support all baudrates up to 115, and also can support 500. The PX4 can support rates of up to 1500. If you setup a rate you cannot support on APM2 and then can't connect to your board you should load a firmware from a different vehicle type. That will reset all your parameters to defaults.
+    // @Values: 1:1200,2:2400,4:4800,9:9600,19:19200,38:38400,57:57600,111:111100,115:115200,500:500000,921:921600,1500:1500000
+    // @User: Standard
+    AP_GROUPINFO("6_BAUD", 13, AP_SerialManager, state[6].baud, SERIAL6_BAUD),
+
+    // @Param: 1_OPTIONS
+    // @DisplayName: Telem1 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire. The Swap option allows the RX and TX pins to be swapped on STM32F7 based boards.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("1_OPTIONS",  14, AP_SerialManager, state[1].options, 0),
+
+    // @Param: 2_OPTIONS
+    // @DisplayName: Telem2 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("2_OPTIONS",  15, AP_SerialManager, state[2].options, 0),
+
+    // @Param: 3_OPTIONS
+    // @DisplayName: Serial3 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("3_OPTIONS",  16, AP_SerialManager, state[3].options, 0),
+
+    // @Param: 4_OPTIONS
+    // @DisplayName: Serial4 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("4_OPTIONS",  17, AP_SerialManager, state[4].options, 0),
+
+    // @Param: 5_OPTIONS
+    // @DisplayName: Serial5 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("5_OPTIONS",  18, AP_SerialManager, state[5].options, 0),
+
+    // @Param: 6_OPTIONS
+    // @DisplayName: Serial6 options
+    // @Description: Control over UART options. The InvertRX option controls invert of the receive pin. The InvertTX option controls invert of the transmit pin. The HalfDuplex option controls half-duplex (onewire) mode, where both transmit and receive is done on the transmit wire.
+    // @Bitmask: 0:InvertRX, 1:InvertTX, 2:HalfDuplex, 4:Swap
+    // @User: Advanced
+    // @RebootRequired: True
+    AP_GROUPINFO("6_OPTIONS",  19, AP_SerialManager, state[6].options, 0),
+
     AP_GROUPEND
 };
 
@@ -164,6 +238,7 @@ void AP_SerialManager::init()
     state[3].uart = hal.uartB;  // serial3, uartB, normally 1st GPS
     state[4].uart = hal.uartE;  // serial4, uartE, normally 2nd GPS
     state[5].uart = hal.uartF;  // serial5
+    state[6].uart = hal.uartG;  // serial6
 
     if (state[0].uart == nullptr) {
         init_console();
@@ -180,6 +255,12 @@ void AP_SerialManager::init()
 #endif
         
         if (state[i].uart != nullptr) {
+
+            // see if special options have been requested
+            if (state[i].protocol != SerialProtocol_None && state[i].options) {
+                set_options(i);
+            }
+
             switch (state[i].protocol) {
                 case SerialProtocol_None:
                     break;
@@ -243,15 +324,20 @@ void AP_SerialManager::init()
                     state[i].uart->set_unbuffered_writes(true);
                     state[i].uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
                     break;
+
+                case SerialProtocol_ESCTelemetry:
+                    // ESC telemetry protocol from BLHeli32 ESCs. Note that baudrate is hardcoded to 115200
+                    state[i].baud = 115200;
+                    state[i].uart->begin(map_baudrate(state[i].baud), 30, 30);
+                    state[i].uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
+                    break;
             }
         }
     }
 }
 
-// find_serial - searches available serial ports for the first instance that allows the given protocol
-//  instance should be zero if searching for the first instance, 1 for the second, etc
-//  returns uart on success, nullptr if a serial port cannot be found
-AP_HAL::UARTDriver *AP_SerialManager::find_serial(enum SerialProtocol protocol, uint8_t instance) const
+
+const AP_SerialManager::UARTState *AP_SerialManager::find_protocol_instance(enum SerialProtocol protocol, uint8_t instance) const
 {
     uint8_t found_instance = 0;
 
@@ -259,7 +345,7 @@ AP_HAL::UARTDriver *AP_SerialManager::find_serial(enum SerialProtocol protocol, 
     for(uint8_t i=0; i<SERIALMANAGER_NUM_PORTS; i++) {
         if (protocol_match(protocol, (enum SerialProtocol)state[i].protocol.get())) {
             if (found_instance == instance) {
-                return state[i].uart;
+                return &state[i];
             }
             found_instance++;
         }
@@ -269,25 +355,28 @@ AP_HAL::UARTDriver *AP_SerialManager::find_serial(enum SerialProtocol protocol, 
     return nullptr;
 }
 
+// find_serial - searches available serial ports for the first instance that allows the given protocol
+//  instance should be zero if searching for the first instance, 1 for the second, etc
+//  returns uart on success, nullptr if a serial port cannot be found
+AP_HAL::UARTDriver *AP_SerialManager::find_serial(enum SerialProtocol protocol, uint8_t instance) const
+{
+    const struct UARTState *_state = find_protocol_instance(protocol, instance);
+    if (_state == nullptr) {
+        return nullptr;
+    }
+    return _state->uart;
+}
+
 // find_baudrate - searches available serial ports for the first instance that allows the given protocol
 //  instance should be zero if searching for the first instance, 1 for the second, etc
 //  returns baudrate on success, 0 if a serial port cannot be found
 uint32_t AP_SerialManager::find_baudrate(enum SerialProtocol protocol, uint8_t instance) const
 {
-    uint8_t found_instance = 0;
-
-    // search for matching protocol
-    for(uint8_t i=0; i<SERIALMANAGER_NUM_PORTS; i++) {
-        if (protocol_match(protocol, (enum SerialProtocol)state[i].protocol.get())) {
-            if (found_instance == instance) {
-                return map_baudrate(state[i].baud);
-            }
-            found_instance++;
-        }
+    const struct UARTState *_state = find_protocol_instance(protocol, instance);
+    if (_state == nullptr) {
+        return 0;
     }
-
-    // if we got this far we did not find the uart
-    return 0;
+    return map_baudrate(_state->baud);
 }
 
 // get_mavlink_channel - provides the mavlink channel associated with a given protocol
@@ -332,24 +421,6 @@ void AP_SerialManager::set_blocking_writes_all(bool blocking)
     for (uint8_t i=0; i<SERIALMANAGER_NUM_PORTS; i++) {
         if (state[i].uart != nullptr) {
             state[i].uart->set_blocking_writes(blocking);
-        }
-    }
-}
-
-// set_console_baud - sets the console's baud rate to the rate specified by the protocol
-void AP_SerialManager::set_console_baud(enum SerialProtocol protocol, uint8_t instance) const
-{
-    uint8_t found_instance = 0;
-
-    // find baud rate of this protocol
-    for (uint8_t i=0; i<SERIALMANAGER_NUM_PORTS; i++) {
-        if (protocol_match(protocol, (enum SerialProtocol)state[i].protocol.get())) {
-            if (instance == found_instance) {
-                // set console's baud rate
-                state[0].uart->begin(map_baudrate(state[i].baud));
-                return;
-            }
-            found_instance++;
         }
     }
 }
@@ -412,6 +483,16 @@ bool AP_SerialManager::protocol_match(enum SerialProtocol protocol1, enum Serial
     }
 
     return false;
+}
+
+// setup any special options
+void AP_SerialManager::set_options(uint8_t i)
+{
+    struct UARTState &opt = state[i];
+    // pass through to HAL
+    if (!opt.uart->set_options(opt.options)) {
+        hal.console->printf("Unable to setup options for Serial%u\n", i);
+    }
 }
 
 

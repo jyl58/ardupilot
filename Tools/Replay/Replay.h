@@ -21,7 +21,6 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AccelCal/AP_AccelCal.h>
-#include <AP_ADC/AP_ADC.h>
 #include <AP_Declination/AP_Declination.h>
 #include <Filter/Filter.h>
 #include <AP_Buffer/AP_Buffer.h>
@@ -35,7 +34,6 @@
 #include <AP_Compass/AP_Compass.h>
 #include <AP_Baro/AP_Baro.h>
 #include <AP_InertialSensor/AP_InertialSensor.h>
-#include <AP_InertialNav/AP_InertialNav.h>
 #include <AP_NavEKF2/AP_NavEKF2.h>
 #include <AP_NavEKF3/AP_NavEKF3.h>
 #include <AP_Mission/AP_Mission.h>
@@ -67,11 +65,12 @@ public:
     NavEKF2 EKF2{&ahrs, rng};
     NavEKF3 EKF3{&ahrs, rng};
     AP_AHRS_NavEKF ahrs{EKF2, EKF3};
-    AP_InertialNav_NavEKF inertial_nav{ahrs};
     AP_Vehicle::FixedWing aparm;
     AP_Airspeed airspeed;
     AP_Int32 unused; // logging is magic for Replay; this is unused
-    DataFlash_Class dataflash{"Replay v0.1", unused};
+    struct LogStructure log_structure[256] = {
+    };
+    DataFlash_Class dataflash{unused};
 
 private:
     Parameters g;
@@ -121,14 +120,21 @@ private:
     SITL::SITL sitl;
 #endif
 
-    LogReader logreader{_vehicle.ahrs, _vehicle.ins, _vehicle.compass, _vehicle.gps, _vehicle.airspeed, _vehicle.dataflash, nottypes};
+    LogReader logreader{_vehicle.ahrs,
+            _vehicle.ins,
+            _vehicle.compass,
+            _vehicle.gps,
+            _vehicle.airspeed,
+            _vehicle.dataflash,
+            _vehicle.log_structure,
+            0,
+            nottypes};
 
     FILE *ekf1f;
     FILE *ekf2f;
     FILE *ekf3f;
     FILE *ekf4f;
 
-    bool done_parameters;
     bool done_baro_init;
     bool done_home_init;
     int32_t arm_time_ms = -1;
@@ -164,6 +170,7 @@ private:
 
     void set_ins_update_rate(uint16_t update_rate);
     void inhibit_gyro_cal();
+    void force_log_disarmed();
 
     void usage(void);
     void set_user_parameters(void);
@@ -181,10 +188,8 @@ private:
     void flush_and_exit();
 
     FILE *xfopen(const char *f, const char *mode);
-};
 
-enum {
-    LOG_CHEK_MSG=100
+    bool seen_non_fmt;
 };
 
 /*

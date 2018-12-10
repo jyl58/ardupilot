@@ -100,7 +100,7 @@ public:
     bool is_complete(void) const;
     void set_initial_slope(void) { initial_slope = slope; }
     bool is_expecting_impact(void) const;
-    void log(void) const;
+    void Log(void) const;
     const DataFlash_Class::PID_Info * get_pid_info(void) const;
 
     // landing altitude offset (meters)
@@ -134,6 +134,9 @@ private:
     adjusted_relative_altitude_cm_fn_t adjusted_relative_altitude_cm_fn;
     disarm_if_autoland_complete_fn_t disarm_if_autoland_complete_fn;
     update_flight_stage_fn_t update_flight_stage_fn;
+    
+    // saved bearing for yaw correction after touchdown
+    float runway_bearing;
 
     // support for deepstall landings
     AP_Landing_Deepstall deepstall;
@@ -152,6 +155,7 @@ private:
     AP_Int8 flap_percent;
     AP_Int8 throttle_slewrate;
     AP_Int8 type;
+    AP_Float touchdown_altitude;
 
     // Land Type STANDARD GLIDE SLOPE
 
@@ -165,8 +169,9 @@ private:
     struct {
         // once landed, post some landing statistics to the GCS
         bool post_stats:1;
-
+        bool force_flare:1;
         bool has_aborted_due_to_slope_recalc:1;
+        bool touched_down:1;
     } type_slope_flags;
 
     void type_slope_do_land(const AP_Mission::Mission_Command& cmd, const float relative_altitude);

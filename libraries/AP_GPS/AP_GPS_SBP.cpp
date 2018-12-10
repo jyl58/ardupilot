@@ -46,13 +46,7 @@ do {                                            \
 
 AP_GPS_SBP::AP_GPS_SBP(AP_GPS &_gps, AP_GPS::GPS_State &_state,
                        AP_HAL::UARTDriver *_port) :
-    AP_GPS_Backend(_gps, _state, _port),
-
-    last_injected_data_ms(0),
-    last_iar_num_hypotheses(0),
-    last_full_update_tow(0),
-    last_full_update_cpu_ms(0),
-    crc_error_counter(0)
+    AP_GPS_Backend(_gps, _state, _port)
 {
 
     Debug("SBP Driver Initialized");
@@ -188,14 +182,17 @@ AP_GPS_SBP::_sbp_process_message() {
 
         case SBP_GPS_TIME_MSGTYPE:
             memcpy(&last_gps_time, parser_state.msg_buff, sizeof(last_gps_time));
+            check_new_itow(last_gps_time.tow, parser_state.msg_len);
             break;
 
         case SBP_VEL_NED_MSGTYPE:
             memcpy(&last_vel_ned, parser_state.msg_buff, sizeof(last_vel_ned));
+            check_new_itow(last_vel_ned.tow, parser_state.msg_len);
             break;
 
         case SBP_POS_LLH_MSGTYPE: {
             struct sbp_pos_llh_t *pos_llh = (struct sbp_pos_llh_t*)parser_state.msg_buff;
+            check_new_itow(pos_llh->tow, parser_state.msg_len);
             // Check if this is a single point or RTK solution
             // flags = 0 -> single point
             if (pos_llh->flags == 0) {
@@ -208,6 +205,7 @@ AP_GPS_SBP::_sbp_process_message() {
 
         case SBP_DOPS_MSGTYPE:
             memcpy(&last_dops, parser_state.msg_buff, sizeof(last_dops));
+            check_new_itow(last_dops.tow, parser_state.msg_len);
             break;
 
         case SBP_TRACKING_STATE_MSGTYPE:

@@ -9,12 +9,8 @@
 class AP_Arming_Rover : public AP_Arming
 {
 public:
-    AP_Arming_Rover(const AP_AHRS &ahrs_ref, Compass &compass,
-                    const AP_BattMonitor &battery, const AC_Fence &fence)
-        : AP_Arming(ahrs_ref, compass, battery),
-          _fence(fence)
-    {
-    }
+
+    AP_Arming_Rover() : AP_Arming() { }
 
     /* Do not allow copies */
     AP_Arming_Rover(const AP_Arming_Rover &other) = delete;
@@ -25,10 +21,9 @@ public:
     bool gps_checks(bool display_failure) override;
 
 protected:
-    enum HomeState home_status() const override;
     bool fence_checks(bool report);
     bool proximity_check(bool report);
 
 private:
-    const AC_Fence& _fence;
+
 };

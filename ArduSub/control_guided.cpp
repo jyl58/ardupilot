@@ -76,8 +76,8 @@ void Sub::guided_vel_control_start()
     guided_mode = Guided_Velocity;
 
     // initialize vertical speeds and leash lengths
-    pos_control.set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control.set_accel_z(g.pilot_accel_z);
+    pos_control.set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control.set_max_accel_z(g.pilot_accel_z);
 
     // initialise velocity controller
     pos_control.init_vel_controller_xyz();
@@ -92,8 +92,8 @@ void Sub::guided_posvel_control_start()
     pos_control.init_xy_controller();
 
     // set speed and acceleration from wpnav's speed and acceleration
-    pos_control.set_speed_xy(wp_nav.get_speed_xy());
-    pos_control.set_accel_xy(wp_nav.get_wp_acceleration());
+    pos_control.set_max_speed_xy(wp_nav.get_speed_xy());
+    pos_control.set_max_accel_xy(wp_nav.get_wp_acceleration());
 
     const Vector3f& curr_pos = inertial_nav.get_position();
     const Vector3f& curr_vel = inertial_nav.get_velocity();
@@ -103,8 +103,8 @@ void Sub::guided_posvel_control_start()
     pos_control.set_desired_velocity_xy(curr_vel.x, curr_vel.y);
 
     // set vertical speed and acceleration
-    pos_control.set_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
-    pos_control.set_accel_z(wp_nav.get_accel_z());
+    pos_control.set_max_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
+    pos_control.set_max_accel_z(wp_nav.get_accel_z());
 
     // pilot always controls yaw
     set_auto_yaw_mode(AUTO_YAW_HOLD);
@@ -117,15 +117,15 @@ void Sub::guided_angle_control_start()
     guided_mode = Guided_Angle;
 
     // set vertical speed and acceleration
-    pos_control.set_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
-    pos_control.set_accel_z(wp_nav.get_accel_z());
+    pos_control.set_max_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
+    pos_control.set_max_accel_z(wp_nav.get_accel_z());
 
     // initialise position and desired velocity
     pos_control.set_alt_target(inertial_nav.get_altitude());
     pos_control.set_desired_velocity_z(inertial_nav.get_velocity_z());
 
     // initialise targets
-    guided_angle_state.update_time_ms = millis();
+    guided_angle_state.update_time_ms = AP_HAL::millis();
     guided_angle_state.roll_cd = ahrs.roll_sensor;
     guided_angle_state.pitch_cd = ahrs.pitch_sensor;
     guided_angle_state.yaw_cd = ahrs.yaw_sensor;
@@ -203,7 +203,7 @@ void Sub::guided_set_velocity(const Vector3f& velocity)
         guided_vel_control_start();
     }
 
-    vel_update_time_ms = millis();
+    vel_update_time_ms = AP_HAL::millis();
 
     // set position controller velocity target
     pos_control.set_desired_velocity(velocity);
@@ -227,7 +227,7 @@ bool Sub::guided_set_destination_posvel(const Vector3f& destination, const Vecto
     }
 #endif
 
-    posvel_update_time_ms = millis();
+    posvel_update_time_ms = AP_HAL::millis();
     posvel_pos_target_cm = destination;
     posvel_vel_target_cms = velocity;
 
@@ -253,7 +253,7 @@ void Sub::guided_set_angle(const Quaternion &q, float climb_rate_cms)
     guided_angle_state.yaw_cd = wrap_180_cd(ToDeg(guided_angle_state.yaw_cd) * 100.0f);
 
     guided_angle_state.climb_rate_cms = climb_rate_cms;
-    guided_angle_state.update_time_ms = millis();
+    guided_angle_state.update_time_ms = AP_HAL::millis();
 }
 
 // guided_run - runs the guided controller
@@ -363,13 +363,13 @@ void Sub::guided_vel_control_run()
     motors.set_desired_spool_state(AP_Motors::DESIRED_THROTTLE_UNLIMITED);
 
     // set velocity to zero if no updates received for 3 seconds
-    uint32_t tnow = millis();
+    uint32_t tnow = AP_HAL::millis();
     if (tnow - vel_update_time_ms > GUIDED_POSVEL_TIMEOUT_MS && !pos_control.get_desired_velocity().is_zero()) {
         pos_control.set_desired_velocity(Vector3f(0,0,0));
     }
 
     // call velocity controller which includes z axis controller
-    pos_control.update_vel_controller_xyz(ekfNavVelGainScaler);
+    pos_control.update_vel_controller_xyz();
 
     float lateral_out, forward_out;
     translate_pos_control_rp(lateral_out, forward_out);
@@ -419,7 +419,7 @@ void Sub::guided_posvel_control_run()
     motors.set_desired_spool_state(AP_Motors::DESIRED_THROTTLE_UNLIMITED);
 
     // set velocity to zero if no updates received for 3 seconds
-    uint32_t tnow = millis();
+    uint32_t tnow = AP_HAL::millis();
     if (tnow - posvel_update_time_ms > GUIDED_POSVEL_TIMEOUT_MS && !posvel_vel_target_cms.is_zero()) {
         posvel_vel_target_cms.zero();
     }
@@ -440,7 +440,7 @@ void Sub::guided_posvel_control_run()
     pos_control.set_desired_velocity_xy(posvel_vel_target_cms.x, posvel_vel_target_cms.y);
 
     // run position controller
-    pos_control.update_xy_controller(ekfNavVelGainScaler);
+    pos_control.update_xy_controller();
 
     float lateral_out, forward_out;
     translate_pos_control_rp(lateral_out, forward_out);
@@ -493,7 +493,7 @@ void Sub::guided_angle_control_run()
     float climb_rate_cms = constrain_float(guided_angle_state.climb_rate_cms, -fabsf(wp_nav.get_speed_down()), wp_nav.get_speed_up());
 
     // check for timeout - set lean angles and climb rate to zero if no updates received for 3 seconds
-    uint32_t tnow = millis();
+    uint32_t tnow = AP_HAL::millis();
     if (tnow - guided_angle_state.update_time_ms > GUIDED_ATTITUDE_TIMEOUT_MS) {
         roll_in = 0.0f;
         pitch_in = 0.0f;
@@ -547,7 +547,7 @@ void Sub::guided_limit_init_time_and_pos()
 bool Sub::guided_limit_check()
 {
     // check if we have passed the timeout
-    if ((guided_limit.timeout_ms > 0) && (millis() - guided_limit.start_time >= guided_limit.timeout_ms)) {
+    if ((guided_limit.timeout_ms > 0) && (AP_HAL::millis() - guided_limit.start_time >= guided_limit.timeout_ms)) {
         return true;
     }
 

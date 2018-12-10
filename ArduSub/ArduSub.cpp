@@ -28,21 +28,20 @@ const AP_Scheduler::Task Sub::scheduler_tasks[] = {
     SCHED_TASK(fifty_hz_loop,         50,     75),
     SCHED_TASK(update_GPS,            50,    200),
 #if OPTFLOW == ENABLED
-    SCHED_TASK(update_optical_flow,  200,    160),
+    SCHED_TASK_CLASS(OpticalFlow,          &sub.optflow,             update,         200, 160),
 #endif
     SCHED_TASK(update_batt_compass,   10,    120),
     SCHED_TASK(read_rangefinder,      20,    100),
     SCHED_TASK(update_altitude,       10,    100),
     SCHED_TASK(three_hz_loop,          3,     75),
     SCHED_TASK(update_turn_counter,   10,     50),
-    SCHED_TASK(compass_accumulate,   100,    100),
     SCHED_TASK_CLASS(AP_Baro,             &sub.barometer,    accumulate,          50,  90),
     SCHED_TASK_CLASS(AP_Notify,           &sub.notify,       update,              50,  90),
     SCHED_TASK(one_hz_loop,            1,    100),
-    SCHED_TASK(gcs_check_input,      400,    180),
+    SCHED_TASK_CLASS(GCS,                 (GCS*)&sub._gcs,   update,             400, 180),
     SCHED_TASK(gcs_send_heartbeat,     1,    110),
-    SCHED_TASK(gcs_send_deferred,     50,    550),
-    SCHED_TASK(gcs_data_stream_send,  50,    550),
+    SCHED_TASK_CLASS(GCS,                 (GCS*)&sub._gcs,   retry_deferred,      50, 550),
+    SCHED_TASK_CLASS(GCS,                 (GCS*)&sub._gcs,   data_stream_send,    50, 550),
 #if MOUNT == ENABLED
     SCHED_TASK_CLASS(AP_Mount,            &sub.camera_mount, update,              50,  75),
 #endif
@@ -61,7 +60,7 @@ const AP_Scheduler::Task Sub::scheduler_tasks[] = {
     SCHED_TASK(accel_cal_update,      10,    100),
     SCHED_TASK(terrain_update,        10,    100),
 #if GRIPPER_ENABLED == ENABLED
-    SCHED_TASK_CLASS(AP_Gripper,          &g2.gripper,       update,              10,  75),
+    SCHED_TASK_CLASS(AP_Gripper,          &sub.g2.gripper,       update,              10,  75),
 #endif
 #ifdef USERHOOK_FASTLOOP
     SCHED_TASK(userhook_FastLoop,    100,     75),
@@ -80,6 +79,7 @@ const AP_Scheduler::Task Sub::scheduler_tasks[] = {
 #endif
 };
 
+constexpr int8_t Sub::_failsafe_priorities[5];
 
 void Sub::setup()
 {
@@ -157,16 +157,16 @@ void Sub::fifty_hz_loop()
     failsafe_sensors_check();
 
     // Update rc input/output
-    RC_Channels::set_pwm_all();
+    rc().read_input();
     SRV_Channels::output_ch_all();
 }
 
 // update_batt_compass - read battery and compass
 // should be called at 10hz
-void Sub::update_batt_compass(void)
+void Sub::update_batt_compass()
 {
     // read battery before compass because it may be used for motor interference compensation
-    read_battery();
+    battery.read();
 
     if (g.compass_enabled) {
         // update compass with throttle value - used for compassmot
@@ -174,7 +174,7 @@ void Sub::update_batt_compass(void)
         compass.read();
         // log compass information
         if (should_log(MASK_LOG_COMPASS) && !ahrs.have_ekf_logging()) {
-            DataFlash.Log_Write_Compass(compass);
+            DataFlash.Log_Write_Compass();
         }
     }
 }
@@ -288,10 +288,17 @@ void Sub::one_hz_loop()
 
     // log terrain data
     terrain_logging();
+
+    // init compass location for declination
+    init_compass_location();
+
+    // need to set "likely flying" when armed to allow for compass
+    // learning to run
+    ahrs.set_likely_flying(hal.util->get_soft_armed());
 }
 
 // called at 50hz
-void Sub::update_GPS(void)
+void Sub::update_GPS()
 {
     static uint32_t last_gps_reading[GPS_MAX_INSTANCES];   // time of last gps message
     bool gps_updated = false;
@@ -302,27 +309,19 @@ void Sub::update_GPS(void)
     for (uint8_t i=0; i<gps.num_sensors(); i++) {
         if (gps.last_message_time_ms(i) != last_gps_reading[i]) {
             last_gps_reading[i] = gps.last_message_time_ms(i);
-
-            // log GPS message
-            if (should_log(MASK_LOG_GPS) && !ahrs.have_ekf_logging()) {
-                DataFlash.Log_Write_GPS(gps, i);
-            }
-
             gps_updated = true;
+            break;
         }
     }
 
     if (gps_updated) {
-        // set system time if necessary
-        set_system_time_from_GPS();
-
 #if CAMERA == ENABLED
         camera.update();
 #endif
     }
 }
 
-void Sub::read_AHRS(void)
+void Sub::read_AHRS()
 {
     // Perform IMU calculations and get attitude info
     //-----------------------------------------------
@@ -341,6 +340,20 @@ void Sub::update_altitude()
     if (should_log(MASK_LOG_CTUN)) {
         Log_Write_Control_Tuning();
     }
+}
+
+bool Sub::control_check_barometer()
+{
+#if CONFIG_HAL_BOARD != HAL_BOARD_SITL
+    if (!ap.depth_sensor_present) { // can't hold depth without a depth sensor
+        gcs().send_text(MAV_SEVERITY_WARNING, "Depth sensor is not connected.");
+        return false;
+    } else if (failsafe.sensor_health) {
+        gcs().send_text(MAV_SEVERITY_WARNING, "Depth sensor error.");
+        return false;
+    }
+#endif
+    return true;
 }
 
 AP_HAL_MAIN_CALLBACKS(&sub);

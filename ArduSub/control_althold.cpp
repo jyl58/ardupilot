@@ -8,17 +8,14 @@
 // althold_init - initialise althold controller
 bool Sub::althold_init()
 {
-#if CONFIG_HAL_BOARD != HAL_BOARD_SITL
-    if (!ap.depth_sensor_present || failsafe.sensor_health) { // can't hold depth without a depth sensor, exit immediately.
-        gcs().send_text(MAV_SEVERITY_WARNING, "BAD DEPTH");
+    if(!control_check_barometer()) {
         return false;
     }
-#endif
 
     // initialize vertical speeds and leash lengths
     // sets the maximum speed up and down returned by position controller
-    pos_control.set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control.set_accel_z(g.pilot_accel_z);
+    pos_control.set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control.set_max_accel_z(g.pilot_accel_z);
 
     // initialise position and desired velocity
     pos_control.set_alt_target(inertial_nav.get_altitude());
@@ -36,8 +33,8 @@ void Sub::althold_run()
     uint32_t tnow = AP_HAL::millis();
 
     // initialize vertical speeds and acceleration
-    pos_control.set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control.set_accel_z(g.pilot_accel_z);
+    pos_control.set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control.set_max_accel_z(g.pilot_accel_z);
 
     if (!motors.armed()) {
         motors.set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
@@ -52,6 +49,25 @@ void Sub::althold_run()
 
     // get pilot desired lean angles
     float target_roll, target_pitch;
+
+    // Check if set_attitude_target_no_gps is valid
+    if (tnow - sub.set_attitude_target_no_gps.last_message_ms < 5000) {
+        float target_yaw;
+        Quaternion(
+            set_attitude_target_no_gps.packet.q
+        ).to_euler(
+            target_roll,
+            target_pitch,
+            target_yaw
+        );
+        target_roll = degrees(target_roll);
+        target_pitch = degrees(target_pitch);
+        target_yaw = degrees(target_yaw);
+
+        attitude_control.input_euler_angle_roll_pitch_yaw(target_roll * 1e2f, target_pitch * 1e2f, target_yaw * 1e2f, true);
+        return;
+    }
+
     get_pilot_desired_lean_angles(channel_roll->get_control_in(), channel_pitch->get_control_in(), target_roll, target_pitch, attitude_control.get_althold_lean_angle_max());
 
     // get pilot's desired yaw rate

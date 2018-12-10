@@ -14,68 +14,11 @@
 enum autopilot_yaw_mode {
     AUTO_YAW_HOLD =             0,  // pilot controls the heading
     AUTO_YAW_LOOK_AT_NEXT_WP =  1,  // point towards next waypoint (no pilot input accepted)
-    AUTO_YAW_ROI =              2,  // point towards a location held in roi_WP (no pilot input accepted)
-    AUTO_YAW_LOOK_AT_HEADING =  3,  // point towards a particular angle (not pilot input accepted)
+    AUTO_YAW_ROI =              2,  // point towards a location held in roi (no pilot input accepted)
+    AUTO_YAW_FIXED =            3,  // point towards a particular angle (no pilot input accepted)
     AUTO_YAW_LOOK_AHEAD =       4,  // point in the direction the copter is moving
     AUTO_YAW_RESETTOARMEDYAW =  5,  // point towards heading at time motors were armed
     AUTO_YAW_RATE =             6,  // turn at a specified rate (held in auto_yaw_rate)
-};
-
-// Ch6... Ch12 aux switch control
-#define AUX_SWITCH_PWM_TRIGGER_HIGH 1800   // pwm value above which the ch7 or ch8 option will be invoked
-#define AUX_SWITCH_PWM_TRIGGER_LOW  1200   // pwm value below which the ch7 or ch8 option will be disabled
-
-// values used by the ap.ch7_opt and ap.ch8_opt flags
-#define AUX_SWITCH_LOW              0       // indicates auxiliary switch is in the low position (pwm <1200)
-#define AUX_SWITCH_MIDDLE           1       // indicates auxiliary switch is in the middle position (pwm >1200, <1800)
-#define AUX_SWITCH_HIGH             2       // indicates auxiliary switch is in the high position (pwm >1800)
-
-// Aux Switch enumeration
-enum aux_sw_func {
-    AUXSW_DO_NOTHING =           0, // aux switch disabled
-    AUXSW_FLIP =                 2, // flip
-    AUXSW_SIMPLE_MODE =          3, // change to simple mode
-    AUXSW_RTL =                  4, // change to RTL flight mode
-    AUXSW_SAVE_TRIM =            5, // save current position as level
-    AUXSW_SAVE_WP =              7, // save mission waypoint or RTL if in auto mode
-    AUXSW_CAMERA_TRIGGER =       9, // trigger camera servo or relay
-    AUXSW_RANGEFINDER =         10, // allow enabling or disabling rangefinder in flight which helps avoid surface tracking when you are far above the ground
-    AUXSW_FENCE =               11, // allow enabling or disabling fence in flight
-    AUXSW_RESETTOARMEDYAW =     12, // deprecated.  changes yaw to be same as when quad was armed
-    AUXSW_SUPERSIMPLE_MODE =    13, // change to simple mode in middle, super simple at top
-    AUXSW_ACRO_TRAINER =        14, // low = disabled, middle = leveled, high = leveled and limited
-    AUXSW_SPRAYER =             15, // enable/disable the crop sprayer
-    AUXSW_AUTO =                16, // change to auto flight mode
-    AUXSW_AUTOTUNE =            17, // auto tune
-    AUXSW_LAND =                18, // change to LAND flight mode
-    AUXSW_GRIPPER =             19, // Operate cargo grippers low=off, middle=neutral, high=on
-    AUXSW_PARACHUTE_ENABLE  =   21, // Parachute enable/disable
-    AUXSW_PARACHUTE_RELEASE =   22, // Parachute release
-    AUXSW_PARACHUTE_3POS =      23, // Parachute disable, enable, release with 3 position switch
-    AUXSW_MISSION_RESET =       24, // Reset auto mission to start from first command
-    AUXSW_ATTCON_FEEDFWD =      25, // enable/disable the roll and pitch rate feed forward
-    AUXSW_ATTCON_ACCEL_LIM =    26, // enable/disable the roll, pitch and yaw accel limiting
-    AUXSW_RETRACT_MOUNT =       27, // Retract Mount
-    AUXSW_RELAY =               28, // Relay pin on/off (only supports first relay)
-    AUXSW_LANDING_GEAR =        29, // Landing gear controller
-    AUXSW_LOST_COPTER_SOUND =   30, // Play lost copter sound
-    AUXSW_MOTOR_ESTOP =         31, // Emergency Stop Switch
-    AUXSW_MOTOR_INTERLOCK =     32, // Motor On/Off switch
-    AUXSW_BRAKE =               33, // Brake flight mode
-	AUXSW_RELAY2 =              34, // Relay2 pin on/off (in Mission planner set CH8_OPT  = 34)
-    AUXSW_RELAY3 =              35, // Relay3 pin on/off (in Mission planner set CH9_OPT  = 35)
-    AUXSW_RELAY4 =              36, // Relay4 pin on/off (in Mission planner set CH10_OPT = 36)
-    AUXSW_THROW =               37,  // change to THROW flight mode
-    AUXSW_AVOID_ADSB =          38,  // enable AP_Avoidance library
-    AUXSW_PRECISION_LOITER =    39,  // enable precision loiter
-    AUXSW_AVOID_PROXIMITY =     40,  // enable object avoidance using proximity sensors (ie. horizontal lidar)
-    AUXSW_ARMDISARM =           41,  // arm or disarm vehicle
-    AUXSW_SMART_RTL =           42, // change to SmartRTL flight mode
-    AUXSW_INVERTED  =           43,  // enable inverted flight
-    AUXSW_WINCH_ENABLE =        44, // winch enable/disable
-    AUXSW_WINCH_CONTROL =       45, // winch control
-    AUXSW_RC_OVERRIDE_ENABLE =  46, // enable RC Override
-    AUXSW_SWITCH_MAX,
 };
 
 // Frame types
@@ -110,6 +53,7 @@ enum control_mode_t {
     SMART_RTL =    21,  // SMART_RTL returns to home by retracing its steps
     FLOWHOLD  =    22,  // FLOWHOLD holds position with optical flow without rangefinder
     FOLLOW    =    23,  // follow attempts to follow another vehicle or ground station
+    ZIGZAG    =    24,  // ZIGZAG mode is able to fly in a zigzag manner with predefined point A and point B
 };
 
 enum mode_reason_t {
@@ -188,7 +132,7 @@ enum tuning_func {
 #define WP_YAW_BEHAVIOR_NONE                          0   // auto pilot will never control yaw during missions or rtl (except for DO_CONDITIONAL_YAW command received)
 #define WP_YAW_BEHAVIOR_LOOK_AT_NEXT_WP               1   // auto pilot will face next waypoint or home during rtl
 #define WP_YAW_BEHAVIOR_LOOK_AT_NEXT_WP_EXCEPT_RTL    2   // auto pilot will face next waypoint except when doing RTL at which time it will stay in it's last
-#define WP_YAW_BEHAVIOR_LOOK_AHEAD                    3   // auto pilot will look ahead during missions and rtl (primarily meant for traditional helicotpers)
+#define WP_YAW_BEHAVIOR_LOOK_AHEAD                    3   // auto pilot will look ahead during missions and rtl (primarily meant for traditional helicopters)
 
 // Auto modes
 enum AutoMode {
@@ -201,6 +145,7 @@ enum AutoMode {
     Auto_Spline,
     Auto_NavGuided,
     Auto_Loiter,
+    Auto_LoiterToAlt,
     Auto_NavPayloadPlace,
 };
 
@@ -266,21 +211,6 @@ enum FlipState {
     Flip_Abandon
 };
 
-// Throw stages
-enum ThrowModeStage {
-    Throw_Disarmed,
-    Throw_Detecting,
-    Throw_Uprighting,
-    Throw_HgtStabilise,
-    Throw_PosHold
-};
-
-// Throw types
-enum ThrowModeType {
-    ThrowType_Upward = 0,
-    ThrowType_Drop = 1
-};
-
 enum LandStateType {
     LandStateType_FlyToLocation = 0,
     LandStateType_Descending = 1
@@ -303,6 +233,7 @@ enum PayloadPlaceStateType {
 // bit options for DEV_OPTIONS parameter
 enum DevOptions {
     DevOptionADSBMAVLink = 1,
+    DevOptionVFR_HUDRelativeAlt = 2,
 };
 
 //  Logging parameters
@@ -310,7 +241,6 @@ enum LoggingParameters {
      TYPE_AIRSTART_MSG,
      TYPE_GROUNDSTART_MSG,
      LOG_CONTROL_TUNING_MSG,
-     LOG_OPTFLOW_MSG,
      LOG_EVENT_MSG,
      LOG_ERROR_MSG,
      LOG_DATA_INT16_MSG,
@@ -325,7 +255,6 @@ enum LoggingParameters {
      LOG_HELI_MSG,
      LOG_PRECLAND_MSG,
      LOG_GUIDEDTARGET_MSG,
-     LOG_THROW_MSG,
 };
 
 #define MASK_LOG_ATTITUDE_FAST          (1<<0)
@@ -351,7 +280,7 @@ enum LoggingParameters {
 
 // DATA - event logging
 #define DATA_AP_STATE                       7
-#define DATA_SYSTEM_TIME_SET                8
+// 8 was DATA_SYSTEM_TIME_SET
 #define DATA_INIT_SIMPLE_BEARING            9
 #define DATA_ARMED                          10
 #define DATA_DISARMED                       11
@@ -405,6 +334,9 @@ enum LoggingParameters {
 #define DATA_WINCH_RELAXED                  68
 #define DATA_WINCH_LENGTH_CONTROL           69
 #define DATA_WINCH_RATE_CONTROL             70
+#define DATA_ZIGZAG_STORE_A                 71
+#define DATA_ZIGZAG_STORE_B                 72
+#define DATA_LAND_REPO_ACTIVE               73
 
 // Error message sub systems and error codes
 #define ERROR_SUBSYSTEM_MAIN                1
@@ -431,6 +363,7 @@ enum LoggingParameters {
 #define ERROR_SUBSYSTEM_NAVIGATION          22
 #define ERROR_SUBSYSTEM_FAILSAFE_TERRAIN    23
 #define ERROR_SUBSYSTEM_EKF_PRIMARY         24
+#define ERROR_SUBSYSTEM_THRUST_LOSS_CHECK   25
 // general error codes
 #define ERROR_CODE_ERROR_RESOLVED           0
 #define ERROR_CODE_FAILED_TO_INITIALISE     1
@@ -475,13 +408,6 @@ enum LoggingParameters {
 #define FS_THR_ENABLED_ALWAYS_LAND                 3
 #define FS_THR_ENABLED_ALWAYS_SMARTRTL_OR_RTL      4
 #define FS_THR_ENABLED_ALWAYS_SMARTRTL_OR_LAND     5
-
-// Battery failsafe definitions (FS_BATT_ENABLE parameter)
-#define FS_BATT_DISABLED                    0       // battery failsafe disabled
-#define FS_BATT_LAND                        1       // switch to LAND mode on battery failsafe
-#define FS_BATT_RTL                         2       // switch to RTL mode on battery failsafe
-#define FS_BATT_SMARTRTL_OR_RTL             3       // switch to SmartRTL, if can't, switch to RTL
-#define FS_BATT_SMARTRTL_OR_LAND            4       // switch to SmartRTL, if can't, swtich to LAND
 
 // GCS failsafe definitions (FS_GCS_ENABLE parameter)
 #define FS_GCS_DISABLED                        0

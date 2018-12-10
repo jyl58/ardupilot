@@ -14,7 +14,6 @@ const extern AP_HAL::HAL& hal;
 AP_InertialSensor_Backend::AP_InertialSensor_Backend(AP_InertialSensor &imu) :
     _imu(imu)
 {
-    _sem = hal.util->new_semaphore();
 }
 
 /*
@@ -54,7 +53,7 @@ void AP_InertialSensor_Backend::_set_gyro_oversampling(uint8_t instance, uint8_t
   sensor may vary slightly from the system clock. This slowly adjusts
   the rate to the observed rate
 */
-void AP_InertialSensor_Backend::_update_sensor_rate(uint16_t &count, uint32_t &start_us, float &rate_hz)
+void AP_InertialSensor_Backend::_update_sensor_rate(uint16_t &count, uint32_t &start_us, float &rate_hz) const
 {
     uint32_t now = AP_HAL::micros();
     if (start_us == 0) {
@@ -105,7 +104,11 @@ void AP_InertialSensor_Backend::_rotate_and_correct_accel(uint8_t instance, Vect
     accel.z *= accel_scale.z;
 
     // rotate to body frame
-    accel.rotate(_imu._board_orientation);
+    if (_imu._board_orientation == ROTATION_CUSTOM && _imu._custom_rotation) {
+        accel = *_imu._custom_rotation * accel;
+    } else {
+        accel.rotate(_imu._board_orientation);
+    }
 }
 
 void AP_InertialSensor_Backend::_rotate_and_correct_gyro(uint8_t instance, Vector3f &gyro) 
@@ -116,7 +119,11 @@ void AP_InertialSensor_Backend::_rotate_and_correct_gyro(uint8_t instance, Vecto
     // gyro calibration is always assumed to have been done in sensor frame
     gyro -= _imu._gyro_offset[instance];
 
-    gyro.rotate(_imu._board_orientation);
+    if (_imu._board_orientation == ROTATION_CUSTOM && _imu._custom_rotation) {
+        gyro = *_imu._custom_rotation * gyro;
+    } else {
+        gyro.rotate(_imu._board_orientation);
+    }
 }
 
 /*
@@ -184,7 +191,8 @@ void AP_InertialSensor_Backend::_notify_new_gyro_raw_sample(uint8_t instance,
     delta_coning = delta_coning % delta_angle;
     delta_coning *= 0.5f;
 
-    if (_sem->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
+    {
+        WITH_SEMAPHORE(_sem);
         // integrate delta angle accumulator
         // the angles and coning corrections are accumulated separately in the
         // referenced paper, but in simulation little difference was found between
@@ -201,7 +209,6 @@ void AP_InertialSensor_Backend::_notify_new_gyro_raw_sample(uint8_t instance,
             _imu._gyro_filter[instance].reset();
         }
         _imu._new_gyro_data[instance] = true;
-        _sem->give();
     }
 
     log_gyro_raw(instance, sample_us, gyro);
@@ -226,7 +233,9 @@ void AP_InertialSensor_Backend::log_gyro_raw(uint8_t instance, const uint64_t sa
         };
         dataflash->WriteBlock(&pkt, sizeof(pkt));
     } else {
-        _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_GYRO, sample_us, gyro);
+        if (!_imu.batchsampler.doing_sensor_rate_logging()) {
+            _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_GYRO, sample_us, gyro);
+        }
     }
 }
 
@@ -300,7 +309,9 @@ void AP_InertialSensor_Backend::_notify_new_accel_raw_sample(uint8_t instance,
     
     _imu.calc_vibration_and_clipping(instance, accel, dt);
 
-    if (_sem->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
+    {
+        WITH_SEMAPHORE(_sem);
+
         // delta velocity
         _imu._delta_velocity_acc[instance] += accel * dt;
         _imu._delta_velocity_acc_dt[instance] += dt;
@@ -313,10 +324,26 @@ void AP_InertialSensor_Backend::_notify_new_accel_raw_sample(uint8_t instance,
         _imu.set_accel_peak_hold(instance, _imu._accel_filtered[instance]);
 
         _imu._new_accel_data[instance] = true;
-        _sem->give();
     }
 
     log_accel_raw(instance, sample_us, accel);
+}
+
+void AP_InertialSensor_Backend::_notify_new_accel_sensor_rate_sample(uint8_t instance, const Vector3f &accel)
+{
+    if (!_imu.batchsampler.doing_sensor_rate_logging()) {
+        return;
+    }
+
+    _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_ACCEL, AP_HAL::micros64(), accel);
+}
+
+void AP_InertialSensor_Backend::_notify_new_gyro_sensor_rate_sample(uint8_t instance, const Vector3f &gyro)
+{
+    if (!_imu.batchsampler.doing_sensor_rate_logging()) {
+        return;
+    }
+    _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_GYRO, AP_HAL::micros64(), gyro);
 }
 
 void AP_InertialSensor_Backend::log_accel_raw(uint8_t instance, const uint64_t sample_us, const Vector3f &accel)
@@ -338,7 +365,9 @@ void AP_InertialSensor_Backend::log_accel_raw(uint8_t instance, const uint64_t s
         };
         dataflash->WriteBlock(&pkt, sizeof(pkt));
     } else {
-        _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_ACCEL, sample_us, accel);
+        if (!_imu.batchsampler.doing_sensor_rate_logging()) {
+            _imu.batchsampler.sample(instance, AP_InertialSensor::IMU_SENSOR_TYPE_ACCEL, sample_us, accel);
+        }
     }
 }
 
@@ -397,9 +426,7 @@ void AP_InertialSensor_Backend::_publish_temperature(uint8_t instance, float tem
  */
 void AP_InertialSensor_Backend::update_gyro(uint8_t instance)
 {    
-    if (!_sem->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
-        return;
-    }
+    WITH_SEMAPHORE(_sem);
 
     if (_imu._new_gyro_data[instance]) {
         _publish_gyro(instance, _imu._gyro_filtered[instance]);
@@ -411,8 +438,6 @@ void AP_InertialSensor_Backend::update_gyro(uint8_t instance)
         _imu._gyro_filter[instance].set_cutoff_frequency(_gyro_raw_sample_rate(instance), _gyro_filter_cutoff());
         _last_gyro_filter_hz[instance] = _gyro_filter_cutoff();
     }
-
-    _sem->give();
 }
 
 /*
@@ -420,9 +445,7 @@ void AP_InertialSensor_Backend::update_gyro(uint8_t instance)
  */
 void AP_InertialSensor_Backend::update_accel(uint8_t instance)
 {    
-    if (!_sem->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
-        return;
-    }
+    WITH_SEMAPHORE(_sem);
 
     if (_imu._new_accel_data[instance]) {
         _publish_accel(instance, _imu._accel_filtered[instance]);
@@ -434,8 +457,6 @@ void AP_InertialSensor_Backend::update_accel(uint8_t instance)
         _imu._accel_filter[instance].set_cutoff_frequency(_accel_raw_sample_rate(instance), _accel_filter_cutoff());
         _last_accel_filter_hz[instance] = _accel_filter_cutoff();
     }
-
-    _sem->give();
 }
 
 bool AP_InertialSensor_Backend::should_log_imu_raw() const

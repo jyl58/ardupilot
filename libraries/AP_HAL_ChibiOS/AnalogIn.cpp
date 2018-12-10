@@ -15,6 +15,11 @@
  * Code by Andrew Tridgell and Siddharth Bharat Purohit
  */
 #include <AP_HAL/AP_HAL.h>
+#include "ch.h"
+#include "hal.h"
+#include <AP_Common/Semaphore.h>
+
+#if HAL_USE_ADC == TRUE && !defined(HAL_DISABLE_ADC_DRIVER)
 
 #include "AnalogIn.h"
 
@@ -22,6 +27,8 @@
 #include <AP_IOMCU/AP_IOMCU.h>
 extern AP_IOMCU iomcu;
 #endif
+
+#include "hwdef/common/stm32_util.h"
 
 #ifndef CHIBIOS_ADC_MAVLINK_DEBUG
 // this allows the first 6 analog channels to be reported by mavlink for debugging purposes
@@ -45,16 +52,19 @@ extern const AP_HAL::HAL& hal;
 
 using namespace ChibiOS;
 
+// special pins
+#define ANALOG_SERVO_VRSSI_PIN 103
+
 /*
   scaling table between ADC count and actual input voltage, to account
   for voltage dividers on the board. 
  */
 const AnalogIn::pin_info AnalogIn::pin_config[] = HAL_ANALOG_PINS;
 
-#define ADC_GRP1_NUM_CHANNELS   ARRAY_SIZE_SIMPLE(AnalogIn::pin_config)
+#define ADC_GRP1_NUM_CHANNELS   ARRAY_SIZE(AnalogIn::pin_config)
 
 // samples filled in by ADC DMA engine
-adcsample_t AnalogIn::samples[ADC_DMA_BUF_DEPTH*ADC_GRP1_NUM_CHANNELS];
+adcsample_t *AnalogIn::samples;
 uint32_t AnalogIn::sample_sum[ADC_GRP1_NUM_CHANNELS];
 uint32_t AnalogIn::sample_count;
 
@@ -72,6 +82,8 @@ AnalogSource::AnalogSource(int16_t pin, float initial_value) :
 
 float AnalogSource::read_average() 
 {
+    WITH_SEMAPHORE(_semaphore);
+
     if (_sum_count == 0) {
         return _value;
     }
@@ -80,6 +92,7 @@ float AnalogSource::read_average()
     _sum_value = 0;
     _sum_ratiometric = 0;
     _sum_count = 0;
+
     return _value;
 }
 
@@ -134,6 +147,7 @@ void AnalogSource::set_pin(uint8_t pin)
     if (_pin == pin) {
         return;
     }
+    WITH_SEMAPHORE(_semaphore);
     _pin = pin;
     _sum_value = 0;
     _sum_ratiometric = 0;
@@ -148,6 +162,8 @@ void AnalogSource::set_pin(uint8_t pin)
  */
 void AnalogSource::_add_value(float v, float vcc5V)
 {
+    WITH_SEMAPHORE(_semaphore);
+
     _latest_value = v;
     _sum_value += v;
     if (vcc5V < 3.0f) {
@@ -165,13 +181,6 @@ void AnalogSource::_add_value(float v, float vcc5V)
     }
 }
 
-
-AnalogIn::AnalogIn() :
-    _board_voltage(0),
-    _servorail_voltage(0),
-    _power_flags(0)
-{
-}
 
 /*
   callback from ADC driver when sample buffer is filled
@@ -197,6 +206,9 @@ void AnalogIn::init()
     if (ADC_GRP1_NUM_CHANNELS == 0) {
         return;
     }
+
+    samples = (adcsample_t *)hal.util->malloc_type(sizeof(adcsample_t)*ADC_DMA_BUF_DEPTH*ADC_GRP1_NUM_CHANNELS, AP_HAL::Util::MEM_DMA_SAFE);
+
     adcStart(&ADCD1, NULL);
     memset(&adcgrpcfg, 0, sizeof(adcgrpcfg));
     adcgrpcfg.circular = true;
@@ -256,6 +268,9 @@ void AnalogIn::_timer_tick(void)
 
     /* read all channels available */
     read_adc(buf_adc);
+
+    // update power status flags
+    update_power_flags();
     
     // match the incoming channels to the currently active pins
     for (uint8_t i=0; i < ADC_GRP1_NUM_CHANNELS; i++) {
@@ -267,30 +282,40 @@ void AnalogIn::_timer_tick(void)
         }
 #endif
     }
-    for (uint8_t i=0; i<ADC_GRP1_NUM_CHANNELS; i++) {
-        Debug("chan %u value=%u\n",
-              (unsigned)pin_config[i].channel,
-              (unsigned)buf_adc[i]);
-        for (uint8_t j=0; j < ADC_GRP1_NUM_CHANNELS; j++) {
-            ChibiOS::AnalogSource *c = _channels[j];
-            if (c != nullptr && pin_config[i].channel == c->_pin) {
-                // add a value
-                c->_add_value(buf_adc[i], _board_voltage);
-            }
-        }
-    }
 
 #if HAL_WITH_IO_MCU
     // now handle special inputs from IOMCU
     _servorail_voltage = iomcu.get_vservo();
+    _rssi_voltage = iomcu.get_vrssi();
 #endif
+    
+    for (uint8_t i=0; i<ADC_GRP1_NUM_CHANNELS; i++) {
+        Debug("chan %u value=%u\n",
+              (unsigned)pin_config[i].channel,
+              (unsigned)buf_adc[i]);
+        for (uint8_t j=0; j < ANALOG_MAX_CHANNELS; j++) {
+            ChibiOS::AnalogSource *c = _channels[j];
+            if (c != nullptr) {
+                if (pin_config[i].channel == c->_pin) {
+                    // add a value
+                    c->_add_value(buf_adc[i], _board_voltage);
+                } else if (c->_pin == ANALOG_SERVO_VRSSI_PIN) {
+                    c->_add_value(_rssi_voltage / VOLTAGE_SCALING, 0);
+                }
+            }
+        }
+    }
 
 #if CHIBIOS_ADC_MAVLINK_DEBUG
     static uint8_t count;
     if (AP_HAL::millis() > 5000 && count++ == 10) {
         count = 0;
         uint16_t adc[6] {};
-        for (uint8_t i=0; i < ADC_GRP1_NUM_CHANNELS; i++) {
+        uint8_t n = ADC_GRP1_NUM_CHANNELS;
+        if (n > 6) {
+            n = 6;
+        }
+        for (uint8_t i=0; i < n; i++) {
             adc[i] = buf_adc[i];
         }
         mavlink_msg_ap_adc_send(MAVLINK_COMM_0, adc[0], adc[1], adc[2], adc[3], adc[4], adc[5]);
@@ -309,4 +334,50 @@ AP_HAL::AnalogSource* AnalogIn::channel(int16_t pin)
     hal.console->printf("Out of analog channels\n");
     return nullptr;
 }
+
+/*
+  update power status flags
+ */
+void AnalogIn::update_power_flags(void)
+{
+    uint16_t flags = 0;
+
+#ifdef HAL_GPIO_PIN_VDD_BRICK_VALID
+    if (!palReadLine(HAL_GPIO_PIN_VDD_BRICK_VALID)) {
+        flags |= MAV_POWER_STATUS_BRICK_VALID;
+    }
+#endif
+    
+#ifdef HAL_GPIO_PIN_VDD_SERVO_VALID
+    if (!palReadLine(HAL_GPIO_PIN_VDD_SERVO_VALID)) {
+        flags |= MAV_POWER_STATUS_SERVO_VALID;
+    }
+#endif
+    
+#ifdef HAL_GPIO_PIN_VBUS
+	if (palReadLine(HAL_GPIO_PIN_VBUS)) {
+        flags |= MAV_POWER_STATUS_USB_CONNECTED;
+    }
+#endif
+    
+#ifdef HAL_GPIO_PIN_VDD_5V_HIPOWER_OC
+    if (!palReadLine(HAL_GPIO_PIN_VDD_5V_HIPOWER_OC)) {
+        flags |= MAV_POWER_STATUS_PERIPH_HIPOWER_OVERCURRENT;
+    }    
+#endif
+
+#ifdef HAL_GPIO_PIN_VDD_5V_PERIPH_OC
+    if (!palReadLine(HAL_GPIO_PIN_VDD_5V_PERIPH_OC)) {
+        flags |= MAV_POWER_STATUS_PERIPH_OVERCURRENT;
+    }    
+#endif
+    if (_power_flags != 0 && 
+        _power_flags != flags && 
+        hal.util->get_soft_armed()) {
+        // the power status has changed while armed
+        flags |= MAV_POWER_STATUS_CHANGED;
+    }
+    _power_flags = flags;
+}
+#endif // HAL_USE_ADC
 

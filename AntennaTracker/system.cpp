@@ -14,8 +14,10 @@ void Tracker::init_tracker()
     serial_manager.init_console();
 
     hal.console->printf("\n\nInit %s\n\nFree RAM: %u\n",
-                        fwver.fw_string,
-                        hal.util->available_memory());
+                        AP::fwversion().fw_string,
+                        (unsigned)hal.util->available_memory());
+
+    init_capabilities();
 
     // Check the EEPROM format version before loading any parameters from EEPROM
     load_parameters();
@@ -33,25 +35,20 @@ void Tracker::init_tracker()
     // Register mavlink_delay_cb, which will run anytime you have
     // more than 5ms remaining in your call to hal.scheduler->delay
     hal.scheduler->register_delay_callback(mavlink_delay_cb_static, 5);
-    
+
     BoardConfig.init();
 #if HAL_WITH_UAVCAN
     BoardConfig_CAN.init();
 #endif
 
     // initialise notify
-    notify.init(false);
+    notify.init();
     AP_Notify::flags.pre_arm_check = true;
     AP_Notify::flags.pre_arm_gps_check = true;
-    AP_Notify::flags.failsafe_battery = false;
 
     // init baro before we start the GCS, so that the CLI baro test works
+    barometer.set_log_baro_bit(MASK_LOG_IMU);
     barometer.init();
-
-    // we start by assuming USB connected, as we initialed the serial
-    // port with SERIAL0_BAUD. check_usb_mux() fixes this if need be.    
-    usb_connected = true;
-    check_usb_mux();
 
     // setup telem slots with serial ports
     gcs().setup_uarts(serial_manager);
@@ -79,7 +76,7 @@ void Tracker::init_tracker()
     ins.init(scheduler.get_loop_rate_hz());
     ahrs.reset();
 
-    init_barometer(true);
+    barometer.calibrate();
 
     // initialise DataFlash library
     DataFlash.setVehicle_Startup_Log_Writer(FUNCTOR_BIND(&tracker, &Tracker::Log_Write_Vehicle_Startup_Messages, void));
@@ -104,8 +101,6 @@ void Tracker::init_tracker()
     if (current_loc.lat == 0 && current_loc.lng == 0) {
         get_home_eeprom(current_loc);
     }
-
-    init_capabilities();
 
     gcs().send_text(MAV_SEVERITY_INFO,"Ready to track");
     hal.scheduler->delay(1000); // Why????
@@ -157,34 +152,12 @@ void Tracker::set_home(struct Location temp)
 {
     set_home_eeprom(temp);
     current_loc = temp;
-    gcs().send_home(temp);
+
+    // check EKF origin has been set
     Location ekf_origin;
     if (ahrs.get_origin(ekf_origin)) {
-        gcs().send_ekf_origin(ekf_origin);
+        ahrs.set_home(temp);
     }
-}
-
-// sets ekf_origin if it has not been set.
-//  should only be used when there is no GPS to provide an absolute position
-void Tracker::set_ekf_origin(const Location& loc)
-{
-    // check location is valid
-    if (!check_latlng(loc)) {
-        return;
-    }
-
-    // check EKF origin has already been set
-    Location ekf_origin;
-    if (ahrs.get_origin(ekf_origin)) {
-        return;
-    }
-
-    if (!ahrs.set_origin(loc)) {
-        return;
-    }
-
-    // send ekf origin to GCS
-    gcs().send_ekf_origin(loc);
 }
 
 void Tracker::arm_servos()
@@ -235,17 +208,6 @@ void Tracker::set_mode(enum ControlMode mode, mode_reason_t reason)
 
 	// log mode change
 	DataFlash.Log_Write_Mode(control_mode, reason);
-}
-
-void Tracker::check_usb_mux(void)
-{
-    bool usb_check = hal.gpio->usb_connected();
-    if (usb_check == usb_connected) {
-        return;
-    }
-
-    // the user has switched to/from the telemetry port
-    usb_connected = usb_check;
 }
 
 /*

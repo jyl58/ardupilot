@@ -205,28 +205,29 @@ void AP_Baro_DPS280::timer(void)
     float pressure, temperature;
 
     calculate_PT(temp, press, pressure, temperature);
-    if (_sem->take_nonblocking()) {
-        pressure_sum += pressure;
-        temperature_sum += temperature;
-        count++;
-        _sem->give();
+
+    if (!pressure_ok(pressure)) {
+        return;
     }
+
+    WITH_SEMAPHORE(_sem);
+
+    pressure_sum += pressure;
+    temperature_sum += temperature;
+    count++;
 }
 
 // transfer data to the frontend
 void AP_Baro_DPS280::update(void)
 {
-    if (count != 0 && _sem->take_nonblocking()) {
-        if (count == 0) {
-            _sem->give();
-            return;
-        }
-
-        _copy_to_frontend(instance, pressure_sum/count, temperature_sum/count);
-        pressure_sum = 0;
-        temperature_sum = 0;
-        count=0;
-
-        _sem->give();
+    if (count == 0) {
+        return;
     }
+
+    WITH_SEMAPHORE(_sem);
+
+    _copy_to_frontend(instance, pressure_sum/count, temperature_sum/count);
+    pressure_sum = 0;
+    temperature_sum = 0;
+    count=0;
 }

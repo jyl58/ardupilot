@@ -231,6 +231,21 @@ void Vector3<T>::rotate(enum Rotation rotation)
         z = -0.932324f * tmpx +  0.361625f * tmpy +  0.000000f * tmpz;
         return;
     }
+    case ROTATION_PITCH_315: {
+        tmp = HALF_SQRT_2*(float)(x - z);
+        z   = HALF_SQRT_2*(float)(x + z);
+        x = tmp;
+        return;
+    }
+    case ROTATION_ROLL_90_PITCH_315: {
+        tmp = z; z = y; y = -tmp;
+        tmp = HALF_SQRT_2*(float)(x - z);
+        z   = HALF_SQRT_2*(float)(x + z);
+        x = tmp;
+        return;
+    }
+    case ROTATION_CUSTOM: // no-op; caller should perform custom rotations via matrix multiplication
+        return;
     }
 }
 
@@ -400,7 +415,7 @@ float Vector3<T>::distance_to_segment(const Vector3<T> &seg_start, const Vector3
     float c = (seg_end-*this).length();
 
     // protect against divide by zero later
-    if (fabsf(b) < FLT_EPSILON) {
+    if (::is_zero(b)) {
         return 0.0f;
     }
 

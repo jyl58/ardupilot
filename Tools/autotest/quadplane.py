@@ -4,7 +4,6 @@
 from __future__ import print_function
 import os
 import pexpect
-import shutil
 from pymavlink import mavutil
 
 from common import AutoTest
@@ -21,25 +20,22 @@ WIND = "0,180,0.2"  # speed,direction,variance
 class AutoTestQuadPlane(AutoTest):
     def __init__(self,
                  binary,
-                 viewerip=None,
-                 use_map=False,
                  valgrind=False,
                  gdb=False,
                  speedup=10,
                  frame=None,
                  params=None,
-                 gdbserver=False):
-        super(AutoTestQuadPlane, self).__init__()
+                 gdbserver=False,
+                 breakpoints=[],
+                 **kwargs):
+        super(AutoTestQuadPlane, self).__init__(**kwargs)
         self.binary = binary
-        self.options = ('--sitl=127.0.0.1:5501 --out=127.0.0.1:19550'
-                        ' --streamrate=10')
-        self.viewerip = viewerip
-        self.use_map = use_map
         self.valgrind = valgrind
         self.gdb = gdb
         self.frame = frame
         self.params = params
         self.gdbserver = gdbserver
+        self.breakpoints = breakpoints
 
         self.home = "%f,%f,%u,%u" % (HOME.lat,
                                      HOME.lng,
@@ -47,12 +43,9 @@ class AutoTestQuadPlane(AutoTest):
                                      HOME.heading)
         self.homeloc = None
         self.speedup = speedup
-        self.speedup_default = 10
 
-        self.log_name = "ArduCopter"
+        self.log_name = "QuadPlane"
         self.logfile = None
-        self.buildlog = None
-        self.copy_tlog = False
 
         self.sitl = None
         self.hasInit = False
@@ -60,11 +53,6 @@ class AutoTestQuadPlane(AutoTest):
     def init(self):
         if self.frame is None:
             self.frame = 'quadplane'
-
-        if self.viewerip:
-            self.options += " --out=%s:14550" % self.viewerip
-        if self.use_map:
-            self.options += ' --map'
 
         defaults_file = os.path.join(testdir, 'default_params/quadplane.parm')
         self.sitl = util.start_SITL(self.binary,
@@ -75,21 +63,15 @@ class AutoTestQuadPlane(AutoTest):
                                     defaults_file=defaults_file,
                                     valgrind=self.valgrind,
                                     gdb=self.gdb,
-                                    gdbserver=self.gdbserver)
-        self.mavproxy = util.start_MAVProxy_SITL('QuadPlane',
-                                                 options=self.options)
-        self.mavproxy.expect('Telemetry log: (\S+)')
-        logfile = self.mavproxy.match.group(1)
-        self.progress("LOGFILE %s" % logfile)
-
-        buildlog = util.reltopdir("../buildlogs/QuadPlane-test.tlog")
-        self.progress("buildlog=%s" % buildlog)
-        if os.path.exists(buildlog):
-            os.unlink(buildlog)
-        try:
-            os.link(logfile, buildlog)
-        except Exception:
-            pass
+                                    gdbserver=self.gdbserver,
+                                    breakpoints=self.breakpoints,
+                                    )
+        self.mavproxy = util.start_MAVProxy_SITL(
+            'QuadPlane', options=self.mavproxy_options())
+        self.mavproxy.expect('Telemetry log: (\S+)\r\n')
+        self.logfile = self.mavproxy.match.group(1)
+        self.progress("LOGFILE %s" % self.logfile)
+        self.try_symlink_tlog()
 
         self.mavproxy.expect('Received [0-9]+ parameters')
 
@@ -100,35 +82,10 @@ class AutoTestQuadPlane(AutoTest):
 
         self.progress("Started simulator")
 
-        # get a mavlink connection going
-        connection_string = '127.0.0.1:19550'
-        try:
-            self.mav = mavutil.mavlink_connection(connection_string,
-                                                  robust_parsing=True)
-        except Exception as msg:
-            self.progress("Failed to start mavlink connection on %s: %s" %
-                          (connection_string, msg))
-            raise
-        self.mav.message_hooks.append(self.message_hook)
-        self.mav.idle_hooks.append(self.idle_hook)
+        self.get_mavlink_connection_going()
+
         self.hasInit = True
         self.progress("Ready to start testing!")
-
-    def close(self):
-        if self.use_map:
-            self.mavproxy.send("module unload map\n")
-            self.mavproxy.expect("Unloaded module map")
-
-        self.mav.close()
-        util.pexpect_close(self.mavproxy)
-        util.pexpect_close(self.sitl)
-
-        valgrind_log = util.valgrind_log_filepath(binary=self.binary,
-                                                  model=self.frame)
-        if os.path.exists(valgrind_log):
-            os.chmod(valgrind_log, 0o644)
-            shutil.copy(valgrind_log,
-                        self.buildlogs_path("QuadPlane-valgrind.log"))
 
     # def test_arm_motors_radio(self):
     #     super(AutotestQuadPlane, self).test_arm_motors_radio()
@@ -154,33 +111,32 @@ class AutoTestQuadPlane(AutoTest):
     def fly_mission(self, filename, fence, height_accuracy=-1):
         """Fly a mission from a file."""
         self.progress("Flying mission %s" % filename)
-        self.mavproxy.send('wp load %s\n' % filename)
-        self.mavproxy.expect('Flight plan received')
+        self.load_mission(filename)
         self.mavproxy.send('fence load %s\n' % fence)
         self.mavproxy.send('wp list\n')
         self.mavproxy.expect('Requesting [0-9]+ waypoints')
         self.mavproxy.send('mode AUTO\n')
         self.wait_mode('AUTO')
-        if not self.wait_waypoint(1, 19, max_dist=60, timeout=1200):
-            return False
-        self.mavproxy.expect('DISARMED')
+        self.wait_waypoint(1, 19, max_dist=60, timeout=1200)
+
+        self.mav.motors_disarmed_wait()
         # wait for blood sample here
         self.mavproxy.send('wp set 20\n')
+        self.wait_ready_to_arm()
         self.arm_vehicle()
-        if not self.wait_waypoint(20, 34, max_dist=60, timeout=1200):
-            return False
-        self.mavproxy.expect('DISARMED')
+        self.wait_waypoint(20, 34, max_dist=60, timeout=1200)
+
+        self.mav.motors_disarmed_wait()
         self.progress("Mission OK")
-        return True
 
     def autotest(self):
         """Autotest QuadPlane in SITL."""
-        self.frame = 'quadplane'
+        self.check_test_syntax(test_file=os.path.realpath(__file__))
         if not self.hasInit:
             self.init()
 
-        failed = False
-        e = 'None'
+        self.fail_list = []
+
         try:
             self.progress("Waiting for a heartbeat with mavlink protocol %s"
                           % self.mav.WIRE_PROTOCOL_VERSION)
@@ -195,23 +151,23 @@ class AutoTestQuadPlane(AutoTest):
 
             # wait for EKF and GPS checks to pass
             self.progress("Waiting reading for arm")
-            self.wait_seconds(30)
+            self.wait_ready_to_arm()
 
+            self.run_test("Arm features", self.test_arm_feature)
             self.arm_vehicle()
 
             m = os.path.join(testdir, "ArduPlane-Missions/Dalby-OBC2016.txt")
             f = os.path.join(testdir,
                              "ArduPlane-Missions/Dalby-OBC2016-fence.txt")
-            if not self.fly_mission(m, f):
-                self.progress("Failed mission")
-                failed = True
-        except pexpect.TIMEOUT as e:
+
+            self.run_test("Mission", lambda: self.fly_mission(m, f))
+        except pexpect.TIMEOUT:
             self.progress("Failed with timeout")
-            failed = True
+            self.fail_list.append("Failed with timeout")
 
         self.close()
 
-        if failed:
-            self.progress("FAILED: %s" % e)
+        if len(self.fail_list):
+            self.progress("FAILED: %s" % self.fail_list)
             return False
         return True

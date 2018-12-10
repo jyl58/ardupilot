@@ -23,8 +23,8 @@ px4fmuv4_bl.bin:
 px4io_bl.bin:
    for IOMCU on fmuv1
 
-revo405_bl.bin:
-   for F405 based revolution boards
+F4LightF405_bl.bin:
+   for F405 based boards running F4Light HAL
    boots at 0x08010000
    reserve sector at 0x08004000 for OSD storage
    reserves sectors at 0x08008000 and 0x0800C000 for ArduPilot storage
@@ -37,6 +37,11 @@ skyviper_v2450_bl.bin:
    for F427 based skyviper-v2450 boards (based on fmuv3)
    reserves sectors 22 and 23 for ArduPilot storage
    board ID 9
+
+skyviperf412_bl.bin:
+   For F412 processors, setup to load on USART2 on pins PA2/PA3
+   Setup for code start at 0x0800C000
+   2 sectors reserved for storage, plus bootloader
 
 Bootloader update on px4 builds
 -------------------------------

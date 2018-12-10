@@ -19,6 +19,7 @@
 #include <AP_Common/Bitmask.h>
 #include <AP_Volz_Protocol/AP_Volz_Protocol.h>
 #include <AP_SBusOut/AP_SBusOut.h>
+#include <AP_BLHeli/AP_BLHeli.h>
 
 #define NUM_SERVO_CHANNELS 16
 
@@ -120,6 +121,27 @@ public:
         k_dspoilerLeft2         = 86,           ///< differential spoiler 2 (left wing)
         k_dspoilerRight2        = 87,           ///< differential spoiler 2 (right wing)
         k_winch                 = 88,
+        k_mainsail_sheet        = 89,           ///< Main Sail control via sheet
+        k_cam_iso               = 90,
+        k_cam_aperture          = 91,
+        k_cam_focus             = 92,
+        k_cam_shutter_speed     = 93,
+        k_scripting1            = 94,           ///< Scripting related outputs
+        k_scripting2            = 95,
+        k_scripting3            = 96,
+        k_scripting4            = 97,
+        k_scripting5            = 98,
+        k_scripting6            = 99,
+        k_scripting7            = 100,
+        k_scripting8            = 101,
+        k_scripting9            = 102,
+        k_scripting10           = 103,
+        k_scripting11           = 104,
+        k_scripting12           = 105,
+        k_scripting13           = 106,
+        k_scripting14           = 107,
+        k_scripting15           = 108,
+        k_scripting16           = 109,
         k_nr_aux_servo_functions         ///< This must be the last enum value (only add new values _before_ this one)
     } Aux_servo_function_t;
 
@@ -300,6 +322,9 @@ public:
     // adjust trim of a channel by a small increment
     void adjust_trim(SRV_Channel::Aux_servo_function_t function, float v);
 
+    // set MIN/MAX parameters for a function
+    static void set_output_min_max(SRV_Channel::Aux_servo_function_t function, uint16_t min_pwm, uint16_t max_pwm);
+    
     // save trims
     void save_trim(void);
 
@@ -308,11 +333,8 @@ public:
         flags.k_throttle_reversible = true;
     }
 
-    // set all outputs to the TRIM value
-    static void output_trim_all(void);
-
     // setup IO failsafe for all channels to trim
-    static void setup_failsafe_trim_all(void);
+    static void setup_failsafe_trim_all_non_motors(void);
 
     // set output for all channels matching the given function type, allow radio_trim to center servo
     static void set_output_pwm_trimmed(SRV_Channel::Aux_servo_function_t function, int16_t value);
@@ -421,6 +443,19 @@ public:
 
     static void push();
 
+    // disable output to a set of channels given by a mask. This is used by the AP_BLHeli code
+    static void set_disabled_channel_mask(uint16_t mask) { disabled_mask = mask; }
+
+    // add to mask of outputs which can do reverse thrust using digital controls
+    static void set_reversible_mask(uint16_t mask) {
+        reversible_mask |= mask;
+    }
+
+    // add to mask of outputs which use digital (non-PWM) output, such as DShot
+    static void set_digital_mask(uint16_t mask) {
+        digital_mask |= mask;
+    }
+    
 private:
     struct {
         bool k_throttle_reversible:1;
@@ -444,6 +479,20 @@ private:
     // support for SBUS protocol
     AP_SBusOut sbus;
     static AP_SBusOut *sbus_ptr;
+
+#if HAL_SUPPORT_RCOUT_SERIAL
+    // support for BLHeli protocol
+    AP_BLHeli blheli;
+    static AP_BLHeli *blheli_ptr;
+#endif
+    static uint16_t disabled_mask;
+
+    // mask of outputs which use a digital output protocol, not
+    // PWM (eg. DShot)
+    static uint16_t digital_mask;
+    
+    // mask of outputs which are digitally reversible (eg. DShot-3D)
+    static uint16_t reversible_mask;
 
     SRV_Channel obj_channels[NUM_SERVO_CHANNELS];
 

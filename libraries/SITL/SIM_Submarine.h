@@ -34,7 +34,7 @@ public:
     Submarine(const char *home_str, const char *frame_str);
 
     /* update model by one time step */
-    void update(const struct sitl_input &input);
+    void update(const struct sitl_input &input) override;
 
     /* static object creator */
     static Aircraft *create(const char *home_str, const char *frame_str) {
@@ -53,7 +53,7 @@ protected:
         float net_bouyancy = 2.0; // (N)
 
         float bouyancy_acceleration = GRAVITY_MSS + net_bouyancy/weight;
-    } frame_proprietary;
+    } frame_property;
 
     bool on_ground() const override;
 

@@ -1,26 +1,16 @@
 #include "Sub.h"
 
-void Sub::init_barometer(bool save)
-{
-    gcs().send_text(MAV_SEVERITY_INFO, "Calibrating barometer");
-    barometer.calibrate(save);
-    gcs().send_text(MAV_SEVERITY_INFO, "Barometer calibration complete");
-}
-
 // return barometric altitude in centimeters
-void Sub::read_barometer(void)
+void Sub::read_barometer()
 {
     barometer.update();
-    if (should_log(MASK_LOG_IMU)) {
-        Log_Write_Baro();
-    }
 
     if (ap.depth_sensor_present) {
         sensor_health.depth = barometer.healthy(depth_sensor_idx);
     }
 }
 
-void Sub::init_rangefinder(void)
+void Sub::init_rangefinder()
 {
 #if RANGEFINDER_ENABLED == ENABLED
     rangefinder.init();
@@ -30,7 +20,7 @@ void Sub::init_rangefinder(void)
 }
 
 // return rangefinder altitude in centimeters
-void Sub::read_rangefinder(void)
+void Sub::read_rangefinder()
 {
 #if RANGEFINDER_ENABLED == ENABLED
     rangefinder.update();
@@ -103,17 +93,10 @@ void Sub::init_compass()
 }
 
 /*
-  if the compass is enabled then try to accumulate a reading
-  also update initial location used for declination
+  initialise compass's location used for declination
  */
-void Sub::compass_accumulate(void)
+void Sub::init_compass_location()
 {
-    if (!g.compass_enabled) {
-        return;
-    }
-
-    compass.accumulate();
-
     // update initial location used for declination
     if (!ap.compass_init_location) {
         Location loc;
@@ -129,57 +112,9 @@ void Sub::compass_accumulate(void)
 void Sub::init_optflow()
 {
     // initialise optical flow sensor
-    optflow.init();
+    optflow.init(MASK_LOG_OPTFLOW);
 }
 #endif      // OPTFLOW == ENABLED
-
-// called at 200hz
-#if OPTFLOW == ENABLED
-void Sub::update_optical_flow(void)
-{
-    static uint32_t last_of_update = 0;
-
-    // exit immediately if not enabled
-    if (!optflow.enabled()) {
-        return;
-    }
-
-    // read from sensor
-    optflow.update();
-
-    // write to log and send to EKF if new data has arrived
-    if (optflow.last_update() != last_of_update) {
-        last_of_update = optflow.last_update();
-        uint8_t flowQuality = optflow.quality();
-        Vector2f flowRate = optflow.flowRate();
-        Vector2f bodyRate = optflow.bodyRate();
-        const Vector3f &posOffset = optflow.get_pos_offset();
-        ahrs.writeOptFlowMeas(flowQuality, flowRate, bodyRate, last_of_update, posOffset);
-        if (g.log_bitmask & MASK_LOG_OPTFLOW) {
-            Log_Write_Optflow();
-        }
-    }
-}
-#endif  // OPTFLOW == ENABLED
-
-// read_battery - check battery voltage and current and invoke failsafe if necessary
-// called at 10hz
-void Sub::read_battery(void)
-{
-    battery.read();
-
-    // update motors with voltage and current
-    if (battery.get_type() != AP_BattMonitor_Params::BattMonitor_TYPE_NONE) {
-        motors.set_voltage(battery.voltage());
-    }
-
-    if (battery.has_current()) {
-        motors.set_current(battery.current_amps());
-        compass.set_current(battery.current_amps());
-    }
-
-    failsafe_battery_check();
-}
 
 void Sub::compass_cal_update()
 {

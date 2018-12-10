@@ -1,22 +1,6 @@
 #include "Plane.h"
 #include <AP_RSSI/AP_RSSI.h>
 
-void Plane::init_barometer(bool full_calibration)
-{
-    gcs().send_text(MAV_SEVERITY_INFO, "Calibrating barometer");
-    if (full_calibration) {
-        barometer.calibrate();
-    } else {
-        barometer.update_calibration();
-    }
-    gcs().send_text(MAV_SEVERITY_INFO, "Barometer calibration complete");
-}
-
-void Plane::init_rangefinder(void)
-{
-    rangefinder.init();
-}
-
 /*
   read the rangefinder and update height estimate
  */
@@ -81,19 +65,7 @@ void Plane::accel_cal_update() {
  */
 void Plane::read_airspeed(void)
 {
-    if (airspeed.enabled()) {
-        airspeed.read();
-        if (should_log(MASK_LOG_IMU)) {
-            Log_Write_Airspeed();
-        }
-
-        // supply a new temperature to the barometer from the digital
-        // airspeed sensor if we can
-        float temperature;
-        if (airspeed.get_temperature(temperature)) {
-            barometer.set_external_temperature(temperature);
-        }
-    }
+    airspeed.update(should_log(MASK_LOG_IMU));
 
     // we calculate airspeed errors (and thus target_airspeed_cm) even
     // when airspeed is disabled as TECS may be using synthetic
@@ -105,35 +77,6 @@ void Plane::read_airspeed(void)
     if (ahrs.airspeed_estimate(&aspeed)) {
         smoothed_airspeed = smoothed_airspeed * 0.8f + aspeed * 0.2f;
     }
-}
-
-void Plane::zero_airspeed(bool in_startup)
-{
-    airspeed.calibrate(in_startup);
-    read_airspeed();
-    // update barometric calibration with new airspeed supplied temperature
-    barometer.update_calibration();
-    gcs().send_text(MAV_SEVERITY_INFO,"Airspeed calibration started");
-}
-
-// read_battery - reads battery voltage and current and invokes failsafe
-// should be called at 10hz
-void Plane::read_battery(void)
-{
-    battery.read();
-    compass.set_current(battery.current_amps());
-
-    if (hal.util->get_soft_armed() &&
-        battery.exhausted(g.fs_batt_voltage, g.fs_batt_mah)) {
-        low_battery_event();
-    }
-}
-
-// read the receiver RSSI as an 8 bit number for MAVLink
-// RC_CHANNELS_SCALED message
-void Plane::read_receiver_rssi(void)
-{
-    receiver_rssi = rssi.read_receiver_rssi_uint8();
 }
 
 /*
@@ -149,21 +92,6 @@ void Plane::rpm_update(void)
     }
 }
 
-/*
-  update AP_Button
- */
-void Plane::button_update(void)
-{
-    g2.button.update();
-}
-
-/*
-  update AP_ICEngine
- */
-void Plane::ice_update(void)
-{
-    g2.ice_control.update();
-}
 // update error mask of sensors and subsystems. The mask
 // uses the MAV_SYS_STATUS_* values from mavlink. If a bit is set
 // then it indicates that the sensor or subsystem is present but
@@ -193,15 +121,11 @@ void Plane::update_sensor_status_flags(void)
         control_sensors_present |= MAV_SYS_STATUS_GEOFENCE;
     }
 
-    if (aparm.throttle_min < 0) {
+    if (have_reverse_thrust()) {
         control_sensors_present |= MAV_SYS_STATUS_REVERSE_MOTOR;
     }
     if (plane.DataFlash.logging_present()) { // primary logging only (usually File)
         control_sensors_present |= MAV_SYS_STATUS_LOGGING;
-    }
-
-    if (plane.battery.healthy()) {
-        control_sensors_present |= MAV_SYS_STATUS_SENSOR_BATTERY;
     }
 
     // all present sensors enabled by default except rate control, attitude stabilization, yaw, altitude, position control, geofence, motor, and battery output which we will set individually
@@ -219,7 +143,7 @@ void Plane::update_sensor_status_flags(void)
         control_sensors_enabled |= MAV_SYS_STATUS_LOGGING;
     }
 
-    if (g.fs_batt_voltage > 0 || g.fs_batt_mah > 0) {
+    if (battery.num_instances() > 0) {
         control_sensors_enabled |= MAV_SYS_STATUS_SENSOR_BATTERY;
     }
 
@@ -359,7 +283,7 @@ void Plane::update_sensor_status_flags(void)
         }
     }
 
-    if (aparm.throttle_min < 0 && SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) < 0) {
+    if (have_reverse_thrust() && SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) < 0) {
         control_sensors_enabled |= MAV_SYS_STATUS_REVERSE_MOTOR;
         control_sensors_health |= MAV_SYS_STATUS_REVERSE_MOTOR;
     }
@@ -370,7 +294,7 @@ void Plane::update_sensor_status_flags(void)
         control_sensors_health &= ~(MAV_SYS_STATUS_SENSOR_3D_GYRO | MAV_SYS_STATUS_SENSOR_3D_ACCEL);
     }
 
-    if (plane.failsafe.low_battery) {
+    if (!plane.battery.healthy() || plane.battery.has_failsafed()) {
         control_sensors_health &= ~MAV_SYS_STATUS_SENSOR_BATTERY;
     }
 

@@ -18,7 +18,6 @@
  *
  */
 
-#include <AP_ADC/AP_ADC.h>
 #include <AP_Airspeed/AP_Airspeed.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
@@ -30,7 +29,6 @@ void loop();
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
 float temperature;
-
 AP_Airspeed airspeed;
 static AP_BoardConfig board_config;
 
@@ -66,7 +64,7 @@ void loop(void)
     static uint32_t timer;
     if ((AP_HAL::millis() - timer) > 100) {
         timer = AP_HAL::millis();
-        airspeed.read();
+        airspeed.update(false);
         airspeed.get_temperature(temperature);
 
         hal.console->printf("airspeed %5.2f temperature %6.2f healthy = %u\n",

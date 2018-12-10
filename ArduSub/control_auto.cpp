@@ -572,7 +572,7 @@ void Sub::set_auto_yaw_roi(const Location &roi_location)
 
 // get_auto_heading - returns target heading depending upon auto_yaw_mode
 // 100hz update rate
-float Sub::get_auto_heading(void)
+float Sub::get_auto_heading()
 {
     switch (auto_yaw_mode) {
 
@@ -602,7 +602,7 @@ float Sub::get_auto_heading(void)
         float track_bearing = get_bearing_cd(wp_nav.get_wp_origin(), wp_nav.get_wp_destination());
 
         // Bearing from current position towards intermediate position target (centidegrees)
-        float desired_angle = wp_nav.get_loiter_bearing_to_target();
+        float desired_angle = pos_control.get_bearing_to_target();
 
         float angle_error = wrap_180_cd(desired_angle - track_bearing);
         float angle_limited = constrain_float(angle_error, -g.xtrack_angle_limit * 100.0f, g.xtrack_angle_limit * 100.0f);
@@ -646,14 +646,15 @@ bool Sub::auto_terrain_recover_start()
     mission.stop();
 
     // Reset xy target
-    wp_nav.init_loiter_target();
+    loiter_nav.clear_pilot_desired_acceleration();
+    loiter_nav.init_target();
 
     // Reset z axis controller
     pos_control.relax_alt_hold_controllers(motors.get_throttle_hover());
 
     // initialize vertical speeds and leash lengths
-    pos_control.set_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
-    pos_control.set_accel_z(wp_nav.get_accel_z());
+    pos_control.set_max_speed_z(wp_nav.get_speed_down(), wp_nav.get_speed_up());
+    pos_control.set_max_accel_z(wp_nav.get_accel_z());
 
     // Reset vertical position and velocity targets
     pos_control.set_alt_target(inertial_nav.get_altitude());
@@ -733,7 +734,7 @@ void Sub::auto_terrain_recover_run()
     }
 
     // run loiter controller
-    wp_nav.update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);
+    loiter_nav.update();
 
     ///////////////////////
     // update xy targets //

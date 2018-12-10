@@ -20,25 +20,15 @@ static void failsafe_check_static()
 
 void Copter::init_ardupilot()
 {
-    if (!hal.gpio->usb_connected()) {
-        // USB is not connected, this means UART0 may be a Xbee, with
-        // its darned bricking problem. We can't write to it for at
-        // least one second after powering up. Simplest solution for
-        // now is to delay for 1 second. Something more elegant may be
-        // added later
-        delay(1000);
-    }
-
     // initialise serial port
     serial_manager.init_console();
 
-    // init vehicle capabilties
-    init_capabilities();
-
     hal.console->printf("\n\nInit %s"
                         "\n\nFree RAM: %u\n",
-                        fwver.fw_string,
+                        AP::fwversion().fw_string,
                         (unsigned)hal.util->available_memory());
+
+    init_capabilities();
 
     //
     // Report firmware version code expect on console (check of actual EEPROM format version is done in load_parameters function)
@@ -87,7 +77,7 @@ void Copter::init_ardupilot()
     winch_init();
 
     // initialise notify system
-    notify.init(true);
+    notify.init();
     notify_flight_mode();
 
     // initialise battery monitor
@@ -98,21 +88,24 @@ void Copter::init_ardupilot()
     
     barometer.init();
 
-    // we start by assuming USB connected, as we initialed the serial
-    // port with SERIAL0_BAUD. check_usb_mux() fixes this if need be.
-    ap.usb_connected = true;
-    check_usb_mux();
-
     // setup telem slots with serial ports
     gcs().setup_uarts(serial_manager);
 
 #if FRSKY_TELEM_ENABLED == ENABLED
     // setup frsky, and pass a number of parameters to the library
-    char firmware_buf[50];
-    snprintf(firmware_buf, sizeof(firmware_buf), "%s %s", fwver.fw_string, get_frame_string());
-    frsky_telemetry.init(serial_manager, firmware_buf,
+    frsky_telemetry.init(serial_manager,
                          get_frame_mav_type(),
-                         &g.fs_batt_voltage, &g.fs_batt_mah, &ap.value);
+                         &ap.value);
+    frsky_telemetry.set_frame_string(get_frame_string());
+#endif
+
+#if DEVO_TELEM_ENABLED == ENABLED
+    // setup devo
+    devo_telemetry.init(serial_manager);
+#endif
+
+#if OSD_ENABLED == ENABLED
+    osd.init();
 #endif
 
 #if LOGGING_ENABLED == ENABLED
@@ -144,9 +137,6 @@ void Copter::init_ardupilot()
     // motors initialised so parameters can be sent
     ap.initialised_params = true;
 
-    // initialise which outputs Servo and Relay events can use
-    ServoRelayEvents.set_channel_mask(~motors->get_motor_mask());
-
     relay.init();
 
     /*
@@ -172,13 +162,14 @@ void Copter::init_ardupilot()
 #endif
 
     // init Location class
-    Location_Class::set_ahrs(&ahrs);
 #if AP_TERRAIN_AVAILABLE && AC_TERRAIN
     Location_Class::set_terrain(&terrain);
     wp_nav->set_terrain(&terrain);
 #endif
+
 #if AC_AVOID_ENABLED == ENABLED
     wp_nav->set_avoidance(&avoid);
+    loiter_nav->set_avoidance(&avoid);
 #endif
 
     attitude_control->parameter_sanity_check();
@@ -218,7 +209,8 @@ void Copter::init_ardupilot()
 
     // read Baro pressure at ground
     //-----------------------------
-    init_barometer(true);
+    barometer.set_log_baro_bit(MASK_LOG_IMU);
+    barometer.calibrate();
 
     // initialise rangefinder
     init_rangefinder();
@@ -234,12 +226,14 @@ void Copter::init_ardupilot()
     // init visual odometry
     init_visual_odom();
 
+#if RPM_ENABLED == ENABLED
     // initialise AP_RPM library
     rpm_sensor.init();
+#endif
 
 #if MODE_AUTO_ENABLED == ENABLED
     // initialise mission library
-    mission.init();
+    mode_auto.mission.init();
 #endif
 
 #if MODE_SMARTRTL_ENABLED == ENABLED
@@ -249,14 +243,12 @@ void Copter::init_ardupilot()
 
     // initialise DataFlash library
 #if MODE_AUTO_ENABLED == ENABLED
-    DataFlash.set_mission(&mission);
+    DataFlash.set_mission(&mode_auto.mission);
 #endif
     DataFlash.setVehicle_Startup_Log_Writer(FUNCTOR_BIND(&copter, &Copter::Log_Write_Vehicle_Startup_Messages, void));
 
-    // initialise the flight mode and aux switch
-    // ---------------------------
-    reset_control_switch();
-    init_aux_switches();
+    // initialise rc channels including setting mode
+    rc().init();
 
     startup_INS_ground();
 
@@ -282,9 +274,6 @@ void Copter::init_ardupilot()
     // disable safety if requested
     BoardConfig.init_safety();
 
-    // default enable RC override
-    copter.ap.rc_override_enable = true;
-    
     hal.console->printf("\nReady to FLY ");
 
     // flag that initialisation has completed
@@ -306,21 +295,6 @@ void Copter::startup_INS_ground()
 
     // reset ahrs including gyro bias
     ahrs.reset();
-}
-
-// calibrate gyros - returns true if successfully calibrated
-bool Copter::calibrate_gyros()
-{
-    // gyro offset calibration
-    copter.ins.init_gyro();
-
-    // reset ahrs gyro bias
-    if (copter.ins.gyro_calibrated_ok_all()) {
-        copter.ahrs.reset_gyro_drift();
-        return true;
-    }
-
-    return false;
 }
 
 // position_ok - returns true if the horizontal absolute position is ok and home position is set
@@ -433,17 +407,6 @@ void Copter::update_auto_armed()
     }
 }
 
-void Copter::check_usb_mux(void)
-{
-    bool usb_check = hal.gpio->usb_connected();
-    if (usb_check == ap.usb_connected) {
-        return;
-    }
-
-    // the user has switched to/from the telemetry port
-    ap.usb_connected = usb_check;
-}
-
 /*
   should we log a message type now?
  */
@@ -468,7 +431,7 @@ void Copter::set_default_frame_class()
 }
 
 // return MAV_TYPE corresponding to frame class
-uint8_t Copter::get_frame_mav_type()
+MAV_TYPE Copter::get_frame_mav_type()
 {
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
         case AP_Motors::MOTOR_FRAME_QUAD:
@@ -491,7 +454,7 @@ uint8_t Copter::get_frame_mav_type()
         case AP_Motors::MOTOR_FRAME_TAILSITTER:
             return MAV_TYPE_COAXIAL;
         case AP_Motors::MOTOR_FRAME_DODECAHEXA:
-            return MAV_TYPE_HEXAROTOR;
+            return MAV_TYPE_DODECAROTOR;
     }
     // unknown frame so return generic
     return MAV_TYPE_GENERIC;
@@ -624,6 +587,12 @@ void Copter::allocate_motors(void)
     }
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
 
+    loiter_nav = new AC_Loiter(inertial_nav, *ahrs_view, *pos_control, *attitude_control);
+    if (loiter_nav == nullptr) {
+        AP_HAL::panic("Unable to allocate LoiterNav");
+    }
+    AP_Param::load_object_from_eeprom(loiter_nav, loiter_nav->var_info);
+
 #if MODE_CIRCLE_ENABLED == ENABLED
     circle_nav = new AC_Circle(inertial_nav, *ahrs_view, *pos_control);
     if (circle_nav == nullptr) {
@@ -633,7 +602,7 @@ void Copter::allocate_motors(void)
 #endif
 
     // reload lines from the defaults file that may now be accessible
-    AP_Param::reload_defaults_file();
+    AP_Param::reload_defaults_file(true);
     
     // now setup some frame-class specific defaults
     switch ((AP_Motors::motor_frame_class)g2.frame_class.get()) {
@@ -653,7 +622,7 @@ void Copter::allocate_motors(void)
     }
 
     // brushed 16kHz defaults to 16kHz pulses
-    if (motors->get_pwm_type() >= AP_Motors::PWM_TYPE_BRUSHED) {
+    if (motors->get_pwm_type() == AP_Motors::PWM_TYPE_BRUSHED) {
         g.rc_speed.set_default(16000);
     }
     

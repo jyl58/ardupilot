@@ -8,10 +8,6 @@
 // stabilize_init - initialise stabilize controller
 bool Copter::ModeStabilize_Heli::init(bool ignore_checks)
 {
-    // set target altitude to zero for reporting
-    // To-Do: make pos controller aware when it's active/inactive so it can always report the altitude error?
-    pos_control->set_alt_target(0);
-
     // set stab collective true to use stabilize scaled collective pitch range
     copter.input_manager.set_use_stab_col(true);
 
@@ -55,8 +51,7 @@ void Copter::ModeStabilize_Heli::run()
     update_simple_mode();
 
     // convert pilot input to lean angles
-    // To-Do: convert get_pilot_desired_lean_angles to return angles as floats
-    get_pilot_desired_lean_angles(channel_roll->get_control_in(), channel_pitch->get_control_in(), target_roll, target_pitch, copter.aparm.angle_max, copter.aparm.angle_max);
+    get_pilot_desired_lean_angles(target_roll, target_pitch, copter.aparm.angle_max, copter.aparm.angle_max);
 
     // get pilot's desired yaw rate
     target_yaw_rate = get_pilot_desired_yaw_rate(channel_yaw->get_control_in());

@@ -19,8 +19,13 @@
 /* 
    FRSKY Telemetry library
 */
+
 #include "AP_Frsky_Telem.h"
+
+#include <AP_InertialSensor/AP_InertialSensor.h>
 #include <GCS_MAVLink/GCS.h>
+
+#include <stdio.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -36,7 +41,9 @@ AP_Frsky_Telem::AP_Frsky_Telem(AP_AHRS &ahrs, const AP_BattMonitor &battery, con
 /*
  * init - perform required initialisation
  */
-void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager, const char *firmware_str, const uint8_t mav_type, const AP_Float *fs_batt_voltage, const AP_Float *fs_batt_mah, const uint32_t *ap_valuep)
+void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager,
+                          const uint8_t mav_type,
+                          const uint32_t *ap_valuep)
 {
     // check for protocol configured for a serial port - only the first serial port with one of these protocols will then run (cannot have FrSky on multiple serial ports)
     if ((_port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_FrSky_D, 0))) {
@@ -48,11 +55,15 @@ void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager, const char *fi
         // make frsky_telemetry available to GCS_MAVLINK (used to queue statustext messages from GCS_MAVLINK)
         gcs().register_frsky_telemetry_callback(this);
         // add firmware and frame info to message queue
-        queue_message(MAV_SEVERITY_INFO, firmware_str);
+        if (_frame_string == nullptr) {
+            queue_message(MAV_SEVERITY_INFO, AP::fwversion().fw_string);
+        } else {
+            char firmware_buf[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
+            snprintf(firmware_buf, sizeof(firmware_buf), "%s %s", AP::fwversion().fw_string, _frame_string);
+            queue_message(MAV_SEVERITY_INFO, firmware_buf);
+        }
         // save main parameters locally
         _params.mav_type = mav_type; // frame type (see MAV_TYPE in Mavlink definition file common.h)
-        _params.fs_batt_voltage = fs_batt_voltage; // failsafe battery voltage in volts
-        _params.fs_batt_mah = fs_batt_mah; // failsafe reserve capacity in mAh
         if (ap_valuep == nullptr) { // ap bit-field
             _ap.value = 0x2000; // set "initialised" to 1 for rover and plane
             _ap.valuep = &_ap.value;
@@ -582,15 +593,8 @@ uint32_t AP_Frsky_Telem::calc_param(void)
     case 1:
         param = _params.mav_type; // frame type (see MAV_TYPE in Mavlink definition file common.h)
         break;
-    case 2:
-        if (_params.fs_batt_voltage != nullptr) {
-            param = (uint32_t)roundf((*_params.fs_batt_voltage) * 100.0f); // battery failsafe voltage in centivolts
-        }
-        break;
-    case 3:
-        if (_params.fs_batt_mah != nullptr) {
-            param = (uint32_t)roundf((*_params.fs_batt_mah)); // battery failsafe capacity in mAh
-        }
+    case 2: // was used to send the battery failsafe voltage
+    case 3: // was used to send the battery failsafe capacity in mAh
         break;
     case 4:
         param = (uint32_t)roundf(_battery.pack_capacity_mah(0)); // battery pack capacity in mAh
@@ -682,6 +686,9 @@ uint32_t AP_Frsky_Telem::calc_ap_status(void)
 {
     uint32_t ap_status;
 
+    // IMU temperature: offset -19, 0 means temp =< 19°, 63 means temp => 82°
+    uint8_t imu_temp = (uint8_t) roundf(constrain_float(AP::ins().get_temperature(0), AP_IMU_TEMP_MIN, AP_IMU_TEMP_MAX) - AP_IMU_TEMP_MIN);
+
     // control/flight mode number (limit to 31 (0x1F) since the value is stored on 5 bits)
     ap_status = (uint8_t)((_ap.control_mode+1) & AP_CONTROL_MODE_LIMIT);
     // simple/super simple modes flags
@@ -694,6 +701,8 @@ uint32_t AP_Frsky_Telem::calc_ap_status(void)
     ap_status |= (uint8_t)(AP_Notify::flags.failsafe_battery)<<AP_BATT_FS_OFFSET;
     // bad ekf flag
     ap_status |= (uint8_t)(AP_Notify::flags.ekf_bad)<<AP_EKF_FS_OFFSET;
+    // IMU temperature
+    ap_status |= imu_temp << AP_IMU_TEMP_OFFSET;
     return ap_status;
 }
 

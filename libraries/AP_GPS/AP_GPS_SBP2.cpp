@@ -184,22 +184,27 @@ AP_GPS_SBP2::_sbp_process_message() {
 
         case SBP_GPS_TIME_MSGTYPE:
             memcpy(&last_gps_time, parser_state.msg_buff, sizeof(struct sbp_gps_time_t));
+            check_new_itow(last_gps_time.tow, parser_state.msg_len);
             break;
 
         case SBP_VEL_NED_MSGTYPE:
             memcpy(&last_vel_ned, parser_state.msg_buff, sizeof(struct sbp_vel_ned_t));
+            check_new_itow(last_vel_ned.tow, parser_state.msg_len);
             break;
 
         case SBP_POS_LLH_MSGTYPE:
             memcpy(&last_pos_llh, parser_state.msg_buff, sizeof(struct sbp_pos_llh_t));
+            check_new_itow(last_pos_llh.tow, parser_state.msg_len);
             break;
 
         case SBP_DOPS_MSGTYPE:
             memcpy(&last_dops, parser_state.msg_buff, sizeof(struct sbp_dops_t));
+            check_new_itow(last_dops.tow, parser_state.msg_len);
             break;
 
         case SBP_EXT_EVENT_MSGTYPE:
             memcpy(&last_event, parser_state.msg_buff, sizeof(struct sbp_ext_event_t));
+            check_new_itow(last_event.tow, parser_state.msg_len);
             logging_ext_event();
             break;
 
@@ -303,8 +308,8 @@ AP_GPS_SBP2::_attempt_state_update()
         state.ground_course = wrap_360(degrees(atan2f(state.velocity[1], state.velocity[0])));
 
         state.speed_accuracy        = safe_sqrt(
-                                        pow((float)last_vel_ned.h_accuracy * 1.0e-3f, 2) + 
-                                        pow((float)last_vel_ned.v_accuracy * 1.0e-3f, 2));
+                                        powf((float)last_vel_ned.h_accuracy * 1.0e-3f, 2) + 
+                                        powf((float)last_vel_ned.v_accuracy * 1.0e-3f, 2));
         state.horizontal_accuracy   = (float) last_pos_llh.h_accuracy * 1.0e-3f;
         state.vertical_accuracy     = (float) last_pos_llh.v_accuracy * 1.0e-3f;
 
@@ -336,6 +341,9 @@ AP_GPS_SBP2::_attempt_state_update()
                 break;
             case 4:
                 state.status = AP_GPS::GPS_OK_FIX_3D_RTK_FIXED;
+                break;
+            case 6:
+                state.status = AP_GPS::GPS_OK_FIX_3D_DGPS;
                 break;
             default:
                 state.status = AP_GPS::NO_FIX;

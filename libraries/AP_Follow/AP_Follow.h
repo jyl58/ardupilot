@@ -36,7 +36,7 @@ public:
     };
 
     // constructor
-    AP_Follow(const AP_AHRS &ahrs);
+    AP_Follow();
 
     // set which target to follow
     void set_target_sysid(uint8_t sysid) { _sysid = sysid; }
@@ -81,14 +81,14 @@ private:
     // get velocity estimate in m/s in NED frame using dt since last update
     bool get_velocity_ned(Vector3f &vel_ned, float dt) const;
 
-    // initialise offsets to provided distance vector (in meters in NED frame) if required
+    // initialise offsets to provided distance vector to other vehicle (in meters in NED frame) if required
     void init_offsets_if_required(const Vector3f &dist_vec_ned);
 
     // get offsets in meters in NED frame
     bool get_offsets_ned(Vector3f &offsets) const;
 
-    // references
-    const AP_AHRS &_ahrs;
+    // rotate 3D vector clockwise by specified angle (in degrees)
+    Vector3f rotate_vector(const Vector3f &vec, float angle_deg) const;
 
     // parameters
     AP_Int8     _enabled;           // 1 if this subsystem is enabled
@@ -97,11 +97,11 @@ private:
     AP_Int8     _offset_type;       // offset frame type (0:North-East-Down, 1:RelativeToLeadVehicleHeading)
     AP_Vector3f _offset;            // offset from lead vehicle in meters
     AP_Int8     _yaw_behave;        // following vehicle's yaw/heading behaviour
+    AP_Int8     _alt_type;          // altitude source for follow mode
     AC_P        _p_pos;             // position error P controller
 
     // local variables
     bool _healthy;                  // true if we are receiving mavlink messages (regardless of whether they have target position info within them)
-    uint8_t _sysid_to_follow = 0;   // mavlink system id of vehicle to follow
     uint32_t _last_location_update_ms;  // system time of last position update
     Location _target_location;      // last known location of target
     Vector3f _target_velocity_ned;  // last known velocity of target in NED frame in m/s
@@ -109,4 +109,6 @@ private:
     uint32_t _last_heading_update_ms;   // system time of last heading update
     float _target_heading;          // heading in degrees
     uint32_t _last_location_sent_to_gcs; // last time GCS was told position
+
+    bool _automatic_sysid;          // did we lock onto a sysid automatically?
 };
