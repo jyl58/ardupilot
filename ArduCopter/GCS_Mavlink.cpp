@@ -678,10 +678,9 @@ MAV_RESULT GCS_MAVLINK_Copter::handle_command_long_packet(const mavlink_command_
         if (!copter.flightmode->do_user_takeoff(takeoff_alt, is_zero(packet.param3))) {
             return MAV_RESULT_FAILED;
         }
-<<<<<<< HEAD
-		
+    }
 		//trigger into guide loiter mode
-		case MAV_CMD_USER_2 :{
+	case MAV_CMD_USER_2 :{
 			if(copter.control_mode != GUIDED){
 				result = MAV_RESULT_ACCEPTED;
 				break;
@@ -690,16 +689,13 @@ MAV_RESULT GCS_MAVLINK_Copter::handle_command_long_packet(const mavlink_command_
 			result = MAV_RESULT_ACCEPTED;
 			break;
 		}
-=======
         return MAV_RESULT_ACCEPTED;
-    }
 
     case MAV_CMD_NAV_LOITER_UNLIM:
         if (!copter.set_mode(LOITER, MODE_REASON_GCS_COMMAND)) {
             return MAV_RESULT_FAILED;
         }
         return MAV_RESULT_ACCEPTED;
->>>>>>> code-from-ArduPilot-master
 
     case MAV_CMD_NAV_RETURN_TO_LAUNCH:
         if (!copter.set_mode(RTL, MODE_REASON_GCS_COMMAND)) {
