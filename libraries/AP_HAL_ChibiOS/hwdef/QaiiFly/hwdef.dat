@@ -65,10 +65,12 @@ PC2 LED_GREEN_R OUTPUT LOW
 PC3 LED_RED_R OUTPUT LOW
 
 # FC status led
-define HAL_GPIO_A_LED_PIN 54  #PD2 is 54th gpio of f405
+#PD2 is 54th gpio of f405
+define HAL_GPIO_A_LED_PIN 54  
 
 #BATT voltage sensor
-PC5 BATT_VOLTAGE_SENS ADC1 SCALE(1) #ADC 15 for batt voltage sensor
+#ADC 15 for batt voltage sensor
+PC5 BATT_VOLTAGE_SENS ADC1 SCALE(1)
 
 # CS pins for external SPI devices
 #PC12 E_CS0 CS
