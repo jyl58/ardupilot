@@ -181,8 +181,8 @@ void Copter::ModeGuided::loiter_control_start()
     loiter_nav->init_target(stop_pos);
 
     // initialize vertical speed and acceleration
-    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_accel_z(g.pilot_accel_z);
+    pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_maxaccel_z(g.pilot_accel_z);
 
     // initialise position and desired velocity
     if (!pos_control->is_active_z()) {
@@ -190,7 +190,9 @@ void Copter::ModeGuided::loiter_control_start()
         pos_control->set_desired_velocity_z(inertial_nav.get_velocity_z());
     }
 	//enabale the precision
+#if PRECISION_LANDING == ENABLED
 	_guide_precision_loiter_enabled=true;
+#endif
 }
 // guided_set_destination - sets guided mode's target destination
 // Returns true if the fence is enabled and guided waypoint is within the fence
@@ -616,7 +618,7 @@ void Copter::ModeGuided::loiter_control_run(){
         attitude_control->reset_rate_controller_I_terms();
         attitude_control->set_yaw_target_to_current_heading();
         pos_control->relax_alt_hold_controllers(0.0f);   // forces throttle output to go to zero
-		loiter_nav->update(ekfGndSpdLimit, ekfNavVelGainScaler);
+		loiter_nav->update();
         attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(loiter_nav->get_roll(), loiter_nav->get_pitch(), target_yaw_rate);
         pos_control->update_z_controller();
 		return;
