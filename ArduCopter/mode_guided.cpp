@@ -610,8 +610,8 @@ void Copter::ModeGuided::loiter_control_run(){
 	float target_yaw_rate=0.0;
 	float target_climb_rate=0.0;
 	// initialize vertical speed and acceleration
-    pos_control->set_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_accel_z(g.pilot_accel_z);
+    pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
+    pos_control->set_max_accel_z(g.pilot_accel_z);
 	if (!motors->armed() || !motors->get_interlock()) {
 		motors->set_desired_spool_state(AP_Motors::DESIRED_SHUT_DOWN);
 		loiter_nav->init_target();
@@ -641,7 +641,7 @@ void Copter::ModeGuided::loiter_control_run(){
     }
 #endif
 	// run loiter controller
-    loiter_nav->update(ekfGndSpdLimit, ekfNavVelGainScaler);
+    loiter_nav->update();
 
     // call attitude controller
     attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(loiter_nav->get_roll(), loiter_nav->get_pitch(), target_yaw_rate);
