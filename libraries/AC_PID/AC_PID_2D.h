@@ -36,7 +36,7 @@ public:
     void        reset_I();
 
     // reset_filter - input and D term filter will be reset to the next value provided to set_input()
-    void        reset_filter() { _flags._reset_filter = true; }
+    void        reset_filter();
 
     // load gain from eeprom
     void        load_gains();
