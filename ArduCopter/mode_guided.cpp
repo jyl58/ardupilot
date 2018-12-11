@@ -182,7 +182,7 @@ void Copter::ModeGuided::loiter_control_start()
 
     // initialize vertical speed and acceleration
     pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
-    pos_control->set_maxaccel_z(g.pilot_accel_z);
+    pos_control->set_max_accel_z(g.pilot_accel_z);
 
     // initialise position and desired velocity
     if (!pos_control->is_active_z()) {
