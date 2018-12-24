@@ -82,6 +82,7 @@
 #include <AP_Arming/AP_Arming.h>
 #include <AP_SmartRTL/AP_SmartRTL.h>
 #include <AP_TempCalibration/AP_TempCalibration.h>
+#include <AC_AutoTune/AC_AutoTune.h>
 
 // Configuration
 #include "defines.h"
@@ -263,6 +264,7 @@ private:
     NavEKF2 EKF2{&ahrs, rangefinder};
     NavEKF3 EKF3{&ahrs, rangefinder};
     AP_AHRS_NavEKF ahrs{EKF2, EKF3, AP_AHRS_NavEKF::FLAG_ALWAYS_USE_EKF};
+    AP_AHRS_View *ahrs_view;
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     SITL::SITL sitl;
@@ -728,7 +730,7 @@ private:
     // GCS_Mavlink.cpp
     void gcs_send_heartbeat(void);
     void send_fence_status(mavlink_channel_t chan);
-    void send_extended_status1(mavlink_channel_t chan);
+    void send_sys_status(mavlink_channel_t chan);
     void send_nav_controller_output(mavlink_channel_t chan);
     void send_rpm(mavlink_channel_t chan);
 
@@ -910,9 +912,9 @@ private:
     ModeAltHold mode_althold;
 #if MODE_AUTO_ENABLED == ENABLED
     ModeAuto mode_auto;
-    AP_Mission &mission = mode_auto.mission; // so parameters work only!
 #endif
 #if AUTOTUNE_ENABLED == ENABLED
+    AutoTune autotune;
     ModeAutoTune mode_autotune;
 #endif
 #if MODE_BRAKE_ENABLED == ENABLED
