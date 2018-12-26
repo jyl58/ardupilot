@@ -50,7 +50,7 @@ vehicle.append(velocity)
 
 # create a compound sensor of all of the individual sensors and stream it
 all_sensors = CompoundSensor([imu, gps, velocity, pose])
-all_sensors.add_stream('socket')
+all_sensors.add_stream('socket',port=60000)
 
 vehicle.append(all_sensors)
 
@@ -58,7 +58,7 @@ vehicle.append(all_sensors)
 # this will be available on port 4000 by default
 engines = QuadrotorDynamicControl()
 vehicle.append(engines)
-engines.add_stream('socket')
+engines.add_stream('socket',port=60001)
 
 # this would allow us to control the vehicle with a keyboard
 # we don't enable it as it causes issues with sensor consistency
@@ -68,7 +68,7 @@ engines.add_stream('socket')
 
 # Environment. Run in fast mode which gives wire-frame view, but lowers
 # CPU load a lot
-env = Environment('land-1/trees', fastmode=True)
+env = Environment('land-1/trees', fastmode=False)
 
 env.set_camera_location([10.0, -10.0, 10.0])
 env.set_camera_rotation([1.0470, 0, 0.7854])
