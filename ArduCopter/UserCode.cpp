@@ -33,6 +33,7 @@ void Copter::userhook_MediumLoop()
 void Copter::userhook_SlowLoop()
 {
     // put your 3.3Hz code here
+    gcs().send_message(MSG_LANDING);
 }
 #endif
 

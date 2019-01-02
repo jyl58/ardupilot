@@ -62,4 +62,6 @@ private:
 
     void send_pid_tuning();
 
+	void send_landed_status();
+
 };

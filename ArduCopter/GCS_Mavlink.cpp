@@ -261,6 +261,18 @@ uint32_t GCS_MAVLINK_Copter::telem_delay() const
 bool GCS_MAVLINK_Copter::vehicle_initialised() const {
     return copter.ap.initialised;
 }
+void GCS_MAVLINK_Copter::send_landed_status() {
+	uint8_t copter_land_status=MAV_LANDED_STATE_UNDEFINED;
+	if(ap.land_complete){
+		copter_land_status=MAV_LANDED_STATE_ON_GROUND;
+	}else{
+		copter_land_status=MAV_LANDED_STATE_IN_AIR;
+	}
+	mavlink_msg_extended_sys_state_send(chan,
+										MAV_LANDED_STATE_UNDEFINED,
+										copter_land_status
+										);
+}
 
 // try to send a message, return false if it wasn't sent
 bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
@@ -320,8 +332,9 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
     case MSG_WIND:
     case MSG_SERVO_OUT:
     case MSG_AOA_SSA:
+		break;
     case MSG_LANDING:
-        // unused
+        send_landed_status();
         break;
 
     case MSG_PID_TUNING:
