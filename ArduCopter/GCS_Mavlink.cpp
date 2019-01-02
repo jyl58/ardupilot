@@ -263,7 +263,7 @@ bool GCS_MAVLINK_Copter::vehicle_initialised() const {
 }
 void GCS_MAVLINK_Copter::send_landed_status() {
 	uint8_t copter_land_status=MAV_LANDED_STATE_UNDEFINED;
-	if(ap.land_complete){
+	if(copter.ap.land_complete){
 		copter_land_status=MAV_LANDED_STATE_ON_GROUND;
 	}else{
 		copter_land_status=MAV_LANDED_STATE_IN_AIR;
