@@ -10,7 +10,7 @@ bool Plane::start_command(const AP_Mission::Mission_Command& cmd)
 
         // log when new commands start
     if (should_log(MASK_LOG_CMD)) {
-        DataFlash.Log_Write_Mission_Cmd(mission, cmd);
+        logger.Write_Mission_Cmd(mission, cmd);
     }
 
     // special handling for nav vs non-nav commands
@@ -159,12 +159,6 @@ bool Plane::start_command(const AP_Mission::Mission_Command& cmd)
         autotune_enable(cmd.p1);
         break;
 
-#if PARACHUTE == ENABLED
-    case MAV_CMD_DO_PARACHUTE:
-        do_parachute(cmd);
-        break;
-#endif
-
 #if MOUNT == ENABLED
     // Sets the region of interest (ROI) for a sensor set or the
     // vehicle itself. This can then be used by the vehicles control
@@ -286,12 +280,6 @@ bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Ret
     case MAV_CMD_CONDITION_DISTANCE:
         return verify_within_distance();
 
-#if PARACHUTE == ENABLED
-    case MAV_CMD_DO_PARACHUTE:
-        // assume parachute was released successfully
-        return true;
-#endif
-        
     // do commands (always return true)
     case MAV_CMD_DO_CHANGE_SPEED:
     case MAV_CMD_DO_SET_HOME:
@@ -337,7 +325,7 @@ void Plane::do_RTL(int32_t rtl_altitude)
     setup_glide_slope();
     setup_turn_angle();
 
-    DataFlash.Log_Write_Mode(control_mode, control_mode_reason);
+    logger.Write_Mode(control_mode, control_mode_reason);
 }
 
 /*
@@ -437,7 +425,7 @@ void Plane::do_landing_vtol_approach(const AP_Mission::Mission_Command& cmd)
 
 void Plane::loiter_set_direction_wp(const AP_Mission::Mission_Command& cmd)
 {
-    if (cmd.content.location.flags.loiter_ccw) {
+    if (cmd.content.location.loiter_ccw) {
         loiter.direction = -1;
     } else {
         loiter.direction = 1;
@@ -915,31 +903,10 @@ void Plane::do_set_home(const AP_Mission::Mission_Command& cmd)
     if (cmd.p1 == 1 && gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
         set_home_persistently(gps.location());
     } else {
-        plane.set_home(cmd.content.location);
+        AP::ahrs().set_home(cmd.content.location);
         gcs().send_ekf_origin();
     }
 }
-
-#if PARACHUTE == ENABLED
-// do_parachute - configure or release parachute
-void Plane::do_parachute(const AP_Mission::Mission_Command& cmd)
-{
-    switch (cmd.p1) {
-        case PARACHUTE_DISABLE:
-            parachute.enabled(false);
-            break;
-        case PARACHUTE_ENABLE:
-            parachute.enabled(true);
-            break;
-        case PARACHUTE_RELEASE:
-            parachute_release();
-            break;
-        default:
-            // do nothing
-            break;
-    }
-}
-#endif
 
 // start_command_callback - callback function called from ap-mission when it begins a new mission command
 //      we double check that the flight mode is AUTO to avoid the possibility of ap-mission triggering actions while we're not in AUTO mode
@@ -1122,7 +1089,7 @@ bool Plane::verify_loiter_heading(bool init)
         // Want to head in a straight line from _here_ to the next waypoint instead of center of loiter wp
 
         // 0 to xtrack from center of waypoint, 1 to xtrack from tangent exit location
-        if (next_WP_loc.flags.loiter_xtrack) {
+        if (next_WP_loc.loiter_xtrack) {
             next_WP_loc = current_loc;
         }
         return true;

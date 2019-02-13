@@ -50,7 +50,6 @@ class AutoTestPlane(AutoTest):
         self.speedup = speedup
 
         self.sitl = None
-        self.hasInit = False
 
         self.log_name = "ArduPlane"
 
@@ -90,8 +89,19 @@ class AutoTestPlane(AutoTest):
 
         self.get_mavlink_connection_going()
 
-        self.hasInit = True
         self.progress("Ready to start testing!")
+
+    def is_plane(self):
+        return True
+
+    def get_rudder_channel(self):
+        return int(self.get_parameter("RCMAP_YAW"))
+
+    def get_disarm_delay(self):
+        return int(self.get_parameter("LAND_DISARMDELAY"))
+
+    def set_autodisarm_delay(self, delay):
+        self.set_parameter("LAND_DISARMDELAY", delay)
 
     def takeoff(self):
         """Takeoff get to 30m altitude."""
@@ -690,10 +700,21 @@ class AutoTestPlane(AutoTest):
         if ex is not None:
             raise ex
 
-    def start_subtest(self, description):
-        self.progress("-")
-        self.progress("---------- %s  ----------" % description)
-        self.progress("-")
+    def test_parachute(self):
+        self.set_rc(9, 1000)
+        self.set_parameter("CHUTE_ENABLED", 1)
+        self.set_parameter("CHUTE_TYPE", 10)
+        self.set_parameter("SERVO9_FUNCTION", 27)
+        self.set_parameter("SIM_PARA_ENABLE", 1)
+        self.set_parameter("SIM_PARA_PIN", 9)
+
+        self.load_mission("plane-parachute-mission.txt")
+        self.mavproxy.send("wp set 1\n")
+        self.change_mode('AUTO')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        self.mavproxy.expect("BANG")
+        self.reboot_sitl()
 
     def run_subtest(self, desc, func):
         self.start_subtest(desc)
@@ -735,10 +756,11 @@ class AutoTestPlane(AutoTest):
                          lambda: self.fly_mission(
                              os.path.join(testdir, "ap1.txt")))
 
-    def set_rc_default(self):
-        super(AutoTestPlane, self).set_rc_default()
-        self.set_rc(3, 1000)
-        self.set_rc(8, 1800)
+    def rc_defaults(self):
+        ret = super(AutoTestPlane, self).rc_defaults()
+        ret[3] = 1000
+        ret[8] = 1800
+        return ret
 
     def default_mode(self):
         return "MANUAL"
@@ -756,6 +778,8 @@ class AutoTestPlane(AutoTest):
 
             ("TestFlaps", "Flaps", self.fly_flaps),
 
+            ("ArmFeatures", "Arm features", self.test_arm_feature),
+
             ("MainFlight",
              "Lots of things in one flight",
              self.test_main_flight),
@@ -763,6 +787,8 @@ class AutoTestPlane(AutoTest):
             ("TestGripperMission",
              "Test Gripper mission items",
              self.test_gripper_mission),
+
+            ("Parachute", "Test Parachute", self.test_parachute),
 
             ("LogDownLoad",
              "Log download",

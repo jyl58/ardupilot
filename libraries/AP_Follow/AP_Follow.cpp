@@ -152,7 +152,7 @@ bool AP_Follow::get_target_location_and_velocity(Location &loc, Vector3f &vel_ne
     // project the vehicle position
     Location last_loc = _target_location;
     location_offset(last_loc, vel_ned.x * dt, vel_ned.y * dt);
-    last_loc.alt -= vel_ned.z * 10.0f * dt; // convert m/s to cm/s, multiply by dt.  minus because NED
+    last_loc.alt -= vel_ned.z * 100.0f * dt; // convert m/s to cm/s, multiply by dt.  minus because NED
 
     // return latest position estimate
     loc = last_loc;
@@ -178,7 +178,7 @@ bool AP_Follow::get_target_dist_and_vel_ned(Vector3f &dist_ned, Vector3f &dist_w
     }
 
     // change to altitude above home if relative altitude is being used
-    if (target_loc.flags.relative_alt == 1) {
+    if (target_loc.relative_alt == 1) {
         current_loc.alt -= AP::ahrs().get_home().alt;
     }
 
@@ -262,8 +262,6 @@ void AP_Follow::handle_msg(const mavlink_message_t &msg)
     // decode global-position-int message
     if (msg.msgid == MAVLINK_MSG_ID_GLOBAL_POSITION_INT) {
 
-        const uint32_t now = AP_HAL::millis();
-
         // get estimated location and velocity (for logging)
         Location loc_estimate{};
         Vector3f vel_estimate;
@@ -285,20 +283,22 @@ void AP_Follow::handle_msg(const mavlink_message_t &msg)
         if (_alt_type == AP_FOLLOW_ALTITUDE_TYPE_RELATIVE) {
             // relative altitude
             _target_location.alt = packet.relative_alt / 10;        // convert millimeters to cm
-            _target_location.flags.relative_alt = 1;                // set relative_alt flag
+            _target_location.relative_alt = 1;                // set relative_alt flag
         } else {
             // absolute altitude
             _target_location.alt = packet.alt / 10;                 // convert millimeters to cm
-            _target_location.flags.relative_alt = 0;                // reset relative_alt flag
+            _target_location.relative_alt = 0;                // reset relative_alt flag
         }
 
         _target_velocity_ned.x = packet.vx * 0.01f; // velocity north
         _target_velocity_ned.y = packet.vy * 0.01f; // velocity east
         _target_velocity_ned.z = packet.vz * 0.01f; // velocity down
-        _last_location_update_ms = now;
+
+        // get a local timestamp with correction for transport jitter
+        _last_location_update_ms = _jitter.correct_offboard_timestamp_msec(packet.time_boot_ms, AP_HAL::millis());
         if (packet.hdg <= 36000) {                  // heading (UINT16_MAX if unknown)
             _target_heading = packet.hdg * 0.01f;   // convert centi-degrees to degrees
-            _last_heading_update_ms = now;
+            _last_heading_update_ms = _last_location_update_ms;
         }
         // initialise _sysid if zero to sender's id
         if (_sysid == 0) {
@@ -307,7 +307,7 @@ void AP_Follow::handle_msg(const mavlink_message_t &msg)
         }
 
         // log lead's estimated vs reported position
-        DataFlash_Class::instance()->Log_Write("FOLL",
+        AP::logger().Write("FOLL",
                                                "TimeUS,Lat,Lon,Alt,VelN,VelE,VelD,LatE,LonE,AltE",  // labels
                                                "sDUmnnnDUm",    // units
                                                "F--B000--B",    // mults

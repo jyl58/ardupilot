@@ -22,7 +22,7 @@
 
 #include "AP_GPS.h"
 #include "AP_GPS_SBP2.h"
-#include <DataFlash/DataFlash.h>
+#include <AP_Logger/AP_Logger.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <GCS_MAVLink/GCS.h>
 
@@ -271,14 +271,14 @@ AP_GPS_SBP2::_attempt_state_update()
         //
         // Check Flags for Valid Messages
         //
-        if (last_gps_time.flags.fix_mode    == 0 ||
-            last_vel_ned.flags.fix_mode     == 0 ||
+        if (last_gps_time.flags.time_src    == 0 ||
+            last_vel_ned.flags.vel_mode     == 0 ||
             last_pos_llh.flags.fix_mode     == 0 ||
             last_dops.flags.fix_mode        == 0) {
 
             Debug("Message Marked as Invalid. NO FIX! Flags: {GPS_TIME: %d, VEL_NED: %d, POS_LLH: %d, DOPS: %d}",
-                   last_gps_time.flags.fix_mode,
-                   last_vel_ned.flags.fix_mode,
+                   last_gps_time.flags.time_src,
+                   last_vel_ned.flags.vel_mode,
                    last_pos_llh.flags.fix_mode,
                    last_dops.flags.fix_mode);
 
@@ -454,7 +454,7 @@ AP_GPS_SBP2::logging_log_full_update()
         last_injected_data_ms      : last_injected_data_ms,
         last_iar_num_hypotheses    : 0,
     };
-    DataFlash_Class::instance()->WriteBlock(&pkt, sizeof(pkt));
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
 };
 
 void
@@ -488,7 +488,7 @@ AP_GPS_SBP2::logging_log_raw_sbp(uint16_t msg_type,
         msg_len         : msg_len,
     };
     memcpy(pkt.data, msg_buff, MIN(msg_len, 48));
-    DataFlash_Class::instance()->WriteBlock(&pkt, sizeof(pkt));
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
 
     for (uint8_t i = 0; i < pages - 1; i++) {
         struct log_SbpRAWM pkt2 = {
@@ -501,7 +501,7 @@ AP_GPS_SBP2::logging_log_raw_sbp(uint16_t msg_type,
             msg_len         : msg_len,
         };
         memcpy(pkt2.data, &msg_buff[48 + i * 104], MIN(msg_len - (48 + i * 104), 104));
-        DataFlash_Class::instance()->WriteBlock(&pkt2, sizeof(pkt2));
+        AP::logger().WriteBlock(&pkt2, sizeof(pkt2));
     }
 };
 
@@ -520,5 +520,5 @@ AP_GPS_SBP2::logging_ext_event() {
         level              : last_event.flags.level,
         quality            : last_event.flags.quality,
     };
-    DataFlash_Class::instance()->WriteBlock(&pkt, sizeof(pkt));
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
 };

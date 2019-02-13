@@ -96,6 +96,7 @@ class Board:
         if cfg.options.enable_scripting:
             env.DEFINES.update(
                 ENABLE_SCRIPTING = 1,
+                ENABLE_HEAP = 1,
                 LUA_32BITS = 1,
                 )
 
@@ -336,6 +337,9 @@ class sitl(Board):
             for f in os.listdir('libraries/AP_OSD/fonts'):
                 if fnmatch.fnmatch(f, "font*bin"):
                     env.ROMFS_FILES += [(f,'libraries/AP_OSD/fonts/'+f)]
+
+        if cfg.options.sitl_flash_storage:
+            env.CXXFLAGS += ['-DSTORAGE_USE_FLASH=1']
 
         if cfg.env.DEST_OS == 'cygwin':
             env.LIB += [
@@ -606,6 +610,9 @@ class ocpoc_zynq(linux):
 class bbbmini(linux):
     toolchain = 'arm-linux-gnueabihf'
 
+    def __init__(self):
+        self.with_uavcan = True
+
     def configure_env(self, cfg, env):
         super(bbbmini, self).configure_env(cfg, env)
 
@@ -616,6 +623,9 @@ class bbbmini(linux):
 class blue(linux):
     toolchain = 'arm-linux-gnueabihf'
 
+    def __init__(self):
+        self.with_uavcan = True
+
     def configure_env(self, cfg, env):
         super(blue, self).configure_env(cfg, env)
 
@@ -625,6 +635,9 @@ class blue(linux):
 
 class pocket(linux):
     toolchain = 'arm-linux-gnueabihf'
+
+    def __init__(self):
+        self.with_uavcan = True
 
     def configure_env(self, cfg, env):
         super(pocket, self).configure_env(cfg, env)

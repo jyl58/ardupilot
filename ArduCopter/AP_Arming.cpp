@@ -211,6 +211,14 @@ bool AP_Arming_Copter::parameter_checks(bool display_failure)
             }
             return false;
         }
+        // Ensure an Aux Channel is configured for motor interlock
+        if (rc().find_channel_for_option(RC_Channel::aux_func_t::MOTOR_INTERLOCK) == nullptr) {
+            if (display_failure) {
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"PreArm: Motor Interlock not configured");
+            }
+            return false;
+        }
+
         #endif // HELI_FRAME
 
         // check for missing terrain data
@@ -497,10 +505,8 @@ bool AP_Arming_Copter::pre_arm_proximity_check(bool display_failure)
     }
 #endif
 
-    return true;
-#else
-    return true;
 #endif
+    return true;
 }
 
 // arm_checks - perform final checks before arming

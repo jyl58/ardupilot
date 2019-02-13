@@ -20,9 +20,6 @@
 #include <GCS_MAVLink/GCS.h>
 #include <Filter/Filter.h>
 #include <utility>
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
-#include <board_config.h>
-#endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
 #include <SITL/SITL.h>
 #endif
@@ -275,11 +272,11 @@ float AP_WindVane::read_analog_direction_ef()
 // read rc input of apparent wind direction in earth-frame in radians
 float AP_WindVane::read_PWM_direction_ef()
 {
-    RC_Channel *ch = rc().channel(_rc_in_no-1);
-    if (ch == nullptr) {
+    RC_Channel *chan = rc().channel(_rc_in_no-1);
+    if (chan == nullptr) {
         return 0.0f;
     }
-    float direction = ch->norm_input() * radians(45);
+    float direction = chan->norm_input() * radians(45);
 
     return wrap_PI(direction + _home_heading);
 }

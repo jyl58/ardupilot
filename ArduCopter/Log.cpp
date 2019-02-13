@@ -2,7 +2,7 @@
 
 #if LOGGING_ENABLED == ENABLED
 
-// Code to Write and Read packets from DataFlash log memory
+// Code to Write and Read packets from AP_Logger log memory
 // Code to interact with the user to dump or erase logs
 
 struct PACKED log_Control_Tuning {
@@ -29,7 +29,7 @@ void Copter::Log_Write_Control_Tuning()
     float terr_alt = 0.0f;
 #if AP_TERRAIN_AVAILABLE && AC_TERRAIN
     if (!terrain.height_above_terrain(terr_alt, true)) {
-        terr_alt = DataFlash.quiet_nan();
+        terr_alt = logger.quiet_nan();
     }
 #endif
     float des_alt_m = 0.0f;
@@ -43,7 +43,7 @@ void Copter::Log_Write_Control_Tuning()
     if (target_rangefinder_alt_used) {
         _target_rangefinder_alt = target_rangefinder_alt * 0.01f; // cm->m
     } else {
-        _target_rangefinder_alt = DataFlash.quiet_nan();
+        _target_rangefinder_alt = logger.quiet_nan();
     }
     struct log_Control_Tuning pkt = {
         LOG_PACKET_HEADER_INIT(LOG_CONTROL_TUNING_MSG),
@@ -61,7 +61,7 @@ void Copter::Log_Write_Control_Tuning()
         target_climb_rate   : target_climb_rate_cms,
         climb_rate          : climb_rate
     };
-    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+    logger.WriteBlock(&pkt, sizeof(pkt));
 }
 
 // Write an attitude packet
@@ -69,25 +69,25 @@ void Copter::Log_Write_Attitude()
 {
     Vector3f targets = attitude_control->get_att_target_euler_cd();
     targets.z = wrap_360_cd(targets.z);
-    DataFlash.Log_Write_Attitude(ahrs, targets);
-    DataFlash.Log_Write_Rate(ahrs_view, *motors, *attitude_control, *pos_control);
+    logger.Write_Attitude(ahrs, targets);
+    logger.Write_Rate(ahrs_view, *motors, *attitude_control, *pos_control);
     if (should_log(MASK_LOG_PID)) {
-        DataFlash.Log_Write_PID(LOG_PIDR_MSG, attitude_control->get_rate_roll_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDP_MSG, attitude_control->get_rate_pitch_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDY_MSG, attitude_control->get_rate_yaw_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDA_MSG, pos_control->get_accel_z_pid().get_pid_info() );
+        logger.Write_PID(LOG_PIDR_MSG, attitude_control->get_rate_roll_pid().get_pid_info());
+        logger.Write_PID(LOG_PIDP_MSG, attitude_control->get_rate_pitch_pid().get_pid_info());
+        logger.Write_PID(LOG_PIDY_MSG, attitude_control->get_rate_yaw_pid().get_pid_info());
+        logger.Write_PID(LOG_PIDA_MSG, pos_control->get_accel_z_pid().get_pid_info() );
     }
 }
 
 // Write an EKF and POS packet
 void Copter::Log_Write_EKF_POS()
 {
-    DataFlash.Log_Write_EKF(ahrs);
-    DataFlash.Log_Write_AHRS2(ahrs);
+    logger.Write_EKF(ahrs);
+    logger.Write_AHRS2(ahrs);
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-    sitl.Log_Write_SIMSTATE(&DataFlash);
+    sitl.Log_Write_SIMSTATE();
 #endif
-    DataFlash.Log_Write_POS(ahrs);
+    logger.Write_POS(ahrs);
 }
 
 struct PACKED log_MotBatt {
@@ -111,27 +111,14 @@ void Copter::Log_Write_MotBatt()
         bat_res         : (float)(battery.get_resistance()),
         th_limit        : (float)(motors->get_throttle_limit())
     };
-    DataFlash.WriteBlock(&pkt_mot, sizeof(pkt_mot));
+    logger.WriteBlock(&pkt_mot, sizeof(pkt_mot));
 #endif
 }
 
-struct PACKED log_Event {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint8_t id;
-};
-
 // Wrote an event packet
-void Copter::Log_Write_Event(uint8_t id)
+void Copter::Log_Write_Event(Log_Event id)
 {
-    if (should_log(MASK_LOG_ANY)) {
-        struct log_Event pkt = {
-            LOG_PACKET_HEADER_INIT(LOG_EVENT_MSG),
-            time_us  : AP_HAL::micros64(),
-            id       : id
-        };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
-    }
+    logger.Write_Event(id);
 }
 
 struct PACKED log_Data_Int16t {
@@ -152,7 +139,7 @@ void Copter::Log_Write_Data(uint8_t id, int16_t value)
             id          : id,
             data_value  : value
         };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+        logger.WriteCriticalBlock(&pkt, sizeof(pkt));
     }
 }
 
@@ -174,7 +161,7 @@ void Copter::Log_Write_Data(uint8_t id, uint16_t value)
             id          : id,
             data_value  : value
         };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+        logger.WriteCriticalBlock(&pkt, sizeof(pkt));
     }
 }
 
@@ -195,7 +182,7 @@ void Copter::Log_Write_Data(uint8_t id, int32_t value)
             id          : id,
             data_value  : value
         };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+        logger.WriteCriticalBlock(&pkt, sizeof(pkt));
     }
 }
 
@@ -216,7 +203,7 @@ void Copter::Log_Write_Data(uint8_t id, uint32_t value)
             id          : id,
             data_value  : value
         };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+        logger.WriteCriticalBlock(&pkt, sizeof(pkt));
     }
 }
 
@@ -238,7 +225,7 @@ void Copter::Log_Write_Data(uint8_t id, float value)
             id          : id,
             data_value  : value
         };
-        DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+        logger.WriteCriticalBlock(&pkt, sizeof(pkt));
     }
 }
 
@@ -258,7 +245,7 @@ void Copter::Log_Write_Error(uint8_t sub_system, uint8_t error_code)
         sub_system    : sub_system,
         error_code    : error_code,
     };
-    DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
+    logger.WriteCriticalBlock(&pkt, sizeof(pkt));
 }
 
 struct PACKED log_ParameterTuning {
@@ -283,7 +270,7 @@ void Copter::Log_Write_Parameter_Tuning(uint8_t param, float tuning_val, int16_t
         tuning_high    : tune_high
     };
 
-    DataFlash.WriteBlock(&pkt_tune, sizeof(pkt_tune));
+    logger.WriteBlock(&pkt_tune, sizeof(pkt_tune));
 }
 
 // logs when baro or compass becomes unhealthy
@@ -325,7 +312,7 @@ void Copter::Log_Write_Heli()
         desired_rotor_speed     : motors->get_desired_rotor_speed(),
         main_rotor_speed        : motors->get_main_rotor_speed(),
     };
-    DataFlash.WriteBlock(&pkt_heli, sizeof(pkt_heli));
+    logger.WriteBlock(&pkt_heli, sizeof(pkt_heli));
 }
 #endif
 
@@ -379,7 +366,7 @@ void Copter::Log_Write_Precland()
         ekf_outcount    : precland.ekf_outlier_count(),
         estimator       : precland.estimator_type()
     };
-    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+    logger.WriteBlock(&pkt, sizeof(pkt));
  #endif     // PRECISION_LANDING == ENABLED
 }
 
@@ -410,11 +397,11 @@ void Copter::Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_tar
         vel_target_y    : vel_target.y,
         vel_target_z    : vel_target.z
     };
-    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+    logger.WriteBlock(&pkt, sizeof(pkt));
 }
 
 // type and unit information can be found in
-// libraries/DataFlash/Logstructure.h; search for "log_Units" for
+// libraries/AP_Logger/Logstructure.h; search for "log_Units" for
 // units and "Format characters" for field type information
 const struct LogStructure Copter::log_structure[] = {
     LOG_COMMON_STRUCTURES,
@@ -424,8 +411,6 @@ const struct LogStructure Copter::log_structure[] = {
       "CTUN", "Qffffffefcfhh", "TimeUS,ThI,ABst,ThO,ThH,DAlt,Alt,BAlt,DSAlt,SAlt,TAlt,DCRt,CRt", "s----mmmmmmnn", "F----00B0BBBB" },
     { LOG_MOTBATT_MSG, sizeof(log_MotBatt),
       "MOTB", "Qffff",  "TimeUS,LiftMax,BatVolt,BatRes,ThLimit", "s-vw-", "F-00-" },
-    { LOG_EVENT_MSG, sizeof(log_Event),         
-      "EV",   "QB",           "TimeUS,Id", "s-", "F-" },
     { LOG_DATA_INT16_MSG, sizeof(log_Data_Int16t),         
       "D16",   "QBh",         "TimeUS,Id,Value", "s--", "F--" },
     { LOG_DATA_UINT16_MSG, sizeof(log_Data_UInt16t),         
@@ -452,20 +437,17 @@ const struct LogStructure Copter::log_structure[] = {
 
 void Copter::Log_Write_Vehicle_Startup_Messages()
 {
-    // only 200(?) bytes are guaranteed by DataFlash
-    DataFlash.Log_Write_MessageF("Frame: %s", get_frame_string());
-    DataFlash.Log_Write_Mode(control_mode, control_mode_reason);
-#if AC_RALLY
-    DataFlash.Log_Write_Rally(rally);
-#endif
+    // only 200(?) bytes are guaranteed by AP_Logger
+    logger.Write_MessageF("Frame: %s", get_frame_string());
+    logger.Write_Mode(control_mode, control_mode_reason);
     ahrs.Log_Write_Home_And_Origin();
-    gps.Write_DataFlash_Log_Startup_messages();
+    gps.Write_AP_Logger_Log_Startup_messages();
 }
 
 
 void Copter::log_init(void)
 {
-    DataFlash.Init(log_structure, ARRAY_SIZE(log_structure));
+    logger.Init(log_structure, ARRAY_SIZE(log_structure));
 }
 
 #else // LOGGING_ENABLED
@@ -475,7 +457,7 @@ void Copter::Log_Write_Performance() {}
 void Copter::Log_Write_Attitude(void) {}
 void Copter::Log_Write_EKF_POS() {}
 void Copter::Log_Write_MotBatt() {}
-void Copter::Log_Write_Event(uint8_t id) {}
+void Copter::Log_Write_Event(Log_Event id) {}
 void Copter::Log_Write_Data(uint8_t id, int32_t value) {}
 void Copter::Log_Write_Data(uint8_t id, uint32_t value) {}
 void Copter::Log_Write_Data(uint8_t id, int16_t value) {}

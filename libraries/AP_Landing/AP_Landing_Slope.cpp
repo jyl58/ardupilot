@@ -107,7 +107,7 @@ bool AP_Landing::type_slope_verify_land(const Location &prev_WP_loc, Location &n
             
             // Check if the landing gear was deployed before landing
             // If not - go around
-            AP_LandingGear *LG_inst = AP_LandingGear::instance();
+            AP_LandingGear *LG_inst = AP_LandingGear::get_singleton();
             if (LG_inst != nullptr && !LG_inst->check_before_land()) {
                 type_slope_request_go_around();
                 gcs().send_text(MAV_SEVERITY_CRITICAL, "Landing gear was not deployed");
@@ -382,8 +382,8 @@ bool AP_Landing::type_slope_is_complete(void) const
 
 void AP_Landing::type_slope_log(void) const
 {
-    // log to DataFlash
-    DataFlash_Class::instance()->Log_Write("LAND", "TimeUS,stage,f1,f2,slope,slopeInit,altO", "QBBBfff",
+    // log to AP_Logger
+    AP::logger().Write("LAND", "TimeUS,stage,f1,f2,slope,slopeInit,altO", "QBBBfff",
                                             AP_HAL::micros64(),
                                             type_slope_stage,
                                             flags,

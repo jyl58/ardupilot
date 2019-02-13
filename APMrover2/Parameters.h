@@ -58,7 +58,8 @@ public:
 
         // 97: RSSI
         k_param_rssi = 97,
-
+        k_param_rpm_sensor,     // rpm sensor 98
+        
         // 100: Arming parameters
         k_param_arming = 100,
 
@@ -108,7 +109,7 @@ public:
         k_param_speed_cruise,
         k_param_speed_turn_gain,    // unused
         k_param_speed_turn_dist,    // unused
-        k_param_ch7_option,
+        k_param_ch7_option,         // unused
         k_param_auto_trigger_pin,
         k_param_auto_kickstart,
         k_param_turn_circle,  // unused
@@ -207,7 +208,7 @@ public:
         k_param_button,
         k_param_osd,
 
-        k_param_DataFlash = 253,  // Logging Group
+        k_param_logger = 253,  // Logging Group
 
         // 254,255: reserved
         };
@@ -369,6 +370,10 @@ public:
 
     // Sprayer
     AC_Sprayer sprayer;
+
+#if GRIPPER_ENABLED
+    AP_Gripper gripper;
+#endif
 
     // Rally point library
     AP_Rally_Rover rally;

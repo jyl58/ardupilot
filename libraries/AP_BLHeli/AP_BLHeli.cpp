@@ -30,7 +30,7 @@
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_SerialManager/AP_SerialManager.h>
-#include <DataFlash/DataFlash.h>
+#include <AP_Logger/AP_Logger.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -118,14 +118,14 @@ const AP_Param::GroupInfo AP_BLHeli::var_info[] = {
     AP_GROUPEND
 };
 
-AP_BLHeli *AP_BLHeli::singleton;
+AP_BLHeli *AP_BLHeli::_singleton;
 
 // constructor
 AP_BLHeli::AP_BLHeli(void)
 {
     // set defaults from the parameter table
     AP_Param::setup_object_defaults(this, var_info);
-    singleton = this;
+    _singleton = this;
     last_control_port = -1;
 }
 
@@ -865,7 +865,7 @@ void AP_BLHeli::blheli_process_command(void)
         }
         if (uart_locked) {
             debug("Unlocked UART");
-            uart->lock_port(0);
+            uart->lock_port(0, 0);
             uart_locked = false;
         }
         memset(blheli.connected, 0, sizeof(blheli.connected));
@@ -1079,7 +1079,7 @@ bool AP_BLHeli::process_input(uint8_t b)
         if (blheli.state == BLHELI_COMMAND_RECEIVED) {
             valid_packet = true;
             last_valid_ms = AP_HAL::millis();
-            if (uart->lock_port(BLHELI_UART_LOCK_KEY)) {
+            if (uart->lock_port(BLHELI_UART_LOCK_KEY, 0)) {
                 uart_locked = true;
             }
             blheli_process_command();
@@ -1089,7 +1089,7 @@ bool AP_BLHeli::process_input(uint8_t b)
     } else if (msp.state == MSP_COMMAND_RECEIVED) {
         if (msp.packetType == MSP_PACKET_COMMAND) {
             valid_packet = true;
-            if (uart->lock_port(BLHELI_UART_LOCK_KEY)) {
+            if (uart->lock_port(BLHELI_UART_LOCK_KEY, 0)) {
                 uart_locked = true;
             }
             last_valid_ms = AP_HAL::millis();
@@ -1185,7 +1185,7 @@ void AP_BLHeli::update(void)
             SRV_Channels::set_disabled_channel_mask(0);            
         }
         debug("Unlocked UART");
-        uart->lock_port(0);
+        uart->lock_port(0, 0);
         uart_locked = false;
     }
     if (initialised || (channel_mask.get() == 0 && channel_auto.get() == 0)) {
@@ -1250,7 +1250,7 @@ void AP_BLHeli::update(void)
       plane and copter can use AP_Motors to get an automatic mask
      */
     if (channel_auto.get() == 1) {
-        AP_Motors *motors = AP_Motors::get_instance();
+        AP_Motors *motors = AP_Motors::get_singleton();
         if (motors) {
             mask |= motors->get_motor_mask();
         }
@@ -1273,7 +1273,7 @@ void AP_BLHeli::update(void)
     debug("ESC: %u motors mask=0x%04x", num_motors, mask);
 
     if (telem_rate > 0) {
-        AP_SerialManager *serial_manager = AP_SerialManager::get_instance();
+        AP_SerialManager *serial_manager = AP_SerialManager::get_singleton();
         if (serial_manager) {
             telem_uart = serial_manager->find_serial(AP_SerialManager::SerialProtocol_ESCTelemetry,0);
         }
@@ -1346,7 +1346,7 @@ void AP_BLHeli::read_telemetry_packet(void)
     last_telem[last_telem_esc] = td;
     last_telem[last_telem_esc].count++;
 
-    DataFlash_Class *df = DataFlash_Class::instance();
+    AP_Logger *df = AP_Logger::get_singleton();
     if (df && df->logging_enabled()) {
         struct log_Esc pkt = {
             LOG_PACKET_HEADER_INIT(uint8_t(LOG_ESC1_MSG+last_telem_esc)),

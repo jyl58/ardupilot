@@ -13,6 +13,10 @@ class Mode {
 
 public:
 
+    // do not allow copying
+    Mode(const Mode &other) = delete;
+    Mode &operator=(const Mode&) = delete;
+
     // Navigation Yaw control
     class AutoYaw {
 
@@ -98,7 +102,7 @@ protected:
     virtual uint32_t wp_distance() const { return 0; }
     virtual int32_t wp_bearing() const { return 0; }
     virtual float crosstrack_error() const { return 0.0f;}
-    virtual bool get_wp(Location_Class &loc) { return false; };
+    virtual bool get_wp(Location &loc) { return false; };
     virtual bool in_guided_mode() const { return false; }
 
     // pilot input processing
@@ -108,7 +112,7 @@ protected:
     bool takeoff_triggered(float target_climb_rate) const;
 
     // helper functions
-    void zero_throttle_and_relax_ac();
+    void zero_throttle_and_relax_ac(bool spool_up = false);
 
     // functions to control landing
     // in modes that support landing
@@ -173,10 +177,6 @@ protected:
     // altitude below which we do no navigation in auto takeoff
     static float auto_takeoff_no_nav_alt_cm;
 
-#if FRAME_CONFIG == HELI_FRAME
-    heli_flags_t &heli_flags;
-#endif
-
     // pass-through functions to reduce code churn on conversion;
     // these are candidates for moving into the Mode base
     // class.
@@ -189,7 +189,7 @@ protected:
     bool set_mode(control_mode_t mode, mode_reason_t reason);
     void set_land_complete(bool b);
     GCS_Copter &gcs();
-    void Log_Write_Event(uint8_t id);
+    void Log_Write_Event(Log_Event id);
     void set_throttle_takeoff(void);
     float get_avoidance_adjusted_climbrate(float target_rate);
     uint16_t get_pilot_speed_dn(void);
@@ -290,13 +290,13 @@ public:
     void rtl_start();
     void takeoff_start(const Location& dest_loc);
     void wp_start(const Vector3f& destination);
-    void wp_start(const Location_Class& dest_loc);
+    void wp_start(const Location& dest_loc);
     void land_start();
     void land_start(const Vector3f& destination);
-    void circle_movetoedge_start(const Location_Class &circle_center, float radius_m);
+    void circle_movetoedge_start(const Location &circle_center, float radius_m);
     void circle_start();
     void spline_start(const Vector3f& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Vector3f& next_spline_destination);
-    void spline_start(const Location_Class& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location_Class& next_destination);
+    void spline_start(const Location& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location& next_destination);
     void nav_guided_start();
 
     bool landing_gear_should_be_deployed() const override;
@@ -323,7 +323,7 @@ protected:
     uint32_t wp_distance() const override;
     int32_t wp_bearing() const override;
     float crosstrack_error() const override { return wp_nav->crosstrack_error();}
-    bool get_wp(Location_Class &loc) override;
+    bool get_wp(Location &loc) override;
     void run_autopilot() override;
 
 private:
@@ -342,7 +342,7 @@ private:
     void loiter_run();
     void loiter_to_alt_run();
 
-    Location_Class loc_from_cmd(const AP_Mission::Mission_Command& cmd) const;
+    Location loc_from_cmd(const AP_Mission::Mission_Command& cmd) const;
 
     void payload_place_start(const Vector3f& destination);
     void payload_place_run();
@@ -353,7 +353,7 @@ private:
 
     AutoMode _mode = Auto_TakeOff;   // controls which auto controller is run
 
-    Location_Class terrain_adjusted_location(const AP_Mission::Mission_Command& cmd) const;
+    Location terrain_adjusted_location(const AP_Mission::Mission_Command& cmd) const;
 
     void do_takeoff(const AP_Mission::Mission_Command& cmd);
     void do_nav_wp(const AP_Mission::Mission_Command& cmd);
@@ -402,7 +402,7 @@ private:
 #endif
     bool verify_nav_delay(const AP_Mission::Mission_Command& cmd);
 
-    void auto_spline_start(const Location_Class& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location_Class& next_destination);
+    void auto_spline_start(const Location& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location& next_destination);
 
     // Loiter control
     uint16_t loiter_time_max;                // How long we should stay in Loiter Mode for mission scripting (time in seconds)
@@ -588,8 +588,21 @@ protected:
 private:
 
     // Flip
-    Vector3f flip_orig_attitude;         // original vehicle attitude before flip
+    Vector3f orig_attitude;         // original vehicle attitude before flip
 
+    enum FlipState {
+        Flip_Start,
+        Flip_Roll,
+        Flip_Pitch_A,
+        Flip_Pitch_B,
+        Flip_Recover,
+        Flip_Abandon
+    };
+    FlipState _state;               // current state of flip
+    control_mode_t   orig_control_mode;   // flight mode when flip was initated
+    uint32_t  start_time_ms;          // time since flip began
+    int8_t    roll_dir;            // roll direction (-1 = roll left, 1 = roll right)
+    int8_t    pitch_dir;           // pitch direction (-1 = pitch forward, 1 = pitch back)
 };
 
 
@@ -698,8 +711,8 @@ public:
 
     void set_angle(const Quaternion &q, float climb_rate_cms, bool use_yaw_rate, float yaw_rate_rads);
     bool set_destination(const Vector3f& destination, bool use_yaw = false, float yaw_cd = 0.0, bool use_yaw_rate = false, float yaw_rate_cds = 0.0, bool yaw_relative = false);
-    bool set_destination(const Location_Class& dest_loc, bool use_yaw = false, float yaw_cd = 0.0, bool use_yaw_rate = false, float yaw_rate_cds = 0.0, bool yaw_relative = false);
-    bool get_wp(Location_Class &loc) override;
+    bool set_destination(const Location& dest_loc, bool use_yaw = false, float yaw_cd = 0.0, bool use_yaw_rate = false, float yaw_rate_cds = 0.0, bool yaw_relative = false);
+    bool get_wp(Location &loc) override;
     void set_velocity(const Vector3f& velocity, bool use_yaw = false, float yaw_cd = 0.0, bool use_yaw_rate = false, float yaw_rate_cds = 0.0, bool yaw_relative = false, bool log_request = true);
     bool set_destination_posvel(const Vector3f& destination, const Vector3f& velocity, bool use_yaw = false, float yaw_cd = 0.0, bool use_yaw_rate = false, float yaw_rate_cds = 0.0, bool yaw_relative = false);
 
@@ -760,7 +773,7 @@ public:
     bool init(bool ignore_checks) override;
     void run() override;
 
-    bool requires_GPS() const override { return true; }
+    bool requires_GPS() const override { return false; }
     bool has_manual_throttle() const override { return false; }
     bool allows_arming(bool from_gcs) const override { return from_gcs; }
     bool is_autopilot() const override { return true; }
@@ -936,10 +949,10 @@ private:
 
     struct {
         // NEU w/ Z element alt-above-ekf-origin unless use_terrain is true in which case Z element is alt-above-terrain
-        Location_Class origin_point;
-        Location_Class climb_target;
-        Location_Class return_target;
-        Location_Class descent_target;
+        Location origin_point;
+        Location climb_target;
+        Location return_target;
+        Location descent_target;
         bool land;
         bool terrain_used;
     } rtl_path;
@@ -1151,6 +1164,7 @@ protected:
     const char *name4() const override { return "FOLL"; }
     uint32_t wp_distance() const override;
     int32_t wp_bearing() const override;
+    bool get_wp(Location &loc) override;
 
     uint32_t last_log_ms;   // system time of last time desired velocity was logging
 };

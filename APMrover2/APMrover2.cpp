@@ -66,6 +66,10 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK_CLASS(RC_Channels,         (RC_Channels*)&rover.g2.rc_channels, read_aux_all,           10,    200),
     SCHED_TASK_CLASS(AP_BattMonitor,      &rover.battery,          read,           10,  300),
     SCHED_TASK_CLASS(AP_ServoRelayEvents, &rover.ServoRelayEvents, update_events,  50,  200),
+#if GRIPPER_ENABLED == ENABLED
+    SCHED_TASK_CLASS(AP_Gripper,          &rover.g2.gripper,      update,         10,   75),
+#endif
+    SCHED_TASK(rpm_update,             10,    100),
 #if MOUNT == ENABLED
     SCHED_TASK_CLASS(AP_Mount,            &rover.camera_mount,     update,         50,  200),
 #endif
@@ -83,7 +87,7 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK(compass_save,           0.1,   200),
     SCHED_TASK(accel_cal_update,       10,    200),
 #if LOGGING_ENABLED == ENABLED
-    SCHED_TASK_CLASS(DataFlash_Class,     &rover.DataFlash,        periodic_tasks, 50,  300),
+    SCHED_TASK_CLASS(AP_Logger,     &rover.logger,        periodic_tasks, 50,  300),
 #endif
     SCHED_TASK_CLASS(AP_InertialSensor,   &rover.ins,              periodic,      400,  200),
     SCHED_TASK_CLASS(AP_Scheduler,        &rover.scheduler,        update_logging, 0.1, 200),
@@ -139,7 +143,7 @@ void Rover::update_soft_armed()
 {
     hal.util->set_soft_armed(arming.is_armed() &&
                              hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED);
-    DataFlash.set_vehicle_armed(hal.util->get_soft_armed());
+    logger.set_vehicle_armed(hal.util->get_soft_armed());
 }
 
 // update AHRS system
@@ -160,8 +164,10 @@ void Rover::ahrs_update()
     // update position
     have_position = ahrs.get_position(current_loc);
 
-    // update home from EKF if necessary
-    update_home_from_EKF();
+    // set home from EKF if necessary and possible
+    if (!ahrs.home_is_set()) {
+        set_home_to_current_location(false);
+    }
 
     // if using the EKF get a speed update now (from accelerometers)
     Vector3f velocity;
@@ -177,7 +183,7 @@ void Rover::ahrs_update()
     }
 
     if (should_log(MASK_LOG_IMU)) {
-        DataFlash.Log_Write_IMU();
+        logger.Write_IMU();
     }
 }
 
@@ -204,7 +210,7 @@ void Rover::update_compass(void)
         ahrs.set_compass(&compass);
         // update offsets
         if (should_log(MASK_LOG_COMPASS)) {
-            DataFlash.Log_Write_Compass();
+            logger.Write_Compass();
         }
     }
 }
@@ -221,7 +227,7 @@ void Rover::update_logging1(void)
 
     if (should_log(MASK_LOG_THR)) {
         Log_Write_Throttle();
-        DataFlash.Log_Write_Beacon(g2.beacon);
+        logger.Write_Beacon(g2.beacon);
     }
 
     if (should_log(MASK_LOG_NTUN)) {
@@ -229,7 +235,7 @@ void Rover::update_logging1(void)
     }
 
     if (should_log(MASK_LOG_RANGEFINDER)) {
-        DataFlash.Log_Write_Proximity(g2.proximity);
+        logger.Write_Proximity(g2.proximity);
     }
 }
 
@@ -244,22 +250,14 @@ void Rover::update_logging2(void)
 
     if (should_log(MASK_LOG_RC)) {
         Log_Write_RC();
-        Log_Write_WheelEncoder();
+        g2.wheel_encoder.Log_Write();
     }
 
     if (should_log(MASK_LOG_IMU)) {
-        DataFlash.Log_Write_Vibration();
+        logger.Write_Vibration();
     }
 }
 
-
-/*
-  update aux servo mappings
- */
-void Rover::update_aux(void)
-{
-    SRV_Channels::enable_aux_servos();
-}
 
 /*
   once a second events
@@ -275,7 +273,7 @@ void Rover::one_second_loop(void)
     set_control_channels();
 
     // cope with changes to aux functions
-    update_aux();
+    SRV_Channels::enable_aux_servos();
 
     // update notify flags
     AP_Notify::flags.pre_arm_check = arming.pre_arm_checks(false);
@@ -285,10 +283,8 @@ void Rover::one_second_loop(void)
     // cope with changes to mavlink system ID
     mavlink_system.sysid = g.sysid_this_mav;
 
-    // update home position if not soft armed and gps position has
-    // changed. Update every 1s at most
-    if (!hal.util->get_soft_armed() &&
-        gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
+    // attempt to update home position and baro calibration if not armed:
+    if (!hal.util->get_soft_armed()) {
         update_home();
     }
 

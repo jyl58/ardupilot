@@ -37,7 +37,7 @@
 #include <GCS_MAVLink/GCS.h>
 #include <AP_SerialManager/AP_SerialManager.h>   // Serial manager library
 #include <AP_GPS/AP_GPS.h>             // ArduPilot GPS library
-#include <DataFlash/DataFlash.h>          // ArduPilot Mega Flash Memory Library
+#include <AP_Logger/AP_Logger.h>          // ArduPilot Mega Flash Memory Library
 #include <AP_Baro/AP_Baro.h>
 #include <AP_Compass/AP_Compass.h>         // ArduPilot Mega Magnetometer Library
 #include <AP_Math/AP_Math.h>            // ArduPilot Mega Vector/Matrix math Library
@@ -59,7 +59,6 @@
 #include <AP_Stats/AP_Stats.h>     // statistics library
 #include <AP_RSSI/AP_RSSI.h>                   // RSSI Library
 #include <Filter/Filter.h>             // Filter library
-#include <AP_Buffer/AP_Buffer.h>          // APM FIFO Buffer
 #include <AP_Relay/AP_Relay.h>           // APM relay
 #include <AP_ServoRelayEvents/AP_ServoRelayEvents.h>
 #include <AP_Airspeed/AP_Airspeed.h>        // needed for AHRS build
@@ -234,7 +233,7 @@ private:
     RC_Channel *channel_yaw;
 
     // Dataflash
-    DataFlash_Class DataFlash;
+    AP_Logger logger;
 
     AP_GPS gps;
 
@@ -413,7 +412,7 @@ private:
 
 #if FRSKY_TELEM_ENABLED == ENABLED
     // FrSky telemetry support
-    AP_Frsky_Telem frsky_telemetry{ahrs, battery, rangefinder};
+    AP_Frsky_Telem frsky_telemetry;
 #endif
 #if DEVO_TELEM_ENABLED == ENABLED
     AP_DEVO_Telem devo_telemetry{ahrs};
@@ -441,7 +440,7 @@ private:
 
     // 3D Location vectors
     // Current location of the vehicle (altitude is relative to home)
-    Location_Class current_loc;
+    Location current_loc;
 
     // IMU variables
     // Integration time (in seconds) for the gyros (DCM algorithm)
@@ -493,7 +492,7 @@ private:
 
     // AC_Fence library to reduce fly-aways
 #if AC_FENCE == ENABLED
-    AC_Fence fence{ahrs};
+    AC_Fence fence;
 #endif
 
 #if AC_AVOID_ENABLED == ENABLED
@@ -527,7 +526,7 @@ private:
 
     // terrain handling
 #if AP_TERRAIN_AVAILABLE && AC_TERRAIN && MODE_AUTO_ENABLED == ENABLED
-    AP_Terrain terrain{mode_auto.mission, rally};
+    AP_Terrain terrain{mode_auto.mission};
 #endif
 
     // Precision Landing
@@ -725,12 +724,9 @@ private:
 
     // fence.cpp
     void fence_check();
-    void fence_send_mavlink_status(mavlink_channel_t chan);
 
     // GCS_Mavlink.cpp
     void gcs_send_heartbeat(void);
-    void send_fence_status(mavlink_channel_t chan);
-    void send_sys_status(mavlink_channel_t chan);
     void send_nav_controller_output(mavlink_channel_t chan);
     void send_rpm(mavlink_channel_t chan);
 
@@ -760,7 +756,7 @@ private:
     void Log_Write_Attitude();
     void Log_Write_EKF_POS();
     void Log_Write_MotBatt();
-    void Log_Write_Event(uint8_t id);
+    void Log_Write_Event(Log_Event id);
     void Log_Write_Data(uint8_t id, int32_t value);
     void Log_Write_Data(uint8_t id, uint32_t value);
     void Log_Write_Data(uint8_t id, int16_t value);
@@ -811,10 +807,8 @@ private:
     void convert_lgr_parameters(void);
 
     // position_vector.cpp
-    Vector3f pv_location_to_vector(const Location& loc);
     float pv_alt_above_origin(float alt_above_home_cm);
     float pv_alt_above_home(float alt_above_origin_cm);
-    float pv_distance_to_home_cm(const Vector3f &destination);
 
     // precision_landing.cpp
     void init_precland();
@@ -875,6 +869,7 @@ private:
     MAV_TYPE get_frame_mav_type();
     const char* get_frame_string();
     void allocate_motors(void);
+    bool is_tradheli() const;
 
     // terrain.cpp
     void terrain_update();
