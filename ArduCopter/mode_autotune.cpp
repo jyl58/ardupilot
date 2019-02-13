@@ -54,7 +54,7 @@ void Copter::AutoTune::run()
 
         // set motors to spin-when-armed if throttle below deadzone, otherwise full range (but motors will only spin at min throttle)
         if (target_climb_rate < 0.0f) {
-            copter.motors->set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
+            copter.motors->set_desired_spool_state(AP_Motors::DESIRED_GROUND_IDLE);
         } else {
             copter.motors->set_desired_spool_state(AP_Motors::DESIRED_THROTTLE_UNLIMITED);
         }
@@ -114,9 +114,9 @@ void Copter::AutoTune::init_z_limits()
 
 void Copter::AutoTune::log_pids()
 {
-    copter.DataFlash.Log_Write_PID(LOG_PIDR_MSG, copter.attitude_control->get_rate_roll_pid().get_pid_info());
-    copter.DataFlash.Log_Write_PID(LOG_PIDP_MSG, copter.attitude_control->get_rate_pitch_pid().get_pid_info());
-    copter.DataFlash.Log_Write_PID(LOG_PIDY_MSG, copter.attitude_control->get_rate_yaw_pid().get_pid_info());
+    copter.logger.Write_PID(LOG_PIDR_MSG, copter.attitude_control->get_rate_roll_pid().get_pid_info());
+    copter.logger.Write_PID(LOG_PIDP_MSG, copter.attitude_control->get_rate_pitch_pid().get_pid_info());
+    copter.logger.Write_PID(LOG_PIDY_MSG, copter.attitude_control->get_rate_yaw_pid().get_pid_info());
 }
 
 
@@ -128,7 +128,7 @@ void Copter::AutoTune::Log_Write_Event(enum at_event id)
 {
     const struct {
         enum at_event eid;
-        uint8_t id;
+        Log_Event id;
     } map[] = {
         { EVENT_AUTOTUNE_INITIALISED, DATA_AUTOTUNE_INITIALISED },
         { EVENT_AUTOTUNE_OFF, DATA_AUTOTUNE_OFF },

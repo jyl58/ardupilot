@@ -29,7 +29,7 @@
 
 #if CH_CFG_USE_DYNAMIC == TRUE
 
-#include <DataFlash/DataFlash.h>
+#include <AP_Logger/AP_Logger.h>
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 #include "hwdef/common/stm32_util.h"
@@ -238,7 +238,7 @@ void Scheduler::reboot(bool hold_in_bootloader)
 
 #ifndef NO_DATAFLASH
     //stop logging
-    DataFlash_Class::instance()->StopLogging();
+    AP::logger().StopLogging();
 
     // stop sdcard driver, if active
     sdcard_stop();
@@ -347,11 +347,22 @@ void Scheduler::_io_thread(void* arg)
     while (!sched->_hal_initialized) {
         sched->delay_microseconds(1000);
     }
+    uint32_t last_sd_start_ms = AP_HAL::millis();
     while (true) {
         sched->delay_microseconds(1000);
 
         // run registered IO processes
         sched->_run_io();
+
+        if (!hal.util->get_soft_armed()) {
+            // if sdcard hasn't mounted then retry it every 3s in the IO
+            // thread when disarmed
+            uint32_t now = AP_HAL::millis();
+            if (now - last_sd_start_ms > 3000) {
+                last_sd_start_ms = now;
+                sdcard_retry();
+            }
+        }
     }
 }
 

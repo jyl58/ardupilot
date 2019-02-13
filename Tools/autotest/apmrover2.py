@@ -56,7 +56,6 @@ class AutoTestRover(AutoTest):
         self.speedup = speedup
 
         self.sitl = None
-        self.hasInit = False
 
         self.log_name = "APMrover2"
 
@@ -96,46 +95,15 @@ class AutoTestRover(AutoTest):
 
         self.get_mavlink_connection_going()
 
-        self.hasInit = True
-
         self.apply_defaultfile_parameters()
 
         self.progress("Ready to start testing!")
 
-    # def reset_and_arm(self):
-    #     """Reset RC, set to MANUAL and arm."""
-    #     self.wait_heartbeat()
-    #     # ensure all sticks in the middle
-    #     self.set_rc_default()
-    #     self.mavproxy.send('switch 1\n')
-    #     self.wait_heartbeat()
-    #     self.disarm_vehicle()
-    #     self.wait_heartbeat()
-    #     self.arm_vehicle()
-    #
+    def is_rover(self):
+        return True
 
-    # # TEST RC OVERRIDE
-    # # TEST RC OVERRIDE TIMEOUT
-    # def test_rtl(self, home, distance_min=5, timeout=250):
-    #     """Return, land."""
-    #     super(AutoTestRover, self).test_rtl(home, distance_min, timeout)
-    #
-    # def test_mission(self, filename):
-    #     """Test a mission from a file."""
-    #     self.progress("Test mission %s" % filename)
-    #     num_wp = self.load_mission(filename)
-    #     self.mavproxy.send('wp set 1\n')
-    #     self.wait_heartbeat()
-    #     self.mavproxy.send('switch 4\n')  # auto mode
-    #     self.wait_mode('AUTO')
-    #     ret = self.wait_waypoint(0, num_wp-1, max_dist=5, timeout=500)
-    #
-    #     if ret:
-    #         self.mavproxy.expect("Mission Complete")
-    #     self.wait_heartbeat()
-    #     self.wait_mode('HOLD')
-    #     self.progress("test: MISSION COMPLETE: passed=%s" % ret)
-    #     return ret
+    def get_rudder_channel(self):
+        return int(self.get_parameter("RCMAP_ROLL"))
 
     ##########################################################
     #   TESTS DRIVE
@@ -380,6 +348,16 @@ class AutoTestRover(AutoTest):
         self.disarm_vehicle()
         self.progress("Mission OK")
 
+    def test_gripper_mission(self):
+        self.load_mission("rover-gripper-mission.txt")
+        self.change_mode('AUTO')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        self.mavproxy.expect("Gripper Grabbed")
+        self.mavproxy.expect("Gripper Released")
+        self.wait_mode("HOLD")
+        self.disarm_vehicle()
+
     def do_get_banner(self):
         self.mavproxy.send("long DO_SEND_BANNER 1\n")
         start = time.time()
@@ -499,7 +477,7 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
         home_distance_max = 5
         if home_distance > home_distance_max:
             raise NotAchievedException(
-                "Did not get home (%u metres distant > %u)" %
+                "Did not get home (%f metres distant > %f)" %
                 (home_distance, home_distance_max))
         self.mavproxy.send('switch 6\n')
         self.wait_mode('MANUAL')
@@ -523,7 +501,9 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
         self.context_push()
         ex = None
         try:
-            self.mavproxy.send("fence load Tools/autotest/rover-fence-ac-avoid.txt\n")
+            avoid_filepath = os.path.join(self.mission_directory(),
+                                          "rover-fence-ac-avoid.txt")
+            self.mavproxy.send("fence load %s\n" % avoid_filepath)
             self.mavproxy.expect("Loaded 6 geo-fence")
             self.set_parameter("FENCE_ENABLE", 0)
             self.set_parameter("PRX_TYPE", 10)
@@ -659,6 +639,71 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
 
         if ex is not None:
             raise ex
+
+    def test_rc_override_cancel(self):
+        self.change_mode('MANUAL')
+        self.wait_ready_to_arm()
+        self.zero_throttle()
+        self.arm_vehicle()
+        # start moving forward a little:
+        normal_rc_throttle = 1700
+        throttle_override = 1900
+
+        self.progress("Establishing baseline RC input")
+        self.mavproxy.send('rc 3 %u\n' % normal_rc_throttle)
+        tstart = self.get_sim_time_cached()
+        while True:
+            if self.get_sim_time_cached() - tstart > 10:
+                raise AutoTestTimeoutException("Did not get rc change")
+            m = self.mav.recv_match(type='RC_CHANNELS', blocking=True)
+            if m.chan3_raw == normal_rc_throttle:
+                break
+
+        self.progress("Set override with RC_CHANNELS_OVERRIDE")
+        tstart = self.get_sim_time_cached()
+        while True:
+            if self.get_sim_time_cached() - tstart > 10:
+                raise AutoTestTimeoutException("Did not override")
+            self.progress("Sending throttle of %u" % (throttle_override,))
+            self.mav.mav.rc_channels_override_send(
+                1, # target system
+                1, # targe component
+                65535, # chan1_raw
+                65535, # chan2_raw
+                throttle_override, # chan3_raw
+                65535, # chan4_raw
+                65535, # chan5_raw
+                65535, # chan6_raw
+                65535, # chan7_raw
+                65535) # chan8_raw
+
+            m = self.mav.recv_match(type='RC_CHANNELS', blocking=True)
+            self.progress("chan3=%f want=%f" % (m.chan3_raw, throttle_override))
+            if m.chan3_raw == throttle_override:
+                break
+
+        self.progress("disabling override and making sure we revert to RC input in good time")
+        tstart = self.get_sim_time_cached()
+        while True:
+            if self.get_sim_time_cached() - tstart > 0.5:
+                raise AutoTestTimeoutException("Did not cancel override")
+            self.progress("Sending cancel of throttle override")
+            self.mav.mav.rc_channels_override_send(
+                1, # target system
+                1, # targe component
+                65535, # chan1_raw
+                65535, # chan2_raw
+                0,     # chan3_raw
+                65535, # chan4_raw
+                65535, # chan5_raw
+                65535, # chan6_raw
+                65535, # chan7_raw
+                65535) # chan8_raw
+
+            m = self.mav.recv_match(type='RC_CHANNELS', blocking=True)
+            self.progress("chan3=%f want=%f" % (m.chan3_raw, normal_rc_throttle))
+            if m.chan3_raw == normal_rc_throttle:
+                break
 
     def test_rc_overrides(self):
         self.context_push()
@@ -836,7 +881,7 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
                 self.arm_vehicle(timeout=5)
                 self.disarm_vehicle()
                 success = False
-            except NotAchievedException as e:
+            except AutoTestTimeoutException as e:
                 success = True
                 pass
             self.mav.srcSystem = old_srcSystem
@@ -922,6 +967,8 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
 
             ("RCOverrides", "Test RC overrides", self.test_rc_overrides),
 
+            ("RCOverridesCancel", "Test RC overrides Cancel", self.test_rc_override_cancel),
+
             ("Sprayer", "Test Sprayer", self.test_sprayer),
 
             ("AC_Avoidance",
@@ -931,6 +978,15 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
             ("CameraMission",
              "Test Camera Mission Items",
              self.test_camera_mission_items),
+
+            # Gripper test
+            ("Gripper",
+             "Test gripper",
+             self.test_gripper),
+
+            ("GripperMission",
+             "Test Gripper Mission Items",
+             self.test_gripper_mission),
 
             ("SET_MESSAGE_INTERVAL",
              "Test MAV_CMD_SET_MESSAGE_INTERVAL",
@@ -947,10 +1003,11 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
             ])
         return ret
 
-    def set_rc_default(self):
-        super(AutoTestRover, self).set_rc_default()
-        self.set_rc(3, 1000)
-        self.set_rc(8, 1800)
+    def rc_defaults(self):
+        ret = super(AutoTestRover, self).rc_defaults()
+        ret[3] = 1000
+        ret[8] = 1800
+        return ret;
 
     def default_mode(self):
         return 'MANUAL'

@@ -207,8 +207,9 @@ void Mode::set_desired_location(const struct Location& destination, float next_l
     if (!is_equal(next_leg_bearing_cd, MODE_NEXT_HEADING_UNKNOWN)) {
         const float curr_leg_bearing_cd = get_bearing_cd(_origin, _destination);
         const float turn_angle_cd = wrap_180_cd(next_leg_bearing_cd - curr_leg_bearing_cd);
-        if (is_zero(turn_angle_cd)) {
-            // if not turning can continue at full speed
+        if (fabsf(turn_angle_cd) < 10.0f) {
+            // if turning less than 0.1 degrees vehicle can continue at full speed
+            // we use 0.1 degrees instead of zero to avoid divide by zero in calcs below
             _desired_speed_final = _desired_speed;
         } else if (rover.use_pivot_steering_at_next_WP(turn_angle_cd)) {
             // pivoting so we will stop
@@ -549,4 +550,50 @@ void Mode::calc_stopping_location(Location& stopping_loc)
     const Vector2f stopping_offset = velocity.normalized() * stopping_dist;
 
     location_offset(stopping_loc, stopping_offset.x, stopping_offset.y);
+}
+
+Mode *Rover::mode_from_mode_num(const enum Mode::Number num)
+{
+    Mode *ret = nullptr;
+    switch (num) {
+    case Mode::Number::MANUAL:
+        ret = &mode_manual;
+        break;
+    case Mode::Number::ACRO:
+        ret = &mode_acro;
+        break;
+    case Mode::Number::STEERING:
+        ret = &mode_steering;
+        break;
+    case Mode::Number::HOLD:
+        ret = &mode_hold;
+        break;
+    case Mode::Number::LOITER:
+        ret = &mode_loiter;
+        break;
+    case Mode::Number::FOLLOW:
+        ret = &mode_follow;
+        break;
+    case Mode::Number::SIMPLE:
+        ret = &mode_simple;
+        break;
+    case Mode::Number::AUTO:
+        ret = &mode_auto;
+        break;
+    case Mode::Number::RTL:
+        ret = &mode_rtl;
+        break;
+    case Mode::Number::SMART_RTL:
+        ret = &mode_smartrtl;
+        break;
+    case Mode::Number::GUIDED:
+       ret = &mode_guided;
+        break;
+    case Mode::Number::INITIALISING:
+        ret = &mode_initializing;
+        break;
+    default:
+        break;
+    }
+    return ret;
 }

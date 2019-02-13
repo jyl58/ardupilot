@@ -109,8 +109,8 @@ public:
     };
 
     // get singleton instance
-    static AP_SerialManager *get_instance(void) {
-        return _instance;
+    static AP_SerialManager *get_singleton(void) {
+        return _singleton;
     }
     
     // init_console - initialise console at default baud rate
@@ -141,11 +141,20 @@ public:
     // set_blocking_writes_all - sets block_writes on or off for all serial channels
     void set_blocking_writes_all(bool blocking);
 
+    // get the passthru ports if enabled
+    bool get_passthru(AP_HAL::UARTDriver *&port1, AP_HAL::UARTDriver *&port2, uint8_t &timeout_s) const;
+
+    // disable passthru by settings SERIAL_PASS2 to -1
+    void disable_passthru(void);
+
+    // get Serial Port
+    AP_HAL::UARTDriver *get_serial_by_id(uint8_t id);
+
     // parameter var table
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
-    static AP_SerialManager *_instance;
+    static AP_SerialManager *_singleton;
     
     // array of uart info
     struct UARTState {
@@ -154,6 +163,11 @@ private:
         AP_HAL::UARTDriver* uart;
         AP_Int16 options;
     } state[SERIALMANAGER_NUM_PORTS];
+
+    // pass-through serial support
+    AP_Int8 passthru_port1;
+    AP_Int8 passthru_port2;
+    AP_Int8 passthru_timeout;
 
     // search through managed serial connections looking for the
     // instance-nth UART which is running protocol protocol

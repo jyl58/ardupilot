@@ -24,7 +24,7 @@ public:
     };
 
     enum InputIgnore {
-        RC_IGNORE_RECEIVER  = (1 << 0), // RC reciever modules
+        RC_IGNORE_RECEIVER  = (1 << 0), // RC receiver modules
         RC_IGNORE_OVERRIDES = (1 << 1), // MAVLink overrides
     };
 
@@ -84,7 +84,7 @@ public:
     bool       has_override() const;
 
     // get control input with zero deadzone
-    int16_t     get_control_in_zero_dz(void) const;
+    int16_t    get_control_in_zero_dz(void) const;
 
     int16_t    get_radio_min() const {return radio_min.get();}
     void       set_radio_min(int16_t val) { radio_min = val;}
@@ -173,6 +173,8 @@ public:
         SAILBOAT_TACK =       63, // rover sailboat tack
         REVERSE_THROTTLE =    64, // reverse throttle input
         GPS_DISABLE  =        65, // disable GPS for testing
+        RELAY5 =              66, // Relay5 pin on/off
+        RELAY6 =              67, // Relay6 pin on/off
         // if you add something here, make sure to update the documentation of the parameter in RC_Channel.cpp!
         // also, if you add an option >255, you will need to fix duplicate_options_exist
     };
@@ -180,14 +182,12 @@ public:
 
 protected:
 
-    // auxillary switch handling:
-    enum aux_switch_pos {
+    // auxillary switch handling (n.b.: we store this as 2-bits!):
+    enum aux_switch_pos_t : uint8_t {
         LOW,       // indicates auxiliary switch is in the low position (pwm <1200)
         MIDDLE,    // indicates auxiliary switch is in the middle position (pwm >1200, <1800)
         HIGH       // indicates auxiliary switch is in the high position (pwm >1800)
     };
-
-    typedef enum aux_switch_pos aux_switch_pos_t;
 
     virtual void init_aux_function(aux_func_t ch_option, aux_switch_pos_t);
     virtual void do_aux_function(aux_func_t ch_option, aux_switch_pos_t);
@@ -238,7 +238,7 @@ private:
     static const uint16_t AUX_PWM_TRIGGER_HIGH = 1800;
     // pwm value below which the option will be disabled:
     static const uint16_t AUX_PWM_TRIGGER_LOW = 1200;
-    aux_switch_pos_t read_3pos_switch() const;
+    bool read_3pos_switch(aux_switch_pos_t &ret) const WARN_IF_UNUSED;
 
     //Documentation of Aux Switch Flags:
     // 0 is low or false, 1 is center or true, 2 is high
@@ -315,7 +315,7 @@ public:
     static int16_t get_receiver_rssi(void);                            // returns [0, 255] for receiver RSSI (0 is no link) if present, otherwise -1
     bool read_input(void);                                             // returns true if new input has been read in
     static void clear_overrides(void);                                 // clears any active overrides
-    static bool receiver_bind(const int dsmMode);                      // puts the reciever in bind mode if present, returns true if success
+    static bool receiver_bind(const int dsmMode);                      // puts the receiver in bind mode if present, returns true if success
     static void set_override(const uint8_t chan, const int16_t value, const uint32_t timestamp_ms = 0); // set a channels override value
     static bool has_active_overrides(void);                            // returns true if there are overrides applied that are valid
 

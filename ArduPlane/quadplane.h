@@ -39,6 +39,8 @@ public:
     void setup_target_position(void);
     void takeoff_controller(void);
     void waypoint_controller(void);
+
+    void update_throttle_thr_mix(void);
     
     // update transition handling
     void update(void);
@@ -116,6 +118,9 @@ public:
 
     // return true if the wp_nav controller is being updated
     bool using_wp_nav(void) const;
+
+    // return true if the user has set ENABLE
+    bool enabled(void) const { return enable != 0; }
     
     struct PACKED log_QControl_Tuning {
         LOG_PACKET_HEADER;
@@ -231,8 +236,12 @@ private:
     // transition deceleration, m/s/s
     AP_Float transition_decel;
 
+    // transition failure milliseconds
+    AP_Int16 transition_failure;
+
     // Quadplane trim, degrees
     AP_Float ahrs_trim_pitch;
+    float _last_ahrs_trim_pitch;
 
     // fw landing approach radius
     AP_Float fw_land_approach_radius;
@@ -304,6 +313,7 @@ private:
     
     // timer start for transition
     uint32_t transition_start_ms;
+    uint32_t transition_low_airspeed_ms;
 
     Location last_auto_target;
 

@@ -140,7 +140,7 @@ bool AC_AutoTune::init_internals(bool _use_poshold,
     pos_control = _pos_control;
     ahrs_view = _ahrs_view;
     inertial_nav = _inertial_nav;
-    motors = AP_Motors::get_instance();
+    motors = AP_Motors::get_singleton();
 
     switch (mode) {
     case FAILED:
@@ -190,8 +190,6 @@ bool AC_AutoTune::init_internals(bool _use_poshold,
 // stop - should be called when the ch7/ch8 switch is switched OFF
 void AC_AutoTune::stop()
 {
-    axes_completed = 0;
-
     // set gains to their original values
     load_gains(GAIN_ORIGINAL);
 
@@ -354,7 +352,7 @@ void AC_AutoTune::run()
     // if not auto armed or motor interlock not enabled set throttle to zero and exit immediately
     // this should not actually be possible because of the init() checks
     if (!motors->armed() || !motors->get_interlock()) {
-        motors->set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
+        motors->set_desired_spool_state(AP_Motors::DESIRED_GROUND_IDLE);
         attitude_control->set_throttle_out_unstabilized(0.0f, true, 0);
         pos_control->relax_alt_hold_controllers(0.0f);
         return;
@@ -663,7 +661,7 @@ void AC_AutoTune::control_attitude()
 
         // log this iterations lean angle and rotation rate
         Log_Write_AutoTuneDetails(lean_angle, rotation_rate);
-        DataFlash_Class::instance()->Log_Write_Rate(ahrs_view, *motors, *attitude_control, *pos_control);
+        AP::logger().Write_Rate(ahrs_view, *motors, *attitude_control, *pos_control);
         log_pids();
         break;
     }
@@ -1698,7 +1696,7 @@ void AC_AutoTune::get_poshold_attitude(int32_t &roll_cd_out, int32_t &pitch_cd_o
 // Write an Autotune data packet
 void AC_AutoTune::Log_Write_AutoTune(uint8_t _axis, uint8_t tune_step, float meas_target, float meas_min, float meas_max, float new_gain_rp, float new_gain_rd, float new_gain_sp, float new_ddt)
 {
-    DataFlash_Class::instance()->Log_Write(
+    AP::logger().Write(
         "ATUN",
         "TimeUS,Axis,TuneStep,Targ,Min,Max,RP,RD,SP,ddt",
         "s--ddd---o",
@@ -1719,7 +1717,7 @@ void AC_AutoTune::Log_Write_AutoTune(uint8_t _axis, uint8_t tune_step, float mea
 // Write an Autotune data packet
 void AC_AutoTune::Log_Write_AutoTuneDetails(float angle_cd, float rate_cds)
 {
-    DataFlash_Class::instance()->Log_Write(
+    AP::logger().Write(
         "ATDE",
         "TimeUS,Angle,Rate",
         "sdk",

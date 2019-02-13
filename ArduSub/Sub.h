@@ -40,7 +40,7 @@
 // Application dependencies
 #include <AP_SerialManager/AP_SerialManager.h>   // Serial manager library
 #include <AP_GPS/AP_GPS.h>             // ArduPilot GPS library
-#include <DataFlash/DataFlash.h>          // ArduPilot Mega Flash Memory Library
+#include <AP_Logger/AP_Logger.h>          // ArduPilot Mega Flash Memory Library
 #include <AP_Baro/AP_Baro.h>
 #include <AP_Compass/AP_Compass.h>         // ArduPilot Mega Magnetometer Library
 #include <AP_InertialSensor/AP_InertialSensor.h>  // ArduPilot Mega Inertial Sensor (accel & gyro) Library
@@ -163,7 +163,7 @@ private:
     RC_Channel *channel_lateral;
 
     // Dataflash
-    DataFlash_Class DataFlash;
+    AP_Logger logger;
 
     AP_GPS gps;
 
@@ -347,7 +347,7 @@ private:
 
     // 3D Location vectors
     // Current location of the Sub (altitude is relative to home)
-    Location_Class current_loc;
+    Location current_loc;
 
     // Navigation Yaw control
     // auto flight mode's yaw mode
@@ -413,7 +413,7 @@ private:
 
     // AC_Fence library to reduce fly-aways
 #if AC_FENCE == ENABLED
-    AC_Fence fence{ahrs};
+    AC_Fence fence;
 #endif
 
 #if AVOIDANCE_ENABLED == ENABLED
@@ -427,7 +427,7 @@ private:
 
     // terrain handling
 #if AP_TERRAIN_AVAILABLE && AC_TERRAIN
-    AP_Terrain terrain{mission, rally};
+    AP_Terrain terrain{mission};
 #endif
 
     // used to allow attitude and depth control without a position system
@@ -475,7 +475,9 @@ private:
     void rotate_body_frame_to_NE(float &x, float &y);
     void gcs_send_heartbeat(void);
     void send_heartbeat(mavlink_channel_t chan);
-    void send_sys_status(mavlink_channel_t chan);
+    void get_sensor_status_flags(uint32_t &control_sensors_present,
+                                 uint32_t &control_sensors_enabled,
+                                 uint32_t &control_sensors_health);
     void send_nav_controller_output(mavlink_channel_t chan);
 #if RPM_ENABLED == ENABLED
     void send_rpm(mavlink_channel_t chan);
@@ -486,7 +488,7 @@ private:
     void Log_Write_Performance();
     void Log_Write_Attitude();
     void Log_Write_MotBatt();
-    void Log_Write_Event(uint8_t id);
+    void Log_Write_Event(Log_Event id);
     void Log_Write_Data(uint8_t id, int32_t value);
     void Log_Write_Data(uint8_t id, uint32_t value);
     void Log_Write_Data(uint8_t id, int16_t value);
@@ -522,10 +524,10 @@ private:
     bool auto_init(void);
     void auto_run();
     void auto_wp_start(const Vector3f& destination);
-    void auto_wp_start(const Location_Class& dest_loc);
+    void auto_wp_start(const Location& dest_loc);
     void auto_wp_run();
     void auto_spline_run();
-    void auto_circle_movetoedge_start(const Location_Class &circle_center, float radius_m);
+    void auto_circle_movetoedge_start(const Location &circle_center, float radius_m);
     void auto_circle_start();
     void auto_circle_run();
     void auto_nav_guided_start();
@@ -545,7 +547,7 @@ private:
     void guided_posvel_control_start();
     void guided_angle_control_start();
     bool guided_set_destination(const Vector3f& destination);
-    bool guided_set_destination(const Location_Class& dest_loc);
+    bool guided_set_destination(const Location& dest_loc);
     void guided_set_velocity(const Vector3f& velocity);
     bool guided_set_destination_posvel(const Vector3f& destination, const Vector3f& velocity);
     void guided_set_angle(const Quaternion &q, float climb_rate_cms);
@@ -579,7 +581,6 @@ private:
     void mainloop_failsafe_enable();
     void mainloop_failsafe_disable();
     void fence_check();
-    void fence_send_mavlink_status(mavlink_channel_t chan);
     bool set_mode(control_mode_t mode, mode_reason_t reason);
     void update_flight_mode();
     void exit_mode(control_mode_t old_control_mode, control_mode_t new_control_mode);
@@ -658,7 +659,7 @@ private:
 #endif
     bool verify_nav_delay(const AP_Mission::Mission_Command& cmd);
 
-    void auto_spline_start(const Location_Class& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location_Class& next_destination);
+    void auto_spline_start(const Location& destination, bool stopped_at_start, AC_WPNav::spline_segment_end_type seg_end_type, const Location& next_destination);
     void log_init(void);
     void init_capabilities(void);
     void accel_cal_update(void);

@@ -74,8 +74,8 @@ void SITL_State::_sitl_setup(const char *home_str)
 
     // find the barometer object if it exists
     _sitl = AP::sitl();
-    _barometer = AP_Baro::get_instance();
-    _ins = AP_InertialSensor::get_instance();
+    _barometer = AP_Baro::get_singleton();
+    _ins = AP_InertialSensor::get_singleton();
     _compass = Compass::get_singleton();
 #if AP_TERRAIN_AVAILABLE
     _terrain = reinterpret_cast<AP_Terrain *>(AP_Param::find_object("TERRAIN_"));
@@ -95,6 +95,7 @@ void SITL_State::_sitl_setup(const char *home_str)
         sitl_model->set_sprayer(&_sitl->sprayer_sim);
         sitl_model->set_gripper_servo(&_sitl->gripper_sim);
         sitl_model->set_gripper_epm(&_sitl->gripper_epm_sim);
+        sitl_model->set_parachute(&_sitl->parachute_sim);
 
         if (_use_fg_view) {
             fg_socket.connect(_fg_address, _fg_view_port);

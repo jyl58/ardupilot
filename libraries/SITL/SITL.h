@@ -2,12 +2,14 @@
 
 #include <AP_Math/AP_Math.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
+#include <AP_Common/Location.h>
 
 #include "SIM_Sprayer.h"
 #include "SIM_Gripper_Servo.h"
 #include "SIM_Gripper_EPM.h"
+#include "SIM_Parachute.h"
 
-class DataFlash_Class;
+class AP_Logger;
 
 namespace SITL {
 
@@ -63,18 +65,18 @@ public:
         mag_ofs.set(Vector3f(5, 13, -18));
         AP_Param::setup_object_defaults(this, var_info);
         AP_Param::setup_object_defaults(this, var_info2);
-        if (_s_instance != nullptr) {
+        if (_singleton != nullptr) {
             AP_HAL::panic("Too many SITL instances");
         }
-        _s_instance = this;
+        _singleton = this;
     }
 
     /* Do not allow copies */
     SITL(const SITL &other) = delete;
     SITL &operator=(const SITL&) = delete;
 
-    static SITL *_s_instance;
-    static SITL *get_instance() { return _s_instance; }
+    static SITL *_singleton;
+    static SITL *get_singleton() { return _singleton; }
 
     enum GPSType {
         GPS_TYPE_NONE  = 0,
@@ -165,6 +167,7 @@ public:
     AP_Int16 pin_mask; // for GPIO emulation
     AP_Float speedup; // simulation speedup
     AP_Int8  odom_enable; // enable visual odomotry data
+    AP_Int8  telem_baudlimit_enable; // enable baudrate limiting on links
 
     // wind control
     enum WindType {
@@ -216,12 +219,15 @@ public:
 
     // weight on wheels pin
     AP_Int8 wow_pin;
+
+    // vibration frequencies in Hz on each axis
+    AP_Vector3f vibe_freq;
     
     uint16_t irlock_port;
 
     void simstate_send(mavlink_channel_t chan);
 
-    void Log_Write_SIMSTATE(DataFlash_Class *dataflash);
+    void Log_Write_SIMSTATE();
 
     // convert a set of roll rates from earth frame to body frame
     static void convert_body_frame(double rollDeg, double pitchDeg,
@@ -235,6 +241,8 @@ public:
 
     Gripper_Servo gripper_sim;
     Gripper_EPM gripper_epm_sim;
+
+    Parachute parachute_sim;
 };
 
 } // namespace SITL

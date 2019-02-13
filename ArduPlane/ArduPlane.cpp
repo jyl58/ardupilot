@@ -85,7 +85,7 @@ const AP_Scheduler::Task Plane::scheduler_tasks[] = {
 #endif // AP_TERRAIN_AVAILABLE
     SCHED_TASK(update_is_flying_5Hz,    5,    100),
 #if LOGGING_ENABLED == ENABLED
-    SCHED_TASK_CLASS(DataFlash_Class, &plane.DataFlash, periodic_tasks, 50, 400),
+    SCHED_TASK_CLASS(AP_Logger, &plane.logger, periodic_tasks, 50, 400),
 #endif
     SCHED_TASK_CLASS(AP_InertialSensor, &plane.ins, periodic, 50, 50),
     SCHED_TASK(avoidance_adsb_update,  10,    100),
@@ -130,7 +130,7 @@ void Plane::update_soft_armed()
 {
     hal.util->set_soft_armed(arming.is_armed() &&
                              hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED);
-    DataFlash.set_vehicle_armed(hal.util->get_soft_armed());
+    logger.set_vehicle_armed(hal.util->get_soft_armed());
 }
 
 // update AHRS system
@@ -148,7 +148,7 @@ void Plane::ahrs_update()
     ahrs.update();
 
     if (should_log(MASK_LOG_IMU)) {
-        DataFlash.Log_Write_IMU();
+        logger.Write_IMU();
     }
 
     // calculate a scaled roll limit based on current pitch
@@ -166,6 +166,9 @@ void Plane::ahrs_update()
     steer_state.locked_course_err += ahrs.get_yaw_rate_earth() * G_Dt;
     steer_state.locked_course_err = wrap_PI(steer_state.locked_course_err);
 
+    // check if we have had a yaw reset from the EKF
+    quadplane.check_yaw_reset();
+
     // update inertial_nav for quadplane
     quadplane.inertial_nav.update(G_Dt);
 }
@@ -181,6 +184,11 @@ void Plane::update_speed_height(void)
 	    // takeoff detection
         SpdHgt_Controller->update_50hz();
     }
+
+    if (quadplane.in_vtol_mode() ||
+        quadplane.in_assisted_flight()) {
+        quadplane.update_throttle_thr_mix();
+    }
 }
 
 
@@ -192,7 +200,7 @@ void Plane::update_compass(void)
     if (g.compass_enabled && compass.read()) {
         ahrs.set_compass(&compass);
         if (should_log(MASK_LOG_COMPASS) && !ahrs.have_ekf_logging()) {
-            DataFlash.Log_Write_Compass();
+            logger.Write_Compass();
         }
     }
 }
@@ -207,10 +215,10 @@ void Plane::update_logging1(void)
     }
 
     if (should_log(MASK_LOG_ATTITUDE_MED) && !should_log(MASK_LOG_IMU))
-        DataFlash.Log_Write_IMU();
+        logger.Write_IMU();
 
     if (should_log(MASK_LOG_ATTITUDE_MED))
-        DataFlash.Log_Write_AOA_SSA(ahrs);
+        logger.Write_AOA_SSA(ahrs);
 }
 
 /*
@@ -228,7 +236,7 @@ void Plane::update_logging2(void)
         Log_Write_RC();
 
     if (should_log(MASK_LOG_IMU))
-        DataFlash.Log_Write_Vibration();
+        logger.Write_Vibration();
 }
 
 
@@ -254,13 +262,6 @@ void Plane::one_second_loop()
     // make it possible to change control channel ordering at runtime
     set_control_channels();
 
-#if HAVE_PX4_MIXER
-    if (!hal.util->get_soft_armed() && (last_mixer_crc == -1)) {
-        // if disarmed try to configure the mixer
-        setup_failsafe_mixing();
-    }
-#endif // CONFIG_HAL_BOARD
-
 #if HAL_WITH_IO_MCU
     iomcu.setup_mixing(&rcmap, g.override_channel.get(), g.mixing_gain, g2.manual_rc_mask);
 #endif
@@ -283,7 +284,7 @@ void Plane::one_second_loop()
 
 #if AP_TERRAIN_AVAILABLE
     if (should_log(MASK_LOG_GPS)) {
-        terrain.log_terrain_data(DataFlash);
+        terrain.log_terrain_data();
     }
 #endif
 
@@ -559,7 +560,6 @@ void Plane::update_flight_mode(void)
     case FLY_BY_WIRE_A: {
         // set nav_roll and nav_pitch using sticks
         nav_roll_cd  = channel_roll->norm_input() * roll_limit_cd;
-        nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
         update_load_factor();
         float pitch_input = channel_pitch->norm_input();
         if (pitch_input > 0) {
@@ -594,7 +594,6 @@ void Plane::update_flight_mode(void)
     case FLY_BY_WIRE_B:
         // Thanks to Yury MonZon for the altitude limit code!
         nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
-        nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
         update_load_factor();
         update_fbwb_speed_height();
         break;
@@ -612,7 +611,6 @@ void Plane::update_flight_mode(void)
         
         if (!cruise_state.locked_heading) {
             nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
-            nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
             update_load_factor();
         } else {
             calc_nav_roll();

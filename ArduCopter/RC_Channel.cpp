@@ -143,7 +143,7 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
     switch(ch_option) {
         case FLIP:
             // flip if switch is on, positive throttle and we're actually flying
-            if (ch_flag == aux_switch_pos::HIGH) {
+            if (ch_flag == aux_switch_pos_t::HIGH) {
                 copter.set_mode(control_mode_t::FLIP, MODE_REASON_TX_COMMAND);
             }
             break;
@@ -192,10 +192,6 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
                 if (copter.mode_auto.mission.num_commands() == 0) {
                     // set our location ID to 16, MAV_CMD_NAV_WAYPOINT
                     cmd.id = MAV_CMD_NAV_TAKEOFF;
-                    cmd.content.location.options = 0;
-                    cmd.p1 = 0;
-                    cmd.content.location.lat = 0;
-                    cmd.content.location.lng = 0;
                     cmd.content.location.alt = MAX(copter.current_loc.alt,100);
 
                     // use the current altitude for the target alt for takeoff.
