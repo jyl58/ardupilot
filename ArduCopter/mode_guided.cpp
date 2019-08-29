@@ -612,6 +612,7 @@ void Copter::ModeGuided::loiter_control_run(){
 	// initialize vertical speed and acceleration
     pos_control->set_max_speed_z(-get_pilot_speed_dn(), g.pilot_speed_up);
     pos_control->set_max_accel_z(g.pilot_accel_z);
+	
 	if (!motors->armed() || !motors->get_interlock()) {
 		motors->set_desired_spool_state(AP_Motors::DESIRED_SHUT_DOWN);
 		loiter_nav->init_target();
@@ -623,8 +624,9 @@ void Copter::ModeGuided::loiter_control_run(){
         pos_control->update_z_controller();
 		return;
 	}
+	
 	if(ap.land_complete){
-		motors->set_desired_spool_state(AP_Motors::DESIRED_SPIN_WHEN_ARMED);
+		motors->set_desired_spool_state(AP_Motors::DESIRED_GROUND_IDLE);
 		loiter_nav->init_target();
         attitude_control->reset_rate_controller_I_terms();
         attitude_control->set_yaw_target_to_current_heading();

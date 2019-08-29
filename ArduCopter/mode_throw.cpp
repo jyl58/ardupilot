@@ -76,11 +76,15 @@ void Copter::ModeThrow::run()
 
     } else if (stage == Throw_HgtStabilise && throw_height_good()) {
         gcs().send_text(MAV_SEVERITY_INFO,"height achieved - controlling position");
-        stage = Throw_PosHold;
+		if (copter.position_ok()){
+			stage = Throw_PosHold;
 
-        // initialise the loiter target to the current position and velocity
-        loiter_nav->clear_pilot_desired_acceleration();
-        loiter_nav->init_target();
+        	// initialise the loiter target to the current position and velocity
+        	loiter_nav->clear_pilot_desired_acceleration();
+       		loiter_nav->init_target();
+		}else{
+			set_mode(ALT_HOLD, MODE_REASON_THROW_COMPLETE);
+		}
 
         // Set the auto_arm status to true to avoid a possible automatic disarm caused by selection of an auto mode with throttle at minimum
         copter.set_auto_armed(true);
