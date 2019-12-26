@@ -20,20 +20,15 @@
 #include <GCS_MAVLink/GCS.h>
 #include <AP_Logger/AP_Logger.h>
 #include "AP_Terrain.h"
+#include <AP_AHRS/AP_AHRS.h>
 
 #if AP_TERRAIN_AVAILABLE
 
-#include <assert.h>
-#include <stdio.h>
-#if HAL_OS_POSIX_IO
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#endif
-#include <sys/types.h>
-#include <errno.h>
+#include <AP_Filesystem/AP_Filesystem.h>
 
 extern const AP_HAL::HAL& hal;
+
+AP_Terrain *AP_Terrain::singleton;
 
 // table of user settable parameters
 const AP_Param::GroupInfo AP_Terrain::var_info[] = {
@@ -62,6 +57,13 @@ AP_Terrain::AP_Terrain(const AP_Mission &_mission) :
     fd(-1)
 {
     AP_Param::setup_object_defaults(this, var_info);
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    if (singleton != nullptr) {
+        AP_HAL::panic("Terrain must be singleton");
+    }
+#endif
+    singleton = this;
 }
 
 /*
@@ -271,7 +273,7 @@ float AP_Terrain::lookahead(float bearing, float distance, float climb_ratio)
 
     // check for terrain at grid spacing intervals
     while (distance > 0) {
-        location_update(loc, bearing, grid_spacing);
+        loc.offset_bearing(bearing, grid_spacing);
         climb += climb_ratio * grid_spacing;
         distance -= grid_spacing;
         float height;
@@ -320,7 +322,6 @@ void AP_Terrain::update(void)
 
     // update capabilities and status
     if (allocate()) {
-        hal.util->set_capabilities(MAV_PROTOCOL_CAPABILITY_TERRAIN);
         if (!pos_valid) {
             // we don't know where we are
             system_status = TerrainStatusUnhealthy;
@@ -331,15 +332,11 @@ void AP_Terrain::update(void)
             system_status = TerrainStatusOK;
         }
     } else {
-        hal.util->clear_capabilities(MAV_PROTOCOL_CAPABILITY_TERRAIN);
         system_status = TerrainStatusDisabled;
     }
 
 }
 
-/*
-  log terrain data to dataflash log
- */
 void AP_Terrain::log_terrain_data()
 {
     if (!allocate()) {
@@ -379,7 +376,7 @@ void AP_Terrain::log_terrain_data()
  */
 bool AP_Terrain::allocate(void)
 {
-    if (enable == 0) {
+    if (enable == 0 || memory_alloc_failed) {
         return false;
     }
     if (cache != nullptr) {
@@ -387,8 +384,8 @@ bool AP_Terrain::allocate(void)
     }
     cache = (struct grid_cache *)calloc(TERRAIN_GRID_BLOCK_CACHE_SIZE, sizeof(cache[0]));
     if (cache == nullptr) {
-        enable.set(0);
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Terrain: Allocation failed");
+        memory_alloc_failed = true;
         return false;
     }
     cache_size = TERRAIN_GRID_BLOCK_CACHE_SIZE;

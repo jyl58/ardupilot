@@ -23,6 +23,8 @@ STM32_ST_USE_TIMER 5
 # flash size
 FLASH_SIZE_KB 2048
 
+env OPTIMIZE -O2
+
 # serial port for stdout, disabled so console is on USB
 #STDOUT_SERIAL SD7
 #STDOUT_BAUDRATE 57600
@@ -210,6 +212,19 @@ SPIDEV icm20608    SPI1 DEVID6  20608_CS   MODE3   2*MHZ   8*MHZ
 SPIDEV lis3mdl     SPI1 DEVID5  MAG_CS     MODE3 500*KHZ 500*KHZ
 SPIDEV ramtron     SPI2 DEVID10 FRAM_CS    MODE3   8*MHZ   8*MHZ
 
+# two IMUs
+define HAL_DEFAULT_INS_FAST_SAMPLE 1
+IMU Invensense SPI:icm20608 ROTATION_ROLL_180_YAW_90
+IMU Invensense SPI:mpu9250  ROTATION_ROLL_180_YAW_90
+
+# one baro
+BARO MS56XX SPI:ms5611
+
+# two compasses
+COMPASS AK8963:probe_mpu9250 0 ROTATION_ROLL_180_YAW_90
+COMPASS LIS3MDL SPI:lis3mdl false ROTATION_NONE
+define HAL_PROBE_EXTERNAL_I2C_COMPASSES
+
 define HAL_CHIBIOS_ARCH_FMUV4PRO 1
 
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
@@ -223,12 +238,6 @@ define STORAGE_FLASH_PAGE 22
 
 # enable FAT filesystem support (needs a microSD defined via SDIO)
 define HAL_OS_FATFS_IO 1
-
-# enable RTSCTS support
-define AP_FEATURE_RTSCTS 1
-
-# enable SBUS_OUT on IOMCU (if you have an IOMCU)
-define AP_FEATURE_SBUS_OUT 1
 
 # battery setup
 define HAL_BATT_VOLT_PIN 2
@@ -247,4 +256,4 @@ define BOARD_PWM_COUNT_DEFAULT 6
 DMA_NOSHARE USART6_TX USART6_RX ADC1
 DMA_PRIORITY USART6*
 
-ROMFS io_firmware.bin Tools/IO_Firmware/fmuv2_IO.bin
+ROMFS io_firmware.bin Tools/IO_Firmware/iofirmware_lowpolh.bin

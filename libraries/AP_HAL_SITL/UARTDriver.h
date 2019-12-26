@@ -22,10 +22,6 @@ public:
         _listen_fd = -1;
     }
 
-    static UARTDriver *from(AP_HAL::UARTDriver *uart) {
-        return static_cast<UARTDriver*>(uart);
-    }
-    
     /* Implementations of UARTDriver virtual methods */
     void begin(uint32_t b) override {
         begin(b, 0, 0);
@@ -124,6 +120,11 @@ private:
     bool _packetise;
     uint16_t _mc_myport;
     uint32_t last_tick_us;
+
+    // if this is not -1 then data should be written here instead of
+    // _fd.  This is to support simulated serial devices, which use a
+    // pipe for read and a pipe for write
+    int _fd_write = -1;
 };
 
 #endif

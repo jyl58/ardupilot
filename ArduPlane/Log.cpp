@@ -16,14 +16,18 @@ void Plane::Log_Write_Attitude(void)
         //Plane does not have the concept of navyaw. This is a placeholder.
         targets.z = 0;
     }
-    
+
     if (quadplane.tailsitter_active() || quadplane.in_vtol_mode()) {
         // we need the attitude targets from the AC_AttitudeControl controller, as they
-        // account for the acceleration limits
-        targets = quadplane.attitude_control->get_att_target_euler_cd();
+        // account for the acceleration limits.
+        // Also, for bodyframe roll input types, _attitude_target_euler_angle is not maintained
+        // since Euler angles are not used and it is a waste of cpu to compute them at the loop rate.
+        // Get them from the quaternion instead:
+        quadplane.attitude_control->get_attitude_target_quat().to_euler(targets.x, targets.y, targets.z);
+        targets *= degrees(100.0f);
         logger.Write_AttitudeView(*quadplane.ahrs_view, targets);
     } else {
-        logger.Write_Attitude(ahrs, targets);
+        logger.Write_Attitude(targets);
     }
     if (quadplane.in_vtol_mode() || quadplane.in_assisted_flight()) {
         // log quadplane PIDs separately from fixed wing PIDs
@@ -39,13 +43,13 @@ void Plane::Log_Write_Attitude(void)
     logger.Write_PID(LOG_PIDS_MSG, steerController.get_pid_info());
 
 #if AP_AHRS_NAVEKF_AVAILABLE
-    logger.Write_EKF(ahrs);
-    logger.Write_AHRS2(ahrs);
+    AP::ahrs_navekf().Log_Write();
+    logger.Write_AHRS2();
 #endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     sitl.Log_Write_SIMSTATE();
 #endif
-    logger.Write_POS(ahrs);
+    logger.Write_POS();
 }
 
 // do logging at loop rate
@@ -186,11 +190,12 @@ struct PACKED log_Sonar {
     float correction;
 };
 
-// Write a sonar packet
+// Write a sonar packet.  Note that RFND log messages are written by
+// RangeFinder itself as part of update().
 void Plane::Log_Write_Sonar()
 {
     uint16_t distance = 0;
-    if (rangefinder.status_orient(ROTATION_PITCH_270) == RangeFinder::RangeFinder_Good) {
+    if (rangefinder.status_orient(ROTATION_PITCH_270) == RangeFinder::Status::Good) {
         distance = rangefinder.distance_cm_orient(ROTATION_PITCH_270);
     }
 
@@ -203,27 +208,7 @@ void Plane::Log_Write_Sonar()
         correction  : rangefinder_state.correction
     };
     logger.WriteBlock(&pkt, sizeof(pkt));
-
-    logger.Write_RFND(rangefinder);
 }
-
-struct PACKED log_Arm_Disarm {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint8_t  arm_state;
-    uint16_t arm_checks;
-};
-
-void Plane::Log_Arm_Disarm() {
-    struct log_Arm_Disarm pkt = {
-        LOG_PACKET_HEADER_INIT(LOG_ARM_DISARM_MSG),
-        time_us                 : AP_HAL::micros64(),
-        arm_state               : arming.is_armed(),
-        arm_checks              : arming.get_enabled_checks()      
-    };
-    logger.WriteCriticalBlock(&pkt, sizeof(pkt));
-}
-
 
 struct PACKED log_AETR {
     LOG_PACKET_HEADER;
@@ -255,7 +240,7 @@ void Plane::Log_Write_RC(void)
     logger.Write_RCIN();
     logger.Write_RCOUT();
     if (rssi.enabled()) {
-        logger.Write_RSSI(rssi);
+        logger.Write_RSSI();
     }
     Log_Write_AETR();
 }
@@ -273,14 +258,12 @@ const struct LogStructure Plane::log_structure[] = {
       "NTUN", "QfcccfffLLii",  "TimeUS,Dist,TBrg,NavBrg,AltErr,XT,XTi,AspdE,TLat,TLng,TAlt,TAspd", "smddmmmnDUmn", "F0BBB0B0GGBB" },
     { LOG_SONAR_MSG, sizeof(log_Sonar),             
       "SONR", "QffBf",   "TimeUS,Dist,Volt,Cnt,Corr", "smv--", "FB0--" },
-    { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm),
-      "ARM", "QBH", "TimeUS,ArmState,ArmChecks", "s--", "F--" },
     { LOG_ATRP_MSG, sizeof(AP_AutoTune::log_ATRP),
       "ATRP", "QBBcfff",  "TimeUS,Type,State,Servo,Demanded,Achieved,P", "s---dd-", "F---00-" },
     { LOG_STATUS_MSG, sizeof(log_Status),
       "STAT", "QBfBBBBBB",  "TimeUS,isFlying,isFlyProb,Armed,Safety,Crash,Still,Stage,Hit", "s--------", "F--------" },
     { LOG_QTUN_MSG, sizeof(QuadPlane::log_QControl_Tuning),
-      "QTUN", "Qffffffeccf", "TimeUS,ThI,ABst,ThO,ThH,DAlt,Alt,BAlt,DCRt,CRt,TMix", "s----mmmnn-", "F----00000-" },
+      "QTUN", "Qffffffeccff", "TimeUS,ThI,ABst,ThO,ThH,DAlt,Alt,BAlt,DCRt,CRt,TMix,Sscl", "s----mmmnn--", "F----00000-0" },
     { LOG_AOA_SSA_MSG, sizeof(log_AOA_SSA),
       "AOA", "Qff", "TimeUS,AOA,SSA", "sdd", "F00" },
     { LOG_PIQR_MSG, sizeof(log_PID), \
@@ -299,7 +282,7 @@ void Plane::Log_Write_Vehicle_Startup_Messages()
 {
     // only 200(?) bytes are guaranteed by AP_Logger
     Log_Write_Startup(TYPE_GROUNDSTART_MSG);
-    logger.Write_Mode(control_mode, control_mode_reason);
+    logger.Write_Mode(control_mode->mode_number(), control_mode_reason);
     ahrs.Log_Write_Home_And_Origin();
     gps.Write_AP_Logger_Log_Startup_messages();
 }
@@ -323,7 +306,6 @@ void Plane::Log_Write_Nav_Tuning() {}
 void Plane::Log_Write_Status() {}
 void Plane::Log_Write_Sonar() {}
 
-void Plane::Log_Arm_Disarm() {}
 void Plane::Log_Write_RC(void) {}
 void Plane::Log_Write_Vehicle_Startup_Messages() {}
 

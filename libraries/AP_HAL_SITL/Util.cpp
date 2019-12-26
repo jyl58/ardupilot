@@ -1,6 +1,10 @@
 #include "Util.h"
 #include <sys/time.h>
 
+#ifdef WITH_SITL_TONEALARM
+HALSITL::ToneAlarm_SF HALSITL::Util::_toneAlarm;
+#endif
+
 uint64_t HALSITL::Util::get_hw_rtc() const
 {
 #ifndef CLOCK_REALTIME
@@ -75,13 +79,13 @@ void *HALSITL::Util::allocate_heap_memory(size_t size)
     return (void *)new_heap;
 }
 
-void *HALSITL::Util::heap_realloc(void *heap, void *ptr, size_t new_size)
+void *HALSITL::Util::heap_realloc(void *heap_ptr, void *ptr, size_t new_size)
 {
-    if (heap == nullptr) {
+    if (heap_ptr == nullptr) {
         return nullptr;
     }
 
-    struct heap *heapp = (struct heap*)heap;
+    struct heap *heapp = (struct heap*)heap_ptr;
 
     // extract appropriate headers
     size_t old_size = 0;
@@ -91,15 +95,15 @@ void *HALSITL::Util::heap_realloc(void *heap, void *ptr, size_t new_size)
         old_size = old_header->allocation_size;
     }
 
+    if ((heapp->current_heap_usage + new_size - old_size) > heapp->scripting_max_heap_size) {
+        // fail the allocation as we don't have the memory. Note that we don't simulate fragmentation
+        return nullptr;
+    }
+
     heapp->current_heap_usage -= old_size;
     if (new_size == 0) {
        free(old_header);
        return nullptr;
-    }
-
-    if ((heapp->current_heap_usage + new_size - old_size) > heapp->scripting_max_heap_size) {
-        // fail the allocation as we don't have the memory. Note that we don't simulate fragmentation
-        return nullptr;
     }
 
     heap_allocation_header *new_header = (heap_allocation_header *)malloc(new_size + sizeof(heap_allocation_header));
@@ -120,3 +124,12 @@ void *HALSITL::Util::heap_realloc(void *heap, void *ptr, size_t new_size)
 }
 
 #endif // ENABLE_HEAP
+
+enum AP_HAL::Util::safety_state HALSITL::Util::safety_switch_state(void)
+{
+    const SITL::SITL *sitl = AP::sitl();
+    if (sitl == nullptr) {
+        return AP_HAL::Util::SAFETY_NONE;
+    }
+    return sitl->safety_switch_state();
+}

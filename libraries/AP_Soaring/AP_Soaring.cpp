@@ -1,4 +1,5 @@
 #include "AP_Soaring.h"
+#include <AP_Logger/AP_Logger.h>
 #include <GCS_MAVLink/GCS.h>
 #include <stdint.h>
 extern const AP_HAL::HAL& hal;
@@ -141,7 +142,7 @@ SoaringController::SoaringController(AP_AHRS &ahrs, AP_SpdHgtControl &spdHgt, co
 void SoaringController::get_target(Location &wp)
 {
     wp = _prev_update_location;
-    location_offset(wp, _ekf.X[2], _ekf.X[3]);
+    wp.offset(_ekf.X[2], _ekf.X[3]);
 }
 
 bool SoaringController::suppress_throttle()
@@ -238,7 +239,7 @@ void SoaringController::init_cruising()
 
 void SoaringController::get_wind_corrected_drift(const Location *current_loc, const Vector3f *wind, float *wind_drift_x, float *wind_drift_y, float *dx, float *dy)
 {
-    Vector2f diff = location_diff(_prev_update_location, *current_loc); // get distances from previous update
+    const Vector2f diff = _prev_update_location.get_distance_NE(*current_loc); // get distances from previous update
     *dx = diff.x;
     *dy = diff.y;
 

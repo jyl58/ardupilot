@@ -16,7 +16,7 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma GCC optimize("O3")
+#pragma GCC optimize("O2")
 
 #include "AP_Math.h"
 
@@ -365,4 +365,10 @@ Quaternion Quaternion::operator/(const Quaternion &v) const
     ret.q3 = (rquat0*quat2 + rquat1*quat3 - rquat2*quat0 - rquat3*quat1);
     ret.q4 = (rquat0*quat3 - rquat1*quat2 + rquat2*quat1 - rquat3*quat0);
     return ret;
+}
+
+// angular difference in radians between quaternions
+Quaternion Quaternion::angular_difference(const Quaternion &v) const
+{
+    return v.inverse() * *this;
 }

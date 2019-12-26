@@ -27,6 +27,7 @@ public:
         AP_HAL::UARTDriver* _uartE, // 2nd GPS
         AP_HAL::UARTDriver* _uartF, // extra1
         AP_HAL::UARTDriver* _uartG, // extra2
+        AP_HAL::UARTDriver* _uartH, // extra3
         AP_HAL::I2CDeviceManager* _i2c_mgr,
         AP_HAL::SPIDeviceManager* _spi,
         AP_HAL::AnalogIn*   _analogin,
@@ -38,6 +39,7 @@ public:
         AP_HAL::Scheduler*  _scheduler,
         AP_HAL::Util*       _util,
         AP_HAL::OpticalFlow *_opticalflow,
+        AP_HAL::Flash *_flash,
 #if HAL_WITH_UAVCAN
         AP_HAL::CANManager* _can_mgr[MAX_NUMBER_OF_CAN_DRIVERS])
 #else
@@ -51,6 +53,7 @@ public:
         uartE(_uartE),
         uartF(_uartF),
         uartG(_uartG),
+        uartH(_uartH),
         i2c_mgr(_i2c_mgr),
         spi(_spi),
         analogin(_analogin),
@@ -61,7 +64,8 @@ public:
         rcout(_rcout),
         scheduler(_scheduler),
         util(_util),
-        opticalflow(_opticalflow)
+        opticalflow(_opticalflow),
+        flash(_flash)
     {
 #if HAL_WITH_UAVCAN
         if (_can_mgr == nullptr) {
@@ -101,6 +105,7 @@ public:
     AP_HAL::UARTDriver* uartE;
     AP_HAL::UARTDriver* uartF;
     AP_HAL::UARTDriver* uartG;
+    AP_HAL::UARTDriver* uartH;
     AP_HAL::I2CDeviceManager* i2c_mgr;
     AP_HAL::SPIDeviceManager* spi;
     AP_HAL::AnalogIn*   analogin;
@@ -112,6 +117,7 @@ public:
     AP_HAL::Scheduler*  scheduler;
     AP_HAL::Util        *util;
     AP_HAL::OpticalFlow *opticalflow;
+    AP_HAL::Flash       *flash;
 #if HAL_WITH_UAVCAN
     AP_HAL::CANManager* can_mgr[MAX_NUMBER_OF_CAN_DRIVERS];
 #else

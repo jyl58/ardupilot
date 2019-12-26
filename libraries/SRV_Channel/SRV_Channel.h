@@ -143,15 +143,23 @@ public:
         k_scripting14           = 107,
         k_scripting15           = 108,
         k_scripting16           = 109,
+        k_LED_neopixel1         = 120,
+        k_LED_neopixel2         = 121,
+        k_LED_neopixel3         = 122,
+        k_LED_neopixel4         = 123,
+        k_roll_out              = 124,
+        k_pitch_out             = 125,
+        k_thrust_out            = 126,
+        k_yaw_out               = 127,
         k_nr_aux_servo_functions         ///< This must be the last enum value (only add new values _before_ this one)
     } Aux_servo_function_t;
 
     // used to get min/max/trim limit value based on reverse
-    enum LimitValue {
-        SRV_CHANNEL_LIMIT_TRIM,
-        SRV_CHANNEL_LIMIT_MIN,
-        SRV_CHANNEL_LIMIT_MAX,
-        SRV_CHANNEL_LIMIT_ZERO_PWM
+    enum class Limit {
+        TRIM,
+        MIN,
+        MAX,
+        ZERO_PWM
     };
 
     // set the output value as a pwm value
@@ -193,6 +201,9 @@ public:
     // return true if function is for a multicopter motor
     static bool is_motor(SRV_Channel::Aux_servo_function_t function);
 
+    // return true if function is for anything that should be stopped in a e-stop situation, ie is dangerous
+    static bool should_e_stop(SRV_Channel::Aux_servo_function_t function);
+
     // return the function of a channel
     SRV_Channel::Aux_servo_function_t get_function(void) const {
         return (SRV_Channel::Aux_servo_function_t)function.get();
@@ -214,7 +225,11 @@ public:
     bool function_configured(void) const {
         return function.configured();
     }
-    
+
+    // specify that small rc input changes should be ignored during passthrough
+    // used by DO_SET_SERVO commands
+    void ignore_small_rcin_changes() { ign_small_rcin_changes = true; }
+
 private:
     AP_Int16 servo_min;
     AP_Int16 servo_max;
@@ -254,7 +269,7 @@ private:
     void aux_servo_function_setup(void);
 
     // return PWM for a given limit value
-    uint16_t get_limit_pwm(LimitValue limit) const;
+    uint16_t get_limit_pwm(Limit limit) const;
 
     // get normalised output from -1 to 1
     float get_output_norm(void);
@@ -265,6 +280,13 @@ private:
     // mask of channels where we have a output_pwm value. Cleared when a
     // scaled value is written. 
     static servo_mask_t have_pwm_mask;
+
+    // previous radio_in during pass-thru
+    int16_t previous_radio_in;
+
+    // specify that small rcinput changes should be ignored during passthrough
+    // used by DO_SET_SERVO commands
+    bool ign_small_rcin_changes;
 };
 
 /*
@@ -329,11 +351,6 @@ public:
     // save trims
     void save_trim(void);
 
-    // setup for a reversible k_throttle (from -100 to 100)
-    void set_reversible_throttle(void) {
-        flags.k_throttle_reversible = true;
-    }
-
     // setup IO failsafe for all channels to trim
     static void setup_failsafe_trim_all_non_motors(void);
 
@@ -368,13 +385,13 @@ public:
     static void set_failsafe_pwm(SRV_Channel::Aux_servo_function_t function, uint16_t pwm);
 
     // setup failsafe for an auxiliary channel function
-    static void set_failsafe_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::LimitValue limit);
+    static void set_failsafe_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::Limit limit);
 
     // setup safety for an auxiliary channel function (used when disarmed)
-    static void set_safety_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::LimitValue limit);
+    static void set_safety_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::Limit limit);
 
-    // set servo to a LimitValue
-    static void set_output_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::LimitValue limit);
+    // set servo to a Limit
+    static void set_output_limit(SRV_Channel::Aux_servo_function_t function, SRV_Channel::Limit limit);
 
     // return true if a function is assigned to a channel
     static bool function_assigned(SRV_Channel::Aux_servo_function_t function);
@@ -456,17 +473,27 @@ public:
     static void set_digital_mask(uint16_t mask) {
         digital_mask |= mask;
     }
-    
+
+    // Set E - stop
+    static void set_emergency_stop(bool state) {
+        emergency_stop = state;
+    }
+
+    // get E - stop
+    static bool get_emergency_stop() { return emergency_stop;}
+
+    // singleton for Lua
+    static SRV_Channels *get_singleton(void) {
+        return _singleton;
+    }
+
 private:
-    struct {
-        bool k_throttle_reversible:1;
-    } flags;
 
     static bool disabled_passthrough;
 
     SRV_Channel::servo_mask_t trimmed_mask;
 
-    static Bitmask function_mask;
+    static Bitmask<SRV_Channel::k_nr_aux_servo_functions> function_mask;
     static bool initialised;
 
     // this static arrangement is to avoid having static objects in AP_Param tables
@@ -516,4 +543,6 @@ private:
     static bool passthrough_disabled(void) {
         return disabled_passthrough;
     }
+
+    static bool emergency_stop;
 };

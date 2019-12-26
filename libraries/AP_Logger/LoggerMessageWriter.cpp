@@ -25,7 +25,7 @@ void LoggerMessageWriter_DFLogStart::reset()
     _writeentiremission.reset();
     _writeallrallypoints.reset();
 
-    stage = ls_blockwriter_stage_init;
+    stage = Stage::FORMATS;
     next_format_to_send = 0;
     _next_unit_to_send = 0;
     _next_multiplier_to_send = 0;
@@ -36,101 +36,97 @@ void LoggerMessageWriter_DFLogStart::reset()
 void LoggerMessageWriter_DFLogStart::process()
 {
     switch(stage) {
-    case ls_blockwriter_stage_init:
-        stage = ls_blockwriter_stage_formats;
-        FALLTHROUGH;
-
-    case ls_blockwriter_stage_formats:
+    case Stage::FORMATS:
         // write log formats so the log is self-describing
-        while (next_format_to_send < _dataflash_backend->num_types()) {
-            if (!_dataflash_backend->Write_Format(_dataflash_backend->structure(next_format_to_send))) {
+        while (next_format_to_send < _logger_backend->num_types()) {
+            if (!_logger_backend->Write_Format(_logger_backend->structure(next_format_to_send))) {
                 return; // call me again!
             }
             next_format_to_send++;
         }
         _fmt_done = true;
-        stage = ls_blockwriter_stage_parms;
+        stage = Stage::UNITS;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_units:
-        while (_next_unit_to_send < _dataflash_backend->num_units()) {
-            if (!_dataflash_backend->Write_Unit(_dataflash_backend->unit(_next_unit_to_send))) {
+    case Stage::UNITS:
+        while (_next_unit_to_send < _logger_backend->num_units()) {
+            if (!_logger_backend->Write_Unit(_logger_backend->unit(_next_unit_to_send))) {
                 return; // call me again!
             }
             _next_unit_to_send++;
         }
-        stage = ls_blockwriter_stage_multipliers;
+        stage = Stage::MULTIPLIERS;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_multipliers:
-        while (_next_multiplier_to_send < _dataflash_backend->num_multipliers()) {
-            if (!_dataflash_backend->Write_Multiplier(_dataflash_backend->multiplier(_next_multiplier_to_send))) {
+    case Stage::MULTIPLIERS:
+        while (_next_multiplier_to_send < _logger_backend->num_multipliers()) {
+            if (!_logger_backend->Write_Multiplier(_logger_backend->multiplier(_next_multiplier_to_send))) {
                 return; // call me again!
             }
             _next_multiplier_to_send++;
         }
-        stage = ls_blockwriter_stage_units;
+        stage = Stage::UNITS;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_format_units:
-        while (_next_format_unit_to_send < _dataflash_backend->num_types()) {
-            if (!_dataflash_backend->Write_Format_Units(_dataflash_backend->structure(_next_format_unit_to_send))) {
+    case Stage::FORMAT_UNITS:
+        while (_next_format_unit_to_send < _logger_backend->num_types()) {
+            if (!_logger_backend->Write_Format_Units(_logger_backend->structure(_next_format_unit_to_send))) {
                 return; // call me again!
             }
             _next_format_unit_to_send++;
         }
-        stage = ls_blockwriter_stage_parms;
+        stage = Stage::PARMS;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_parms:
+    case Stage::PARMS:
         while (ap) {
-            if (!_dataflash_backend->Write_Parameter(ap, token, type)) {
+            if (!_logger_backend->Write_Parameter(ap, token, type)) {
                 return;
             }
             ap = AP_Param::next_scalar(&token, &type);
         }
 
-        stage = ls_blockwriter_stage_sysinfo;
+        stage = Stage::SYSINFO;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_sysinfo:
+    case Stage::SYSINFO:
         _writesysinfo.process();
         if (!_writesysinfo.finished()) {
             return;
         }
-        stage = ls_blockwriter_stage_write_entire_mission;
+        stage = Stage::WRITE_ENTIRE_MISSION;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_write_entire_mission:
+    case Stage::WRITE_ENTIRE_MISSION:
         _writeentiremission.process();
         if (!_writeentiremission.finished()) {
             return;
         }
-        stage = ls_blockwriter_stage_write_all_rally_points;
+        stage = Stage::WRITE_ALL_RALLY_POINTS;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_write_all_rally_points:
+    case Stage::WRITE_ALL_RALLY_POINTS:
         _writeallrallypoints.process();
         if (!_writeallrallypoints.finished()) {
             return;
         }
-        stage = ls_blockwriter_stage_vehicle_messages;
+        stage = Stage::VEHICLE_MESSAGES;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_vehicle_messages:
+    case Stage::VEHICLE_MESSAGES:
         // we guarantee 200 bytes of space for the vehicle startup
         // messages.  This allows them to be simple functions rather
         // than e.g. LoggerMessageWriter-based state machines
-        if (_dataflash_backend->vehicle_message_writer()) {
-            if (_dataflash_backend->bufferspace_available() < 200) {
+        if (_logger_backend->vehicle_message_writer()) {
+            if (_logger_backend->bufferspace_available() < 200) {
                 return;
             }
-            (_dataflash_backend->vehicle_message_writer())();
+            (_logger_backend->vehicle_message_writer())();
         }
-        stage = ls_blockwriter_stage_done;
+        stage = Stage::DONE;
         FALLTHROUGH;
 
-    case ls_blockwriter_stage_done:
+    case Stage::DONE:
         break;
     }
 
@@ -140,7 +136,7 @@ void LoggerMessageWriter_DFLogStart::process()
 void LoggerMessageWriter_WriteSysInfo::reset()
 {
     LoggerMessageWriter::reset();
-    stage = ws_blockwriter_stage_init;
+    stage = Stage::FORMATS;
 }
 
 void LoggerMessageWriter_WriteSysInfo::process() {
@@ -148,20 +144,20 @@ void LoggerMessageWriter_WriteSysInfo::process() {
 
     switch(stage) {
 
-    case ws_blockwriter_stage_init:
-        stage = ws_blockwriter_stage_firmware_string;
+    case Stage::FORMATS:
+        stage = Stage::FIRMWARE_STRING;
         FALLTHROUGH;
 
-    case ws_blockwriter_stage_firmware_string:
-        if (! _dataflash_backend->Write_Message(fwver.fw_string)) {
+    case Stage::FIRMWARE_STRING:
+        if (! _logger_backend->Write_Message(fwver.fw_string)) {
             return; // call me again
         }
-        stage = ws_blockwriter_stage_git_versions;
+        stage = Stage::GIT_VERSIONS;
         FALLTHROUGH;
 
-    case ws_blockwriter_stage_git_versions:
+    case Stage::GIT_VERSIONS:
         if (fwver.middleware_name && fwver.os_name) {
-            if (! _dataflash_backend->Write_MessageF("%s: %s %s: %s",
+            if (! _logger_backend->Write_MessageF("%s: %s %s: %s",
                                                         fwver.middleware_name,
                                                         fwver.middleware_hash_str,
                                                         fwver.os_name,
@@ -169,21 +165,39 @@ void LoggerMessageWriter_WriteSysInfo::process() {
                 return; // call me again
             }
         } else if (fwver.os_name) {
-            if (! _dataflash_backend->Write_MessageF("%s: %s",
+            if (! _logger_backend->Write_MessageF("%s: %s",
                                                         fwver.os_name,
                                                         fwver.os_hash_str)) {
                 return; // call me again
             }
         }
-        stage = ws_blockwriter_stage_system_id;
+        stage = Stage::SYSTEM_ID;
         FALLTHROUGH;
 
-    case ws_blockwriter_stage_system_id:
+    case Stage::SYSTEM_ID:
         char sysid[40];
         if (hal.util->get_system_id(sysid)) {
-            if (! _dataflash_backend->Write_Message(sysid)) {
+            if (! _logger_backend->Write_Message(sysid)) {
                 return; // call me again
             }
+        }
+        stage = Stage::PARAM_SPACE_USED;
+        FALLTHROUGH;
+
+    case Stage::PARAM_SPACE_USED:
+        if (! _logger_backend->Write_MessageF("Param space used: %u/%u", AP_Param::storage_used(), AP_Param::storage_size())) {
+            return; // call me again
+        }
+        stage = Stage::RC_PROTOCOL;
+        FALLTHROUGH;
+
+    case Stage::RC_PROTOCOL:
+        const char *prot = hal.rcin->protocol();
+        if (prot == nullptr) {
+            prot = "None";
+        }
+        if (! _logger_backend->Write_MessageF("RC Protocol: %s", prot)) {
+            return; // call me again
         }
     }
 
@@ -200,26 +214,18 @@ void LoggerMessageWriter_WriteAllRallyPoints::process()
 
     switch(stage) {
 
-    case ar_blockwriter_stage_init:
-        if (_rally == nullptr) {
-            stage = ar_blockwriter_stage_done;
-            break;
-        }
-        stage = ar_blockwriter_stage_write_new_rally_message;
-        FALLTHROUGH;
-
-    case ar_blockwriter_stage_write_new_rally_message:
-        if (! _dataflash_backend->Write_Message("New rally")) {
+    case Stage::WRITE_NEW_RALLY_MESSAGE:
+        if (! _logger_backend->Write_Message("New rally")) {
             return; // call me again
         }
-        stage = ar_blockwriter_stage_write_all_rally_points;
+        stage = Stage::WRITE_ALL_RALLY_POINTS;
         FALLTHROUGH;
 
-    case ar_blockwriter_stage_write_all_rally_points:
+    case Stage::WRITE_ALL_RALLY_POINTS:
         while (_rally_number_to_send < _rally->get_rally_total()) {
             RallyLocation rallypoint;
             if (_rally->get_rally_point_with_index(_rally_number_to_send, rallypoint)) {
-                if (!_dataflash_backend->Write_RallyPoint(
+                if (!_logger_backend->Write_RallyPoint(
                         _rally->get_rally_total(),
                         _rally_number_to_send,
                         rallypoint)) {
@@ -228,10 +234,10 @@ void LoggerMessageWriter_WriteAllRallyPoints::process()
             }
             _rally_number_to_send++;
         }
-        stage = ar_blockwriter_stage_done;
+        stage = Stage::DONE;
         FALLTHROUGH;
 
-    case ar_blockwriter_stage_done:
+    case Stage::DONE:
         break;
     }
 
@@ -241,7 +247,7 @@ void LoggerMessageWriter_WriteAllRallyPoints::process()
 void LoggerMessageWriter_WriteAllRallyPoints::reset()
 {
     LoggerMessageWriter::reset();
-    stage = ar_blockwriter_stage_init;
+    stage = Stage::WRITE_NEW_RALLY_MESSAGE;
     _rally_number_to_send = 0;
 }
 
@@ -254,39 +260,30 @@ void LoggerMessageWriter_WriteEntireMission::process() {
 
     switch(stage) {
 
-    case em_blockwriter_stage_init:
-        if (_mission == nullptr) {
-            stage = em_blockwriter_stage_done;
-            break;
-        } else {
-            stage = em_blockwriter_stage_write_new_mission_message;
-        }
-        FALLTHROUGH;
-
-    case em_blockwriter_stage_write_new_mission_message:
-        if (! _dataflash_backend->Write_Message("New mission")) {
+    case Stage::WRITE_NEW_MISSION_MESSAGE:
+        if (! _logger_backend->Write_Message("New mission")) {
             return; // call me again
         }
-        stage = em_blockwriter_stage_write_mission_items;
+        stage = Stage::WRITE_MISSION_ITEMS;
         FALLTHROUGH;
 
-    case em_blockwriter_stage_write_mission_items: {
+    case Stage::WRITE_MISSION_ITEMS: {
         AP_Mission::Mission_Command cmd;
         while (_mission_number_to_send < _mission->num_commands()) {
             // upon failure to write the mission we will re-read from
             // storage; this could be improved.
             if (_mission->read_cmd_from_storage(_mission_number_to_send,cmd)) {
-                if (!_dataflash_backend->Write_Mission_Cmd(*_mission, cmd)) {
+                if (!_logger_backend->Write_Mission_Cmd(*_mission, cmd)) {
                     return; // call me again
                 }
             }
             _mission_number_to_send++;
         }
-        stage = em_blockwriter_stage_done;
+        stage = Stage::DONE;
         FALLTHROUGH;
     }
 
-    case em_blockwriter_stage_done:
+    case Stage::DONE:
         break;
     }
 
@@ -296,6 +293,6 @@ void LoggerMessageWriter_WriteEntireMission::process() {
 void LoggerMessageWriter_WriteEntireMission::reset()
 {
     LoggerMessageWriter::reset();
-    stage = em_blockwriter_stage_init;
+    stage = Stage::WRITE_NEW_MISSION_MESSAGE;
     _mission_number_to_send = 0;
 }

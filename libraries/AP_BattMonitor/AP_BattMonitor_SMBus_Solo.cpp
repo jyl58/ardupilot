@@ -53,7 +53,7 @@ void AP_BattMonitor_SMBus_Solo::timer()
         // because the Solo's I2C bus is so noisy, it's worth not spending the
         // time and bus bandwidth to request the pack voltage as a seperate
         // transaction
-        _state.voltage = pack_voltage_mv * 1e-3;
+        _state.voltage = pack_voltage_mv * 1e-3f;
         _state.last_time_micros = tnow;
         _state.healthy = true;
     }
@@ -93,6 +93,8 @@ void AP_BattMonitor_SMBus_Solo::timer()
     read_temp();
 
     read_serial_number();
+
+    read_cycle_count();
 }
 
 // read_block - returns number of characters read if successful, zero if unsuccessful

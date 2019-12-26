@@ -21,7 +21,7 @@ autotest_args=""
 
 # If CI_BUILD_TARGET is not set, build 3 different ones
 if [ -z "$CI_BUILD_TARGET" ]; then
-    CI_BUILD_TARGET="sitl linux"
+    CI_BUILD_TARGET="sitl linux fmuv3"
 fi
 
 declare -A waf_supported_boards
@@ -31,24 +31,32 @@ waf=modules/waf/waf-light
 # get list of boards supported by the waf build
 for board in $($waf list_boards | head -n1); do waf_supported_boards[$board]=1; done
 
-function get_time {
-    date -u "+%s"
-}
-
 echo "Targets: $CI_BUILD_TARGET"
 echo "Compiler: $c_compiler"
 
 pymavlink_installed=0
+mavproxy_installed=0
 
 function run_autotest() {
     NAME="$1"
     BVEHICLE="$2"
     RVEHICLE="$3"
 
+    if [ $mavproxy_installed -eq 0 ]; then
+        echo "Installing MAVProxy"
+        pushd /tmp
+          git clone --recursive https://github.com/ardupilot/MAVProxy
+          pushd MAVProxy
+            python setup.py build install --user --force
+          popd
+        popd
+        mavproxy_installed=1
+        # now uninstall the version of pymavlink pulled in by MAVProxy deps:
+        pip uninstall -y pymavlink
+    fi
     if [ $pymavlink_installed -eq 0 ]; then
         echo "Installing pymavlink"
-        git submodule init
-        git submodule update
+        git submodule update --init --recursive
         (cd modules/mavlink/pymavlink && python setup.py build install --user)
         pymavlink_installed=1
     fi
@@ -61,6 +69,9 @@ function run_autotest() {
     fi
     if [ $NAME == "Rover" ]; then
         w="$w --enable-math-check-indexes"
+    fi
+    if [ "x$CI_BUILD_DEBUG" != "x" ]; then
+        w="$w --debug"
     fi
     Tools/autotest/autotest.py --waf-configure-args="$w" "$BVEHICLE" "$RVEHICLE"
     ccache -s && ccache -z
@@ -84,8 +95,17 @@ for t in $CI_BUILD_TARGET; do
         run_autotest "Rover" "build.APMrover2" "drive.APMrover2"
         continue
     fi
+    if [ "$t" == "sitltest-balancebot" ]; then
+        run_autotest "BalanceBot" "build.APMrover2" "drive.BalanceBot"
+        continue
+    fi
     if [ "$t" == "sitltest-sub" ]; then
         run_autotest "Sub" "build.ArduSub" "dive.ArduSub"
+        continue
+    fi
+
+    if [ "$t" == "unit-tests" ]; then
+        run_autotest "Unit Tests" "build.unit_tests" "run.unit_tests"
         continue
     fi
 
@@ -97,6 +117,58 @@ for t in $CI_BUILD_TARGET; do
         continue
     fi
 
+    if [ "$t" == "periph-build" ]; then
+        echo "Building f103 bootloader"
+        $waf configure --board f103-GPS --bootloader
+        $waf clean
+        $waf bootloader
+        echo "Building f103 peripheral fw"
+        $waf configure --board f103-GPS
+        $waf clean
+        $waf AP_Periph
+        echo "Building f303 bootloader"
+        $waf configure --board f303-GPS --bootloader
+        $waf clean
+        $waf bootloader
+        echo "Building f303 peripheral fw"
+        $waf configure --board f303-GPS
+        $waf clean
+        $waf AP_Periph
+        continue
+    fi
+    
+    if [ "$t" == "CubeOrange-bootloader" ]; then
+        echo "Building CubeOrange bootloader"
+        $waf configure --board CubeOrange --bootloader
+        $waf clean
+        $waf bootloader
+        continue
+    fi
+
+    if [ "$t" == "stm32f7" ]; then
+        echo "Building mRoX21-777/"
+        $waf configure --board mRoX21-777
+        $waf clean
+        $waf plane
+        continue
+    fi
+
+    if [ "$t" == "stm32h7" ]; then
+        echo "Building Durandal"
+        $waf configure --board Durandal
+        $waf clean
+        $waf copter
+        continue
+    fi
+
+    if [ "$t" == "fmuv2-plane" ]; then
+        echo "Building fmuv2 plane"
+        $waf configure --board fmuv2
+        $waf clean
+        $waf plane
+        continue
+    fi
+    
     if [ "$t" == "iofirmware" ]; then
         echo "Building iofirmware"
         $waf configure --board iomcu
@@ -105,12 +177,9 @@ for t in $CI_BUILD_TARGET; do
         continue
     fi
 
-    if [ "$t" == "revo-mini" ]; then
-        # save some time by only building one target for revo-mini
-        echo "Building revo-mini"
-        $waf configure --board revo-mini
-        $waf clean
-        $waf plane
+    if [ "$t" == "configure-all" ]; then
+        echo "Checking configure of all boards"
+        ./Tools/scripts/configure_all.py
         continue
     fi
 
@@ -131,11 +200,11 @@ for t in $CI_BUILD_TARGET; do
     fi
 done
 
-python Tools/autotest/param_metadata/param_parse.py --no-emit --vehicle APMrover2
-python Tools/autotest/param_metadata/param_parse.py --no-emit --vehicle AntennaTracker
-python Tools/autotest/param_metadata/param_parse.py --no-emit --vehicle ArduCopter
-python Tools/autotest/param_metadata/param_parse.py --no-emit --vehicle ArduPlane
-python Tools/autotest/param_metadata/param_parse.py --no-emit --vehicle ArduSub
+python Tools/autotest/param_metadata/param_parse.py --vehicle APMrover2
+python Tools/autotest/param_metadata/param_parse.py --vehicle AntennaTracker
+python Tools/autotest/param_metadata/param_parse.py --vehicle ArduCopter
+python Tools/autotest/param_metadata/param_parse.py --vehicle ArduPlane
+python Tools/autotest/param_metadata/param_parse.py --vehicle ArduSub
 
 echo build OK
 exit 0

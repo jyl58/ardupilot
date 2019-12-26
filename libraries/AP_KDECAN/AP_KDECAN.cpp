@@ -34,6 +34,7 @@
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_Motors/AP_Motors.h>
+#include <AP_Logger/AP_Logger.h>
 
 #include "AP_KDECAN.h"
 
@@ -53,6 +54,7 @@ const AP_Param::GroupInfo AP_KDECAN::var_info[] = {
     AP_GROUPEND
 };
 
+const uint16_t AP_KDECAN::SET_PWM_MIN_INTERVAL_US;
 
 AP_KDECAN::AP_KDECAN()
 {
@@ -600,9 +602,9 @@ void AP_KDECAN::update()
         debug_can(2, "KDECAN: failed to get PWM semaphore on write\n\r");
     }
 
-    AP_Logger *df = AP_Logger::get_singleton();
+    AP_Logger *logger = AP_Logger::get_singleton();
 
-    if (df == nullptr || !df->should_log(0xFFFFFFFF)) {
+    if (logger == nullptr || !logger->should_log(0xFFFFFFFF)) {
         return;
     }
 
@@ -627,30 +629,25 @@ void AP_KDECAN::update()
     // log ESC telemetry data
     for (uint8_t i = 0; i < _esc_max_node_id; i++) {
         if (telem_buffer[i].new_data) {
-            struct log_Esc pkt = {
-                LOG_PACKET_HEADER_INIT(uint8_t(LOG_ESC1_MSG+i)),
-                time_us     : telem_buffer[i].time,
-                rpm         : int32_t(telem_buffer[i].rpm * 60UL * 2 / num_poles * 100),
-                voltage     : telem_buffer[i].voltage,
-                current     : telem_buffer[i].current,
-                temperature : int16_t(telem_buffer[i].temp * 100U),
-                current_tot : 0
-            };
-            df->WriteBlock(&pkt, sizeof(pkt));
+            logger->Write_ESC(i, telem_buffer[i].time,
+                          int32_t(telem_buffer[i].rpm * 60UL * 2 / num_poles * 100),
+                          telem_buffer[i].voltage,
+                          telem_buffer[i].current,
+                          int16_t(telem_buffer[i].temp * 100U), 0, 0);
         }
     }
 }
 
-bool AP_KDECAN::pre_arm_check(const char* &reason)
+bool AP_KDECAN::pre_arm_check(char* reason, uint8_t reason_len)
 {
     if (!_enum_sem.take(1)) {
         debug_can(2, "KDECAN: failed to get enumeration semaphore on read\n\r");
-        reason = "KDECAN enumeration state unknown";
+        snprintf(reason, reason_len ,"KDECAN enumeration state unknown");
         return false;
     }
 
     if (_enumeration_state != ENUMERATION_STOPPED) {
-        reason = "KDECAN enumeration running";
+        snprintf(reason, reason_len ,"KDECAN enumeration running");
         _enum_sem.give();
         return false;
     }
@@ -668,17 +665,17 @@ bool AP_KDECAN::pre_arm_check(const char* &reason)
     uint8_t num_present_escs = __builtin_popcount(_esc_present_bitmask);
 
     if (num_present_escs < num_expected_motors) {
-        reason = "Not enough KDECAN ESCs detected";
+        snprintf(reason, reason_len ,"Not enough KDECAN ESCs detected");
         return false;
     }
 
     if (num_present_escs > num_expected_motors) {
-        reason = "Too many KDECAN ESCs detected";
+        snprintf(reason, reason_len ,"Too many KDECAN ESCs detected");
         return false;
     }
 
     if (_esc_max_node_id != num_expected_motors) {
-        reason = "Wrong KDECAN node IDs, run enumeration";
+        snprintf(reason, reason_len ,"Wrong KDECAN node IDs, run enumeration");
         return false;
     }
 

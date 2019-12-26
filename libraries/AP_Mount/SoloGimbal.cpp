@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_Logger/AP_Logger.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -40,10 +41,10 @@ gimbal_mode_t SoloGimbal::get_mode()
     }
 }
 
-void SoloGimbal::receive_feedback(mavlink_channel_t chan, const mavlink_message_t *msg)
+void SoloGimbal::receive_feedback(mavlink_channel_t chan, const mavlink_message_t &msg)
 {
     mavlink_gimbal_report_t report_msg;
-    mavlink_msg_gimbal_report_decode(msg, &report_msg);
+    mavlink_msg_gimbal_report_decode(&msg, &report_msg);
     uint32_t tnow_ms = AP_HAL::millis();
     _last_report_msg_ms = tnow_ms;
 
@@ -229,7 +230,7 @@ void SoloGimbal::readVehicleDeltaAngle(uint8_t ins_index, Vector3f &dAng) {
 void SoloGimbal::update_fast() {
     const AP_InertialSensor &ins = AP::ins();
 
-    if (ins.get_gyro_health(0) && ins.get_gyro_health(1)) {
+    if (ins.use_gyro(0) && ins.use_gyro(1)) {
         // dual gyro mode - average first two gyros
         Vector3f dAng;
         readVehicleDeltaAngle(0, dAng);
@@ -383,8 +384,8 @@ void SoloGimbal::update_target(const Vector3f &newTarget)
 
 void SoloGimbal::write_logs()
 {
-    AP_Logger *dataflash = AP_Logger::get_singleton();
-    if (dataflash == nullptr) {
+    AP_Logger *logger = AP_Logger::get_singleton();
+    if (logger == nullptr) {
         return;
     }
 
@@ -409,7 +410,7 @@ void SoloGimbal::write_logs()
         joint_angles_y  : _measurement.joint_angles.y,
         joint_angles_z  : _measurement.joint_angles.z
     };
-    dataflash->WriteBlock(&pkt1, sizeof(pkt1));
+    logger->WriteBlock(&pkt1, sizeof(pkt1));
 
     struct log_Gimbal2 pkt2 = {
         LOG_PACKET_HEADER_INIT(LOG_GIMBAL2_MSG),
@@ -425,7 +426,7 @@ void SoloGimbal::write_logs()
         target_y: _att_target_euler_rad.y,
         target_z: _att_target_euler_rad.z
     };
-    dataflash->WriteBlock(&pkt2, sizeof(pkt2));
+    logger->WriteBlock(&pkt2, sizeof(pkt2));
 
     _log_dt = 0;
     _log_del_ang.zero();

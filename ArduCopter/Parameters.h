@@ -1,6 +1,17 @@
 #pragma once
 
 #include <AP_Common/AP_Common.h>
+#include "RC_Channel.h"
+
+#if GRIPPER_ENABLED == ENABLED
+ # include <AP_Gripper/AP_Gripper.h>
+#endif
+#if MODE_FOLLOW_ENABLED == ENABLED
+ # include <AP_Follow/AP_Follow.h>
+#endif
+#if VISUAL_ODOMETRY_ENABLED == ENABLED
+ # include <AP_VisualOdom/AP_VisualOdom.h>
+#endif
 
 // Global parameter class.
 //
@@ -174,7 +185,7 @@ public:
         k_param_disarm_delay,
         k_param_fs_crash_check,
         k_param_throw_motor_start,
-        k_param_terrain_follow,    // 94
+        k_param_rtl_alt_type,
         k_param_avoid,
         k_param_avoidance_adsb,
 
@@ -207,7 +218,7 @@ public:
         k_param_ch10_option_old,
         k_param_ch11_option_old,
         k_param_ch12_option_old,
-        k_param_takeoff_trigger_dz,
+        k_param_takeoff_trigger_dz_old,
         k_param_gcs3,
         k_param_gcs_pid_mask,    // 126
 
@@ -227,7 +238,7 @@ public:
         k_param_curr_amp_per_volt,  // deprecated - can be deleted
         k_param_input_voltage,  // deprecated - can be deleted
         k_param_pack_capacity,  // deprecated - can be deleted
-        k_param_compass_enabled,
+        k_param_compass_enabled_deprecated,
         k_param_compass,
         k_param_rangefinder_enabled_old, // deprecated
         k_param_frame_type,
@@ -259,7 +270,7 @@ public:
         k_param_camera_mount2,      // deprecated
 
         //
-        // Batery monitoring parameters
+        // Battery monitoring parameters
         //
         k_param_battery_volt_pin = 168, // deprecated - can be deleted
         k_param_battery_curr_pin,   // 169 deprecated - can be deleted
@@ -285,8 +296,8 @@ public:
         k_param_throttle_trim,          // remove
         k_param_esc_calibrate,
         k_param_radio_tuning,
-        k_param_radio_tuning_high,
-        k_param_radio_tuning_low,
+        k_param_radio_tuning_high_old,   // unused
+        k_param_radio_tuning_low_old,    // unused
         k_param_rc_speed = 192,
         k_param_failsafe_battery_enabled, // unused - moved to AP_BattMonitor
         k_param_throttle_mid,           // remove
@@ -376,7 +387,6 @@ public:
 
     AP_Float        throttle_filt;
     AP_Int16        throttle_behavior;
-    AP_Int16        takeoff_trigger_dz;
     AP_Float        pilot_takeoff_alt;
 
     AP_Int16        rtl_altitude;
@@ -389,7 +399,6 @@ public:
     AP_Int8         failsafe_gcs;               // ground station failsafe behavior
     AP_Int16        gps_hdop_good;              // GPS Hdop value at or below this value represent a good position
 
-    AP_Int8         compass_enabled;
     AP_Int8         super_simple;
     AP_Int16        rtl_alt_final;
     AP_Int16        rtl_climb_min;              // rtl minimum climb in cm
@@ -429,8 +438,6 @@ public:
     AP_Int32        log_bitmask;
     AP_Int8         esc_calibrate;
     AP_Int8         radio_tuning;
-    AP_Int16        radio_tuning_high;
-    AP_Int16        radio_tuning_low;
     AP_Int8         frame_type;
     AP_Int8         disarm_delay;
 
@@ -444,9 +451,7 @@ public:
     AP_Int8         throw_motor_start;
 #endif
 
-#if AP_TERRAIN_AVAILABLE && AC_TERRAIN
-    AP_Int8         terrain_follow;
-#endif
+    AP_Int8         rtl_alt_type;
 
     AP_Int16                rc_speed; // speed of fast RC Channels in Hz
 
@@ -479,7 +484,7 @@ public:
     AP_Float wp_navalt_min;
 
     // button checking
-    AP_Button button;
+    AP_Button *button_ptr;
 
 #if STATS_ENABLED == ENABLED
     // vehicle statistics
@@ -583,6 +588,35 @@ public:
     // we need a pointer to autotune for the G2 table
     void *autotune_ptr;
 #endif
+
+#ifdef ENABLE_SCRIPTING
+    AP_Scripting scripting;
+#endif // ENABLE_SCRIPTING
+
+    AP_Float tuning_min;
+    AP_Float tuning_max;
+
+#if AC_OAPATHPLANNER_ENABLED == ENABLED
+    // object avoidance path planning
+    AP_OAPathPlanner oa;
+#endif
+
+#if MODE_SYSTEMID_ENABLED == ENABLED
+    // we need a pointer to the mode for the G2 table
+    void *mode_systemid_ptr;
+#endif
+
+    // vibration failsafe enable/disable
+    AP_Int8 fs_vibe_enabled;
+
+    // Failsafe options bitmask #36
+    AP_Int32 fs_options;
+
+#if MODE_AUTOROTATE_ENABLED == ENABLED
+    // Autonmous autorotation
+    AC_Autorotation arot;
+#endif
+
 };
 
 extern const AP_Param::Info        var_info[];

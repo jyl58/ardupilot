@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include "Storage.h"
 
+#include <stdio.h>
+
 using namespace HALSITL;
 
 extern const AP_HAL::HAL& hal;
@@ -35,6 +37,9 @@ void Storage::_storage_open(void)
         hal.console->printf("open failed of " HAL_STORAGE_FILE "\n");
         return;
     }
+
+    fcntl(log_fd, F_SETFD, FD_CLOEXEC);
+
     int ret = read(log_fd, _buffer, HAL_STORAGE_SIZE);
     if (ret < 0) {
         hal.console->printf("read failed for " HAL_STORAGE_FILE "\n");
@@ -121,7 +126,7 @@ void Storage::_timer_tick(void)
 
 #if STORAGE_USE_POSIX
     if (using_filesystem && log_fd != -1) {
-        uint32_t offset = STORAGE_LINE_SIZE*i;
+        const off_t offset = STORAGE_LINE_SIZE*i;
         if (lseek(log_fd, offset, SEEK_SET) != offset) {
             return;
         }

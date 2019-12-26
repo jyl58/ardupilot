@@ -10,6 +10,8 @@
 
 #include <stdio.h>
 
+#if COMPASS_LEARN_ENABLED
+
 extern const AP_HAL::HAL &hal;
 
 // constructor
@@ -17,6 +19,13 @@ CompassLearn::CompassLearn(Compass &_compass) :
     compass(_compass)
 {
     gcs().send_text(MAV_SEVERITY_INFO, "CompassLearn: Initialised");
+    for (uint8_t i=0; i<compass.get_count(); i++) {
+        if (compass._state[i].use_for_yaw) {
+            // reset scale factors, we can't learn scale factors in
+            // flight
+            compass.set_and_save_scale_factor(i, 0.0);
+        }
+    }
 }
 
 /*
@@ -42,17 +51,8 @@ void CompassLearn::update(void)
         // remember primary mag
         primary_mag = compass.get_primary();
 
-        // setup the expected earth field at this location
-        float declination_deg=0, inclination_deg=0, intensity_gauss=0;
-        AP_Declination::get_mag_field_ef(loc.lat*1.0e-7, loc.lng*1.0e-7, intensity_gauss, declination_deg, inclination_deg);
-
-        // create earth field
-        mag_ef = Vector3f(intensity_gauss*1000, 0.0, 0.0);
-        Matrix3f R;
-
-        R.from_euler(0.0f, -ToRad(inclination_deg), ToRad(declination_deg));
-        mag_ef = R * mag_ef;
-
+        // setup the expected earth field in mGauss at this location
+        mag_ef = AP_Declination::get_earth_field_ga(loc) * 1000;
         have_earth_field = true;
 
         // form eliptical correction matrix and invert it. This is
@@ -71,8 +71,9 @@ void CompassLearn::update(void)
         }
 
         // set initial error to field intensity
+        float intensity = mag_ef.length();
         for (uint16_t i=0; i<num_sectors; i++) {
-            errors[i] = intensity_gauss*1000;
+            errors[i] = intensity;
         }
         
         gcs().send_text(MAV_SEVERITY_INFO, "CompassLearn: have earth field");
@@ -139,6 +140,7 @@ void CompassLearn::update(void)
             for (uint8_t i=0; i<compass.get_count(); i++) {
                 if (compass._state[i].use_for_yaw) {
                     compass.save_offsets(i);
+                    compass.set_and_save_scale_factor(i, 0.0);
                     compass.set_use_for_yaw(i, true);
                 }
             }
@@ -213,7 +215,7 @@ void CompassLearn::process_sample(const struct sample &s)
             predicted_offsets[i] = offsets;
         } else {
             // lowpass the predicted offsets and the error
-            const float learn_rate = 0.92;
+            const float learn_rate = 0.92f;
             predicted_offsets[i] = predicted_offsets[i] * learn_rate + offsets * (1-learn_rate);
             errors[i] = errors[i] * learn_rate + delta * (1-learn_rate);
         }
@@ -237,3 +239,6 @@ void CompassLearn::process_sample(const struct sample &s)
     worst_error = worstv;
     best_yaw_deg = wrap_360(degrees(s.attitude.z) + besti * (360/num_sectors));
 }
+
+#endif // COMPASS_LEARN_ENABLED
+

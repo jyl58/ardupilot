@@ -8,7 +8,6 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_Param/AP_Param.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
-#include <AP_BattMonitor/AP_BattMonitor.h>
 
 #include "CompassCalibrator.h"
 #include "AP_Compass_Backend.h"
@@ -32,6 +31,9 @@
 #endif
 #endif
 
+#define COMPASS_CAL_ENABLED !defined(HAL_BUILD_AP_PERIPH)
+#define COMPASS_MOT_ENABLED !defined(HAL_BUILD_AP_PERIPH)
+#define COMPASS_LEARN_ENABLED !defined(HAL_BUILD_AP_PERIPH)
 
 // define default compass calibration fitness and consistency checks
 #define AP_COMPASS_CALIBRATION_FITNESS_DEFAULT 16.0f
@@ -70,11 +72,13 @@ public:
     /// @returns    True if the compass was initialized OK, false if it was not
     ///             found or is not functioning.
     ///
-    bool init();
+    void init();
 
     /// Read the compass and update the mag_ variables.
     ///
     bool read();
+
+    bool enabled() const { return _enabled; }
 
     /// Calculate the tilt-compensated heading_ variables.
     ///
@@ -102,6 +106,7 @@ public:
     void set_and_save_offsets(uint8_t i, const Vector3f &offsets);
     void set_and_save_diagonals(uint8_t i, const Vector3f &diagonals);
     void set_and_save_offdiagonals(uint8_t i, const Vector3f &diagonals);
+    void set_and_save_scale_factor(uint8_t i, float scale_factor);
 
     /// Saves the current offset x/y/z values for one or all compasses
     ///
@@ -120,9 +125,13 @@ public:
     const Vector3f &get_field(uint8_t i) const { return _state[i].field; }
     const Vector3f &get_field(void) const { return get_field(get_primary()); }
 
-    // compass calibrator interface
-    void compass_cal_update();
+    /// Return true if we have set a scale factor for a compass
+    bool have_scale_factor(uint8_t i) const;
 
+    // compass calibrator interface
+    void cal_update();
+
+#if COMPASS_MOT_ENABLED
     // per-motor calibration access
     void per_motor_calibration_start(void) {
         _per_motor.calibration_start();
@@ -133,6 +142,7 @@ public:
     void per_motor_calibration_end(void) {
         _per_motor.calibration_end();
     }
+#endif
     
     void start_calibration_all(bool retry=false, bool autosave=false, float delay_sec=0.0f, bool autoreboot = false);
 
@@ -141,13 +151,16 @@ public:
     bool compass_cal_requires_reboot() const { return _cal_complete_requires_reboot; }
     bool is_calibrating() const;
 
+    // indicate which bit in LOG_BITMASK indicates we should log compass readings
+    void set_log_bit(uint32_t log_bit) { _log_bit = log_bit; }
+
     /*
       handle an incoming MAG_CAL command
     */
     MAV_RESULT handle_mag_cal_command(const mavlink_command_long_t &packet);
 
-    void send_mag_cal_progress(mavlink_channel_t chan);
-    void send_mag_cal_report(mavlink_channel_t chan);
+    bool send_mag_cal_progress(const class GCS_MAVLINK& link);
+    bool send_mag_cal_report(const class GCS_MAVLINK& link);
 
     // check if the compasses are pointing in the same direction
     bool consistent() const;
@@ -169,24 +182,6 @@ public:
 
     const Vector3f &get_offdiagonals(uint8_t i) const { return _state[i].offdiagonals; }
     const Vector3f &get_offdiagonals(void) const { return get_offdiagonals(get_primary()); }
-    
-    /// Sets the initial location used to get declination
-    ///
-    /// @param  latitude             GPS Latitude.
-    /// @param  longitude            GPS Longitude.
-    ///
-    void set_initial_location(int32_t latitude, int32_t longitude);
-
-    /// Program new offset values.
-    ///
-    /// @param  i                   compass instance
-    /// @param  x                   Offset to the raw mag_x value in milligauss.
-    /// @param  y                   Offset to the raw mag_y value in milligauss.
-    /// @param  z                   Offset to the raw mag_z value in milligauss.
-    ///
-    void set_and_save_offsets(uint8_t i, int x, int y, int z) {
-        set_and_save_offsets(i, Vector3f(x, y, z));
-    }
 
     // learn offsets accessor
     bool learn_offsets_enabled() const { return _learn == LEARN_INFLIGHT; }
@@ -256,10 +251,12 @@ public:
         }
     }
 
+#if COMPASS_MOT_ENABLED
     /// Set the battery voltage for per-motor compensation
     void set_voltage(float voltage) {
         _per_motor.set_voltage(voltage);
     }
+#endif
     
     /// Returns True if the compasses have been configured (i.e. offsets saved)
     ///
@@ -328,6 +325,12 @@ public:
 
     uint8_t get_filter_range() const { return uint8_t(_filter_range.get()); }
 
+    /*
+      fast compass calibration given vehicle position and yaw
+     */
+    MAV_RESULT mag_cal_fixed_yaw(float yaw_deg, uint8_t compass_mask,
+                                 float lat_deg, float lon_deg);
+
 private:
     static Compass *_singleton;
     /// Register a new compas driver, allocating an instance number
@@ -353,9 +356,17 @@ private:
     // see if we already have probed a i2c driver by bus number and address
     bool _have_i2c_driver(uint8_t bus_num, uint8_t address) const;
 
+    /*
+      get mag field with the effects of offsets, diagonals and
+      off-diagonals removed
+    */
+    bool get_uncorrected_field(uint8_t instance, Vector3f &field);
+    
+#if COMPASS_CAL_ENABLED
     //keep track of which calibrators have been saved
     bool _cal_saved[COMPASS_MAX_INSTANCES];
     bool _cal_autosave;
+#endif
 
     //autoreboot after compass calibration
     bool _compass_cal_autoreboot;
@@ -364,7 +375,7 @@ private:
 
     // enum of drivers for COMPASS_TYPEMASK
     enum DriverType {
-        DRIVER_HMC5883  =0,
+        DRIVER_HMC5843  =0,
         DRIVER_LSM303D  =1,
         DRIVER_AK8963   =2,
         DRIVER_BMM150   =3,
@@ -375,7 +386,7 @@ private:
         DRIVER_ICM20948 =8,
         DRIVER_MMC3416  =9,
         DRIVER_UAVCAN   =11,
-        DRIVER_QMC5883  =12,
+        DRIVER_QMC5883L =12,
         DRIVER_SITL     =13,
         DRIVER_MAG3110  =14,
         DRIVER_IST8308  = 15,
@@ -387,6 +398,9 @@ private:
     // backend objects
     AP_Compass_Backend *_backends[COMPASS_MAX_BACKEND];
     uint8_t     _backend_count;
+
+    // whether to enable the compass drivers at all
+    AP_Int8     _enabled;
 
     // number of registered compasses.
     uint8_t     _compass_count;
@@ -410,6 +424,9 @@ private:
     // first-time-around flag used by offset nulling
     bool        _null_init_done;
 
+    // stores which bit is used to indicate we should log compass readings
+    uint32_t _log_bit = -1;
+
     // used by offset correction
     static const uint8_t _mag_history_size = 20;
 
@@ -430,6 +447,7 @@ private:
         AP_Vector3f offset;
         AP_Vector3f diagonals;
         AP_Vector3f offdiagonals;
+        AP_Float    scale_factor;
 
         // device id detected at init.
         // saved to eeprom when offsets are saved allowing ram &
@@ -466,10 +484,20 @@ private:
 
     AP_Int16 _offset_max;
 
-    CompassCalibrator _calibrator[COMPASS_MAX_INSTANCES];
+    // bitmask of options
+    enum class Option : uint16_t {
+        CAL_REQUIRE_GPS = (1U<<0),
+    };
+    AP_Int16 _options;
 
+#if COMPASS_CAL_ENABLED
+    CompassCalibrator _calibrator[COMPASS_MAX_INSTANCES];
+#endif
+
+#if COMPASS_MOT_ENABLED
     // per-motor compass compensation
     Compass_PerMotor _per_motor{*this};
+#endif
     
     // if we want HIL only
     bool _hil_mode:1;
@@ -483,6 +511,14 @@ private:
 
     CompassLearn *learn;
     bool learn_allocated;
+
+    /// Sets the initial location used to get declination
+    ///
+    /// @param  latitude             GPS Latitude.
+    /// @param  longitude            GPS Longitude.
+    ///
+    void try_set_initial_location();
+    bool _initial_location_set;
 };
 
 namespace AP {

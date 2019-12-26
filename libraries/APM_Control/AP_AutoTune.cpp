@@ -35,6 +35,7 @@
 
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
+#include <AP_Logger/AP_Logger.h>
 #include <AP_Math/AP_Math.h>
 
 extern const AP_HAL::HAL& hal;
@@ -266,8 +267,8 @@ void AP_AutoTune::check_save(void)
  */
 void AP_AutoTune::log_param_change(float v, const char *suffix)
 {
-    AP_Logger *dataflash = AP_Logger::get_singleton();
-    if (!dataflash->logging_started()) {
+    AP_Logger *logger = AP_Logger::get_singleton();
+    if (!logger->logging_started()) {
         return;
     }
     char key[AP_MAX_NAME_SIZE+1];
@@ -279,7 +280,7 @@ void AP_AutoTune::log_param_change(float v, const char *suffix)
         strncpy(&key[9], suffix, AP_MAX_NAME_SIZE-9);
     }
     key[AP_MAX_NAME_SIZE] = 0;
-    dataflash->Write_Parameter(key, v);
+    logger->Write_Parameter(key, v);
 }
 
 /*
@@ -327,8 +328,8 @@ void AP_AutoTune::save_gains(const ATGains &v)
 
 void AP_AutoTune::write_log(float servo, float demanded, float achieved)
 {
-    AP_Logger *dataflash = AP_Logger::get_singleton();
-    if (!dataflash->logging_started()) {
+    AP_Logger *logger = AP_Logger::get_singleton();
+    if (!logger->logging_started()) {
         return;
     }
 
@@ -342,5 +343,5 @@ void AP_AutoTune::write_log(float servo, float demanded, float achieved)
         achieved   : achieved,
         P          : current.P.get()
     };
-    dataflash->WriteBlock(&pkt, sizeof(pkt));
+    logger->WriteBlock(&pkt, sizeof(pkt));
 }

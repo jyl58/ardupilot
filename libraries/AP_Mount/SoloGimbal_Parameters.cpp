@@ -1,5 +1,6 @@
 #include "SoloGimbal_Parameters.h"
 #include <AP_HAL/AP_HAL.h>
+#include <AP_Logger/AP_Logger.h>
 #include <GCS_MAVLink/GCS.h>
 #include <stdio.h>
 
@@ -180,14 +181,14 @@ void SoloGimbal_Parameters::update()
     }
 }
 
-void SoloGimbal_Parameters::handle_param_value(const mavlink_message_t *msg)
+void SoloGimbal_Parameters::handle_param_value(const mavlink_message_t &msg)
 {
     mavlink_param_value_t packet;
-    mavlink_msg_param_value_decode(msg, &packet);
+    mavlink_msg_param_value_decode(&msg, &packet);
 
-    AP_Logger *dataflash = AP_Logger::get_singleton();
-    if (dataflash != nullptr) {
-        dataflash->Write_Parameter(packet.param_id, packet.param_value);
+    AP_Logger *logger = AP_Logger::get_singleton();
+    if (logger != nullptr) {
+        logger->Write_Parameter(packet.param_id, packet.param_value);
     }
 
     for(uint8_t i=0; i<MAVLINK_GIMBAL_NUM_TRACKED_PARAMS; i++) {

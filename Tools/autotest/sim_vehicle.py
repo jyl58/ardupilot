@@ -22,7 +22,7 @@ import textwrap
 import time
 import shlex
 
-from MAVProxy.modules.lib import mp_util
+from pymavlink import mavextra
 from pysim import vehicleinfo
 
 # List of open terminal windows for macosx
@@ -196,9 +196,10 @@ def kill_tasks_psutil(victims):
     use this routine"""
     import psutil
     for proc in psutil.process_iter():
-        if proc.status == psutil.STATUS_ZOMBIE:
+        pdict = proc.as_dict(attrs=['name', 'status'])
+        if pdict['status'] == psutil.STATUS_ZOMBIE:
             continue
-        if proc.name in victims:
+        if pdict['name'] in victims:
             proc.kill()
 
 
@@ -230,6 +231,7 @@ def kill_tasks():
             'MAVProxy.exe',
             'runsim.py',
             'AntennaTracker.elf',
+            'scrimmage'
         }
         for vehicle in vinfo.options:
             for frame in vinfo.options[vehicle]["frames"]:
@@ -293,6 +295,14 @@ def do_build_waf(opts, frame_options):
 
     if opts.OSD:
         cmd_configure.append("--enable-sfml")
+        cmd_configure.append("--sitl-osd")
+
+    if opts.rgbled:
+        cmd_configure.append("--enable-sfml")
+        cmd_configure.append("--sitl-rgbled")
+
+    if opts.tonealarm:
+        cmd_configure.append("--enable-sfml-audio")
 
     if opts.flash_storage:
         cmd_configure.append("--sitl-flash-storage")
@@ -407,10 +417,10 @@ def find_new_spawn(loc, file_path):
                     (instance, offset) = lines.split("=")
                     if ((int)(instance) == (int)(cmd_opts.instance)):
                         (x, y, z, head) = offset.split(",")
-                        g = mp_util.gps_offset((float)(lat), (float)(lon), (float)(x), (float)(y))
+                        g = mavextra.gps_offset((float)(lat), (float)(lon), (float)(x), (float)(y))
                         loc = str(g[0])+","+str(g[1])+","+str(alt+z)+","+str(head)
                         return loc
-        g = mp_util.gps_newpos((float)(lat), (float)(lon), 90, 20*(int)(cmd_opts.instance))
+        g = mavextra.gps_newpos((float)(lat), (float)(lon), 90, 20*(int)(cmd_opts.instance))
         loc = str(g[0])+","+str(g[1])+","+str(alt)+","+str(heading)
         return loc
 
@@ -478,7 +488,6 @@ def run_in_terminal_window(autotest, name, cmd):
         # on MacOS record the window IDs so we can close them later
         out = subprocess.Popen(runme, stdout=subprocess.PIPE).communicate()[0]
         out = out.decode('utf-8')
-        import re
         p = re.compile('tab 1 of window id (.*)')
 
         tstart = time.time()
@@ -496,7 +505,7 @@ def run_in_terminal_window(autotest, name, cmd):
         else:
             progress("Cannot find %s process terminal" % name)
     else:
-        p = subprocess.Popen(runme)
+        subprocess.Popen(runme)
 
 
 tracker_uarta = None  # blemish
@@ -529,7 +538,7 @@ def start_antenna_tracker(autotest, opts):
     os.chdir(oldpwd)
 
 
-def start_vehicle(binary, autotest, opts, stuff, loc):
+def start_vehicle(binary, autotest, opts, stuff, loc=None):
     """Run the ArduPilot binary"""
 
     cmd_name = opts.vehicle
@@ -540,6 +549,7 @@ def start_vehicle(binary, autotest, opts, stuff, loc):
         # adding this option allows valgrind to cope with the overload
         # of operator new
         cmd.append("--soname-synonyms=somalloc=nouserintercepts")
+        cmd.append("--track-origins=yes")
     if opts.callgrind:
         cmd_name += " (callgrind)"
         cmd.append("valgrind")
@@ -557,6 +567,19 @@ def start_vehicle(binary, autotest, opts, stuff, loc):
         gdb_commands_file.close()
         cmd.extend(["-x", gdb_commands_file.name])
         cmd.append("--args")
+    elif opts.lldb or opts.lldb_stopped:
+        cmd_name += " (lldb)"
+        cmd.append("lldb")
+        lldb_commands_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        atexit.register(os.unlink, lldb_commands_file.name)
+
+        for breakpoint in opts.breakpoint:
+            lldb_commands_file.write("b %s\n" % (breakpoint,))
+        if not opts.lldb_stopped:
+            lldb_commands_file.write("process launch\n")
+        lldb_commands_file.close()
+        cmd.extend(["-s", lldb_commands_file.name])
+        cmd.append("--")
     if opts.strace:
         cmd_name += " (strace)"
         cmd.append("strace")
@@ -566,7 +589,8 @@ def start_vehicle(binary, autotest, opts, stuff, loc):
     cmd.append(binary)
     cmd.append("-S")
     cmd.append("-I" + str(opts.instance))
-    cmd.extend(["--home", loc])
+    if loc is not None:
+        cmd.extend(["--home", loc])
     if opts.wipe_eeprom:
         cmd.append("-w")
     cmd.extend(["--model", stuff["model"]])
@@ -624,7 +648,7 @@ def start_mavproxy(opts, stuff):
             cmd.extend(["--master", "mcast:"])
         else:
             cmd.extend(["--master", mavlink_port])
-        if stuff["sitl-port"]:
+        if stuff["sitl-port"] and not opts.no_rcin:
             cmd.extend(["--sitl", simout_port])
 
     if not opts.no_extra_ports:
@@ -696,6 +720,8 @@ def start_mavproxy(opts, stuff):
         cmd.append('--console')
     if opts.aircraft is not None:
         cmd.extend(['--aircraft', opts.aircraft])
+    if opts.moddebug:
+        cmd.append('--moddebug=%u' % opts.moddebug)
 
     if opts.fresh_params:
         # these were built earlier:
@@ -722,7 +748,7 @@ vehicle_options_string = '|'.join(vinfo.options.keys())
 def generate_frame_help():
     ret = ""
     for vehicle in vinfo.options:
-        frame_options = vinfo.options[vehicle]["frames"].keys()
+        frame_options = sorted(vinfo.options[vehicle]["frames"].keys())
         frame_options_string = '|'.join(frame_options)
         ret += "%s: %s\n" % (vehicle, frame_options_string)
     return ret
@@ -732,9 +758,9 @@ def generate_frame_help():
 parser = CompatOptionParser(
     "sim_vehicle.py",
     epilog=""
-    "eeprom.bin in the starting directory contains the parameters for your"
+    "eeprom.bin in the starting directory contains the parameters for your "
     "simulated vehicle. Always start from the same directory. It is "
-    "recommended that you start in the main vehicle directory for the vehicle"
+    "recommended that you start in the main vehicle directory for the vehicle "
     "you are simulating, for example, start in the ArduPlane directory to "
     "simulate ArduPlane")
 
@@ -831,6 +857,14 @@ group_sim.add_option("-g", "--gdb-stopped",
                      action='store_true',
                      default=False,
                      help="use gdb for debugging ardupilot (no auto-start)")
+group_sim.add_option("--lldb",
+                     action='store_true',
+                     default=False,
+                     help="use lldb for debugging ardupilot")
+group_sim.add_option("--lldb-stopped",
+                     action='store_true',
+                     default=False,
+                     help="use ldb for debugging ardupilot (no auto-start)")
 group_sim.add_option("-d", "--delay-start",
                      default=0,
                      type='float',
@@ -845,7 +879,7 @@ group_sim.add_option("-M", "--mavlink-gimbal",
                      default=False,
                      help="enable MAVLink gimbal")
 group_sim.add_option("-L", "--location", type='string',
-                     default='CMAC',
+                     default=None,
                      help="use start location from "
                      "Tools/autotest/locations.txt")
 group_sim.add_option("-l", "--custom-location",
@@ -897,6 +931,16 @@ group_sim.add_option("", "--osd",
                      dest='OSD',
                      default=False,
                      help="Enable SITL OSD")
+group_sim.add_option("", "--tonealarm",
+                     action='store_true',
+                     dest='tonealarm',
+                     default=False,
+                     help="Enable SITL ToneAlarm")
+group_sim.add_option("", "--rgbled",
+                     action='store_true',
+                     dest='rgbled',
+                     default=False,
+                     help="Enable SITL RGBLed")
 group_sim.add_option("", "--add-param-file",
                      type='string',
                      default=None,
@@ -937,6 +981,13 @@ group.add_option("", "--console",
 group.add_option("", "--aircraft",
                  default=None,
                  help="store state and logs in named directory")
+group.add_option("", "--moddebug",
+                 default=0,
+                 type=int,
+                 help="mavproxy module debug")
+group.add_option("", "--no-rcin",
+                 action='store_true',
+                 help="disable mavproxy rcin")
 parser.add_option_group(group)
 
 cmd_opts, cmd_args = parser.parse_args()
@@ -957,23 +1008,27 @@ if cmd_opts.hil:
     if cmd_opts.callgrind:
         print("May not use callgrind with hil")
         sys.exit(1)
-    if cmd_opts.gdb or cmd_opts.gdb_stopped:
-        print("May not use gdb with hil")
+    if cmd_opts.gdb or cmd_opts.gdb_stopped or cmd_opts.lldb or cmd_opts.lldb_stopped:
+        print("May not use gdb or lldb with hil")
         sys.exit(1)
     if cmd_opts.strace:
         print("May not use strace with hil")
         sys.exit(1)
 
-if cmd_opts.valgrind and (cmd_opts.gdb or cmd_opts.gdb_stopped):
-    print("May not use valgrind with gdb")
+if cmd_opts.valgrind and (cmd_opts.gdb or cmd_opts.gdb_stopped or cmd_opts.lldb or cmd_opts.lldb_stopped):
+    print("May not use valgrind with gdb or lldb")
     sys.exit(1)
 
 if cmd_opts.valgrind and cmd_opts.callgrind:
     print("May not use valgrind with callgrind")
     sys.exit(1)
 
-if cmd_opts.strace and (cmd_opts.gdb or cmd_opts.gdb_stopped):
-    print("May not use strace with gdb")
+if cmd_opts.strace and (cmd_opts.gdb or cmd_opts.gdb_stopped or cmd_opts.lldb or cmd_opts.lldb_stopped):
+    print("May not use strace with gdb or lldb")
+    sys.exit(1)
+
+if (cmd_opts.gdb or cmd_opts.gdb_stopped) and (cmd_opts.lldb or cmd_opts.lldb_stopped):
+    print("May not use lldb with gdb")
     sys.exit(1)
 
 if cmd_opts.strace and cmd_opts.valgrind:
@@ -1035,9 +1090,12 @@ if cmd_opts.tracker:
 if cmd_opts.custom_location:
     location = cmd_opts.custom_location
     progress("Starting up at %s" % (location,))
-else:
+elif cmd_opts.location is not None:
     location = find_location_by_name(find_autotest_dir(), cmd_opts.location)
     progress("Starting up at %s (%s)" % (location, cmd_opts.location))
+else:
+    progress("Starting up at SITL location")
+    location = None
 
 if cmd_opts.use_dir is not None:
     new_dir = cmd_opts.use_dir
@@ -1050,12 +1108,15 @@ if cmd_opts.use_dir is not None:
 
 if cmd_opts.hil:
     # (unlikely)
-    run_in_terminal_window(find_autotest_dir(),
-                           "JSBSim",
-                           [os.path.join(find_autotest_dir(),
-                                         "jsb_sim/runsim.py"),
-                            "--home", location,
-                            "--speedup=" + str(cmd_opts.speedup)])
+    jsbsim_opts = [
+        os.path.join(find_autotest_dir(),
+                     "jsb_sim/runsim.py"),
+        "--speedup=" + str(cmd_opts.speedup)
+    ]
+    if location is not None:
+        jsbsim_opts.extend(["--home", location])
+
+    run_in_terminal_window(find_autotest_dir(), "JSBSim", jsbsim_opts)
 else:
     if not cmd_opts.no_rebuild:  # i.e. we should rebuild
         do_build(vehicle_dir, cmd_opts, frame_infos)
@@ -1079,7 +1140,7 @@ else:
                   find_autotest_dir(),
                   cmd_opts,
                   frame_infos,
-                  location)
+                  loc=location)
 
 if cmd_opts.delay_start:
     progress("Sleeping for %f seconds" % (cmd_opts.delay_start,))

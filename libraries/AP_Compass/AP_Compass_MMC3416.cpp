@@ -68,7 +68,7 @@ AP_Compass_MMC3416::AP_Compass_MMC3416(AP_HAL::OwnPtr<AP_HAL::Device> _dev,
 
 bool AP_Compass_MMC3416::init()
 {
-    if (!dev->get_semaphore()->take(0)) {
+    if (!dev->get_semaphore()->take(HAL_SEMAPHORE_BLOCK_FOREVER)) {
         return false;
     }
 
@@ -220,7 +220,7 @@ void AP_Compass_MMC3416::timer()
             have_initial_offset = true;
         } else {
             // low pass changes to the offset
-            offset = offset * 0.95 + new_offset * 0.05;
+            offset = offset * 0.95f + new_offset * 0.05f;
         }
 
 #if 0

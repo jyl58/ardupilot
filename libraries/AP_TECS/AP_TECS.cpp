@@ -1,5 +1,8 @@
 #include "AP_TECS.h"
+
 #include <AP_HAL/AP_HAL.h>
+#include <AP_Baro/AP_Baro.h>
+#include <AP_Logger/AP_Logger.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -238,7 +241,14 @@ const AP_Param::GroupInfo AP_TECS::var_info[] = {
     // @Values: 0:Disable,1:Enable
     // @User: Advanced
     AP_GROUPINFO("SYNAIRSPEED", 27, AP_TECS, _use_synthetic_airspeed, 0),
-    
+
+    // @Param: OPTIONS
+    // @DisplayName: Extra TECS options
+    // @Description: This allows the enabling of special features in the speed/height controller
+    // @Bitmask: 0:GliderOnly
+    // @User: Advanced
+    AP_GROUPINFO("OPTIONS", 28, AP_TECS, _options, 0),
+
     AP_GROUPEND
 };
 
@@ -409,28 +419,31 @@ void AP_TECS::_update_speed_demand(void)
     // calculate velocity rate limits based on physical performance limits
     // provision to use a different rate limit if bad descent or underspeed condition exists
     // Use 50% of maximum energy rate to allow margin for total energy contgroller
-    float velRateMax = 0.5f * _STEdot_max / _TAS_state;
-    float velRateMin = 0.5f * _STEdot_min / _TAS_state;
+    const float velRateMax = 0.5f * _STEdot_max / _TAS_state;
+    const float velRateMin = 0.5f * _STEdot_min / _TAS_state;
+    const float TAS_dem_previous = _TAS_dem_adj;
+
+    // assume fixed 10Hz call rate
+    const float dt = 0.1;
 
     // Apply rate limit
-    if ((_TAS_dem - _TAS_dem_adj) > (velRateMax * 0.1f))
+    if ((_TAS_dem - TAS_dem_previous) > (velRateMax * dt))
     {
-        _TAS_dem_adj = _TAS_dem_adj + velRateMax * 0.1f;
+        _TAS_dem_adj = TAS_dem_previous + velRateMax * dt;
         _TAS_rate_dem = velRateMax;
     }
-    else if ((_TAS_dem - _TAS_dem_adj) < (velRateMin * 0.1f))
+    else if ((_TAS_dem - TAS_dem_previous) < (velRateMin * dt))
     {
-        _TAS_dem_adj = _TAS_dem_adj + velRateMin * 0.1f;
+        _TAS_dem_adj = TAS_dem_previous + velRateMin * dt;
         _TAS_rate_dem = velRateMin;
     }
     else
     {
+        _TAS_rate_dem = (_TAS_dem - TAS_dem_previous) / dt;
         _TAS_dem_adj = _TAS_dem;
-        _TAS_rate_dem = (_TAS_dem - _TAS_dem_last) / 0.1f;
     }
     // Constrain speed demand again to protect against bad values on initialisation.
     _TAS_dem_adj = constrain_float(_TAS_dem_adj, _TASmin, _TASmax);
-    _TAS_dem_last = _TAS_dem;
 }
 
 void AP_TECS::_update_height_demand(void)
@@ -858,6 +871,15 @@ void AP_TECS::_update_pitch(void)
     // causing massive integrator changes. See Issue#4066
     integSEB_delta = constrain_float(integSEB_delta, -integSEB_range*0.1f, integSEB_range*0.1f);
 
+    // prevent the constraint on pitch integrator _integSEB_state from
+    // itself injecting step changes in the variable. We only want the
+    // constraint to prevent large changes due to integSEB_delta, not
+    // to cause step changes due to a change in the constrain
+    // limits. Large steps in _integSEB_state can cause long term
+    // pitch changes
+    integSEB_min = MIN(integSEB_min, _integSEB_state);
+    integSEB_max = MAX(integSEB_max, _integSEB_state);
+
     // integrate
     _integSEB_state = constrain_float(_integSEB_state + integSEB_delta, integSEB_min, integSEB_max);
 
@@ -899,7 +921,6 @@ void AP_TECS::_initialise_states(int32_t ptchMinCO_cd, float hgt_afe)
         _hgt_dem_adj       = _hgt_dem_adj_last;
         _hgt_dem_prev      = _hgt_dem_adj_last;
         _hgt_dem_in_old    = _hgt_dem_adj_last;
-        _TAS_dem_last      = _TAS_dem;
         _TAS_dem_adj       = _TAS_dem;
         _flags.underspeed        = false;
         _flags.badDescent        = false;
@@ -913,7 +934,6 @@ void AP_TECS::_initialise_states(int32_t ptchMinCO_cd, float hgt_afe)
         _hgt_dem_adj_last  = hgt_afe;
         _hgt_dem_adj       = _hgt_dem_adj_last;
         _hgt_dem_prev      = _hgt_dem_adj_last;
-        _TAS_dem_last      = _TAS_dem;
         _TAS_dem_adj       = _TAS_dem;
         _flags.underspeed        = false;
         _flags.badDescent  = false;
@@ -968,11 +988,14 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
     }
     _THRminf  = aparm.throttle_min * 0.01f;
 
+    // min of 1% throttle range to prevent a numerical error
+    _THRmaxf = MAX(_THRmaxf, _THRminf+0.01);
+
     // work out the maximum and minimum pitch
     // if TECS_PITCH_{MAX,MIN} isn't set then use
     // LIM_PITCH_{MAX,MIN}. Don't allow TECS_PITCH_{MAX,MIN} to be
     // larger than LIM_PITCH_{MAX,MIN}
-    if (_pitch_max <= 0) {
+    if (_pitch_max == 0) {
         _PITCHmaxf = aparm.pitch_limit_max_cd * 0.01f;
     } else {
         _PITCHmaxf = MIN(_pitch_max, aparm.pitch_limit_max_cd * 0.01f);
@@ -990,14 +1013,20 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
         _PITCHminf = constrain_float(_PITCHminf, -_pitch_max_limit, _PITCHmaxf);
         _pitch_max_limit = 90;
     }
-        
+
+    if (!_landing.is_on_approach()) {
+        // reset land pitch min when not landing
+        _land_pitch_min = _PITCHminf;
+    }
+    
     if (_landing.is_flaring()) {
         // in flare use min pitch from LAND_PITCH_CD
         _PITCHminf = MAX(_PITCHminf, _landing.get_pitch_cd() * 0.01f);
 
         // and use max pitch from TECS_LAND_PMAX
         if (_land_pitch_max != 0) {
-            _PITCHmaxf = MIN(_PITCHmaxf, _land_pitch_max);
+            // note that this allows a flare pitch outside the normal TECS auto limits
+            _PITCHmaxf = _land_pitch_max;
         }
 
         // and allow zero throttle
@@ -1023,6 +1052,28 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
         }
     }
 
+    if (_landing.is_on_approach()) {
+        // don't allow the lower bound of pitch to decrease, nor allow
+        // it to increase rapidly. This prevents oscillation of pitch
+        // demand while in landing approach based on rapidly changing
+        // time to flare estimate
+        if (_land_pitch_min <= -90) {
+            _land_pitch_min = _PITCHminf;
+        }
+        const float flare_pitch_range = 20;
+        const float delta_per_loop = (flare_pitch_range/_landTimeConst) * _DT;
+        _PITCHminf = MIN(_PITCHminf, _land_pitch_min+delta_per_loop);
+        _land_pitch_min = MAX(_land_pitch_min, _PITCHminf);
+        _PITCHminf = MAX(_land_pitch_min, _PITCHminf);
+    }
+
+    if (_landing.is_flaring()) {
+        // ensure we don't violate the limits for flare pitch
+        if (_land_pitch_max != 0) {
+            _PITCHmaxf = MIN(_land_pitch_max, _PITCHmaxf);
+        }
+    }
+
     if (flight_stage == AP_Vehicle::FixedWing::FLIGHT_TAKEOFF || flight_stage == AP_Vehicle::FixedWing::FLIGHT_ABORT_LAND) {
         if (!_flags.reached_speed_takeoff && _TAS_state >= _TAS_dem_adj) {
             // we have reached our target speed in takeoff, allow for
@@ -1034,6 +1085,9 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
     // convert to radians
     _PITCHmaxf = radians(_PITCHmaxf);
     _PITCHminf = radians(_PITCHminf);
+
+    // don't allow max pitch to go below min pitch
+    _PITCHmaxf = MAX(_PITCHmaxf, _PITCHminf);
 
     // initialise selected states and variables if DT > 1 second or in climbout
     _initialise_states(ptchMinCO_cd, hgt_afe);
@@ -1069,7 +1123,7 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
     _detect_bad_descent();
 
     // when soaring is active we never trigger a bad descent
-    if (soaring_active) {
+    if (soaring_active || (_options & OPTION_GLIDER_ONLY)) {
         _flags.badDescent = false;        
     }
 
@@ -1098,10 +1152,15 @@ void AP_TECS::update_pitch_throttle(int32_t hgt_dem_cm,
         (double)_TAS_rate_dem,
         (double)logging.SKE_weighting,
         _flags_byte);
-    AP::logger().Write("TEC2", "TimeUS,KErr,PErr,EDelta,LF", "Qffff",
-                                           now,
-                                           (double)logging.SKE_error,
-                                           (double)logging.SPE_error,
-                                           (double)logging.SEB_delta,
-                                           (double)load_factor);
+    AP::logger().Write("TEC2", "TimeUS,pmax,pmin,KErr,PErr,EDelta,LF",
+                       "s------",
+                       "F------",
+                       "Qffffff",
+                       now,
+                       (double)degrees(_PITCHmaxf),
+                       (double)degrees(_PITCHminf),
+                       (double)logging.SKE_error,
+                       (double)logging.SPE_error,
+                       (double)logging.SEB_delta,
+                       (double)load_factor);
 }

@@ -16,18 +16,6 @@ public:
     // Constructor
     RC_Channel(void);
 
-    // used to get min/max/trim limit value based on _reverse
-    enum LimitValue {
-        RC_CHANNEL_LIMIT_TRIM,
-        RC_CHANNEL_LIMIT_MIN,
-        RC_CHANNEL_LIMIT_MAX
-    };
-
-    enum InputIgnore {
-        RC_IGNORE_RECEIVER  = (1 << 0), // RC receiver modules
-        RC_IGNORE_OVERRIDES = (1 << 1), // MAVLink overrides
-    };
-
     enum ChannelType {
         RC_CHANNEL_TYPE_ANGLE = 0,
         RC_CHANNEL_TYPE_RANGE = 1,
@@ -83,6 +71,8 @@ public:
     void       set_override(const uint16_t v, const uint32_t timestamp_us);
     bool       has_override() const;
 
+    int16_t    stick_mixing(const int16_t servo_in);
+
     // get control input with zero deadzone
     int16_t    get_control_in_zero_dz(void) const;
 
@@ -107,10 +97,10 @@ public:
 
     // auxillary switch support:
     void init_aux();
-    void read_aux();
+    bool read_aux();
 
     // Aux Switch enumeration
-    enum aux_func {
+    enum class AUX_FUNC {
         DO_NOTHING =           0, // aux switch disabled
         FLIP =                 2, // flip
         SIMPLE_MODE =          3, // change to simple mode
@@ -175,10 +165,25 @@ public:
         GPS_DISABLE  =        65, // disable GPS for testing
         RELAY5 =              66, // Relay5 pin on/off
         RELAY6 =              67, // Relay6 pin on/off
+        STABILIZE =           68, // stabilize mode
+        POSHOLD   =           69, // poshold mode
+        ALTHOLD   =           70, // althold mode
+        FLOWHOLD  =           71, // flowhold mode
+        CIRCLE    =           72, // circle mode
+        DRIFT     =           73, // drift mode
+        SAILBOAT_MOTOR_3POS = 74, // Sailboat motoring 3pos
+        SURFACE_TRACKING =    75, // Surface tracking upwards or downwards
+        STANDBY  =            76, // Standby mode
+        TAKEOFF   =           77, // takeoff
+        KILL_IMU1 =          100, // disable first IMU (for IMU failure testing)
+        KILL_IMU2 =          101, // disable second IMU (for IMU failure testing)
         // if you add something here, make sure to update the documentation of the parameter in RC_Channel.cpp!
         // also, if you add an option >255, you will need to fix duplicate_options_exist
+
+        // inputs eventually used to replace RCMAP
+        MAINSAIL =           207, // mainsail input
     };
-    typedef enum aux_func aux_func_t;
+    typedef enum AUX_FUNC aux_func_t;
 
 protected:
 
@@ -192,11 +197,14 @@ protected:
     virtual void init_aux_function(aux_func_t ch_option, aux_switch_pos_t);
     virtual void do_aux_function(aux_func_t ch_option, aux_switch_pos_t);
 
+    void do_aux_function_avoid_adsb(const aux_switch_pos_t ch_flag);
     void do_aux_function_avoid_proximity(const aux_switch_pos_t ch_flag);
     void do_aux_function_camera_trigger(const aux_switch_pos_t ch_flag);
+    void do_aux_function_fence(const aux_switch_pos_t ch_flag);
     void do_aux_function_clear_wp(const aux_switch_pos_t ch_flag);
     void do_aux_function_gripper(const aux_switch_pos_t ch_flag);
     void do_aux_function_lost_vehicle_sound(const aux_switch_pos_t ch_flag);
+    void do_aux_function_mission_reset(const aux_switch_pos_t ch_flag);
     void do_aux_function_rc_override_enable(const aux_switch_pos_t ch_flag);
     void do_aux_function_relay(uint8_t relay, bool val);
     void do_aux_function_sprayer(const aux_switch_pos_t ch_flag);
@@ -205,6 +213,7 @@ protected:
     virtual void mode_switch_changed(modeswitch_pos_t new_pos) {
         // no action by default (e.g. Tracker, Sub, who do their own thing)
     };
+
 
 private:
 
@@ -240,37 +249,16 @@ private:
     static const uint16_t AUX_PWM_TRIGGER_LOW = 1200;
     bool read_3pos_switch(aux_switch_pos_t &ret) const WARN_IF_UNUSED;
 
-    //Documentation of Aux Switch Flags:
-    // 0 is low or false, 1 is center or true, 2 is high
-    // pairs of bits in old_switch_positions give the old switch position for an RC input.
-    static uint32_t old_switch_positions;
-
-    aux_switch_pos_t old_switch_position() const {
-        return (aux_switch_pos_t)((old_switch_positions >> (ch_in*2)) & 0x3);
-    }
-    void set_old_switch_position(const RC_Channel::aux_switch_pos_t value) {
-        old_switch_positions &= ~(0x3 << (ch_in*2));
-        old_switch_positions |= (value << (ch_in*2));
-    }
-
-    // Structure used to detect changes in the flight mode control switch
-    // static since we should only ever have one mode switch!
-    typedef struct {
-        modeswitch_pos_t debounced_position; // currently used position
-        modeswitch_pos_t last_position;      // position in previous iteration
-        uint32_t last_edge_time_ms; // system time that position was last changed
-    } modeswitch_state_t;
-    static modeswitch_state_t mode_switch_state;
-
-    // de-bounce counters
-    typedef struct {
-        uint8_t count;
-        uint8_t new_position;
-    } debounce_state_t;
-    debounce_state_t debounce;
+    // Structure used to detect and debounce switch changes
+    struct {
+        int8_t debounce_position = -1;
+        int8_t current_position = -1;
+        uint32_t last_edge_time_ms;
+    } switch_state;
 
     void reset_mode_switch();
     void read_mode_switch();
+    bool debounce_completed(int8_t position);
 };
 
 
@@ -306,6 +294,8 @@ public:
     }
     //end compatability functions for Plane
 
+    // this function is implemented in the child class in the vehicle
+    // code
     virtual RC_Channel *channel(uint8_t chan) = 0;
 
     uint8_t get_radio_in(uint16_t *chans, const uint8_t num_channels); // reads a block of chanel radio_in values starting from channel 0
@@ -340,18 +330,53 @@ public:
         }
     }
 
+    // should we ignore RC failsafe bits from receivers?
+    bool ignore_rc_failsafe(void) const {
+        return get_singleton() != nullptr && (_options & uint32_t(Option::IGNORE_FAILSAFE));
+    }
+
+    bool ignore_overrides() const {
+        return _options & uint32_t(Option::IGNORE_OVERRIDES);
+    }
+
+    bool ignore_receiver() const {
+        return _options & uint32_t(Option::IGNORE_RECEIVER);
+    }
+
+    float override_timeout_ms() const {
+        return _override_timeout.get() * 1e3f;
+    }
+
+    /*
+      get the RC input PWM value given a channel number.  Note that
+      channel numbers start at 1, as this API is designed for use in
+      LUA
+    */
+    bool get_pwm(uint8_t channel, uint16_t &pwm) const;
+
+protected:
+
+    enum class Option {
+        IGNORE_RECEIVER  = (1 << 0), // RC receiver modules
+        IGNORE_OVERRIDES = (1 << 1), // MAVLink overrides
+        IGNORE_FAILSAFE  = (1 << 2), // ignore RC failsafe bits
+    };
+
+    void new_override_received() {
+        has_new_overrides = true;
+    }
+
 private:
     static RC_Channels *_singleton;
     // this static arrangement is to avoid static pointers in AP_Param tables
     static RC_Channel *channels;
 
-    static bool has_new_overrides;
-    static AP_Float *override_timeout;
-    static AP_Int32 *options;
+    bool has_new_overrides;
+
     AP_Float _override_timeout;
     AP_Int32  _options;
 
-    // flight_mode_channel_number must be overridden:
+    // flight_mode_channel_number must be overridden in vehicle specific code
     virtual int8_t flight_mode_channel_number() const = 0;
     RC_Channel *flight_mode_channel();
 

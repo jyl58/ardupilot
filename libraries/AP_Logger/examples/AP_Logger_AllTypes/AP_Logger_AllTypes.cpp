@@ -48,13 +48,27 @@ enum MyLogMessages {
 };
 
 static const struct LogStructure log_structure[] = {
+    { LOG_FORMAT_MSG,
+      sizeof(log_Format),
+      "FMT",
+      "BBnNZ",
+      "Type,Length,Name,Format,Columns",
+      "-b---",
+      "-----" },
+    { LOG_UNIT_MSG, sizeof(log_Unit),
+      "UNIT", "QbZ",      "TimeUS,Id,Label", "s--","F--" },
+    { LOG_FORMAT_UNITS_MSG, sizeof(log_Format_Units),
+      "FMTU", "QBNN",      "TimeUS,FmtType,UnitIds,MultIds","s---", "F---" },
+    { LOG_MULT_MSG, sizeof(log_Format_Multiplier),
+      "MULT", "Qbd",      "TimeUS,Id,Mult", "s--","F--" },
+
     { LOG_TYP1_MSG,
       sizeof(log_TYP1),
       "TYP1",
-      "QbBhHiIfdnNZ",
-      "TimeUS,b,B,h,H,i,I,f,d,n,N,Z",
-      "s-----------",
-      "F-----------"
+      "QabBhHiIfdnNZ",
+      "TimeUS,a,b,B,h,H,i,I,f,d,n,N,Z",
+      "s------------",
+      "F------------"
     },
     { LOG_TYP2_MSG,
       sizeof(log_TYP2),
@@ -85,27 +99,26 @@ static uint16_t log_num;
 
 class AP_LoggerTest_AllTypes : public AP_HAL::HAL::Callbacks {
 public:
-    void setup();
-    void loop();
+    void setup() override;
+    void loop() override;
 
 private:
 
     AP_Int32 log_bitmask;
-    AP_Logger dataflash{log_bitmask};
-    void print_mode(AP_HAL::BetterStream *port, uint8_t mode);
+    AP_Logger logger{log_bitmask};
 
     void Log_Write_TypeMessages();
     void Log_Write_TypeMessages_Log_Write();
 
-    void flush_dataflash(AP_Logger &dataflash);
+    void flush_logger(AP_Logger &logger);
 };
 
-void AP_LoggerTest_AllTypes::flush_dataflash(AP_Logger &_dataflash)
+void AP_LoggerTest_AllTypes::flush_logger(AP_Logger &_logger)
 {
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL || CONFIG_HAL_BOARD == HAL_BOARD_LINUX
-    _dataflash.flush();
+    _logger.flush();
 #else
-    // flush is not available on e.g. px4 as it would be a somewhat
+    // flush is not available on e.g. stm32 as it would be a somewhat
     // dangerous operation, but if we wait long enough (at time of
     // writing, 2 seconds, see AP_Logger_File::_io_timer) the data
     // will go out.
@@ -116,13 +129,16 @@ void AP_LoggerTest_AllTypes::flush_dataflash(AP_Logger &_dataflash)
 
 void AP_LoggerTest_AllTypes::Log_Write_TypeMessages()
 {
-    log_num = dataflash.find_last_log();
+    log_num = logger.find_last_log();
     hal.console->printf("Using log number %u\n", log_num);
 
-    struct log_TYP1 typ1 = {
+    hal.console->printf("Writing out a few messages to get formats out...");
+    logger.Write_Message("Start 1");
+
+    struct log_TYP1 typ1{
         LOG_PACKET_HEADER_INIT(LOG_TYP1_MSG),
         time_us : AP_HAL::micros64(),
-        a : { -32768, 32767, 1, -1, 0, 17 }, // int16[32]
+        a : { -32768, 32767, 1, -1, 0, 19 }, // int16[32]
         b : -17, // int8_t
         B : 42,  // uint8_t
         h : -12372,  // int16_t
@@ -140,7 +156,7 @@ void AP_LoggerTest_AllTypes::Log_Write_TypeMessages()
               'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
               'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P' }
     };
-    dataflash.WriteBlock(&typ1, sizeof(typ1));
+    logger.WriteBlock(&typ1, sizeof(typ1));
 
     struct log_TYP2 typ2 = {
         LOG_PACKET_HEADER_INIT(LOG_TYP2_MSG),
@@ -154,63 +170,85 @@ void AP_LoggerTest_AllTypes::Log_Write_TypeMessages()
         q : -98239832498328,   // int64_t
         Q : 3432345232233432   // uint64_t
     };
-    dataflash.WriteBlock(&typ2, sizeof(typ2));
+    logger.WriteBlock(&typ2, sizeof(typ2));
 
-    flush_dataflash(dataflash);
+    flush_logger(logger);
 
-    dataflash.StopLogging();
+    logger.StopLogging();
 }
 
 void AP_LoggerTest_AllTypes::Log_Write_TypeMessages_Log_Write()
 {
-    log_num = dataflash.find_last_log();
+    log_num = logger.find_last_log();
     hal.console->printf("Using log number for Log_Write %u\n", log_num);
 
-    dataflash.Write("TYP3", TYP1_LBL, TYP1_FMT,
-                        AP_HAL::micros64(),
-                        -17, // int8_t
-                        42,  // uint8_t
-                        -12372,  // int16_t
-                        19812,   // uint16_t
-                        -98234729,   // int32_t
-                        74627293,    // uint32_t
-                        35.87654f,  // float
-                        (double)67.7393274658293,   // double
-                        "ABCD", // char[4]
-                        // char[16]:
-                        "ABCDEFGHIJKLMNOP",
-                        // char[64]:
-                        "ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOPABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP"
+    hal.console->printf("Writing out a few messages to get formats out...");
+    logger.Write_Message("Start 2");
+
+    logger.Write("TYPn",
+                 "TimeUS,Str",
+                 "Qn",
+                 AP_HAL::micros64(),
+                 "ABCD");
+
+    const int16_t a[32] = { -32768, 32767, 1, -1, 0, 17 };
+
+    logger.Write("TYPa",
+                 "TimeUS,Arr",
+                 "Qa",
+                 AP_HAL::micros64(),
+                 a);
+
+    logger.Write("TYP3",
+                 TYP1_LBL,
+                 TYP1_FMT,
+                 AP_HAL::micros64(),
+                 a, // int16[32]
+                 -17, // int8_t
+                 42,  // uint8_t
+                 -12372,  // int16_t
+                 19812,   // uint16_t
+                 -98234729,   // int32_t
+                 74627293,    // uint32_t
+                 35.87654f,  // float
+                 (double)67.7393274658293,   // double
+                 "ABCD", // char[4]
+                 // char[16]:
+                 "ABCDEFGHIJKLMNOP",
+                 // char[64]:
+                 "ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOPABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP"
         );
 
-    dataflash.Write("TYP4", TYP2_LBL, TYP2_FMT,
-                        AP_HAL::micros64(),
-                        -9823, // int16_t * 100
-                        5436,  // uint16_t * 100
-                        -9209238,  // int32_t * 100
-                        19239872,  // uint32_t * 100
-                        -3576543,   // uint32_t latitude/longitude;
-                        5,          //   uint8_t;   // flight mode;
-                        -98239832498328,   // int64_t
-                        3432345232233432   // uint64_t
+    logger.Write("TYP4",
+                 TYP2_LBL,
+                 TYP2_FMT,
+                 AP_HAL::micros64(),
+                 -9823, // int16_t * 100
+                 5436,  // uint16_t * 100
+                 -9209238,  // int32_t * 100
+                 19239872,  // uint32_t * 100
+                 -3576543,   // uint32_t latitude/longitude;
+                 5,          //   uint8_t;   // flight mode;
+                 -98239832498328,   // int64_t
+                 3432345232233432   // uint64_t
         );
 
     // emit a message which contains NaNs:
-    dataflash.Write("NANS", "f,d,bf,bd", "fdfd",  dataflash.quiet_nanf(), dataflash.quiet_nan(), NAN, NAN);
+    logger.Write("NANS", "f,d,bf,bd", "fdfd",  logger.quiet_nanf(), logger.quiet_nan(), NAN, NAN);
 
-    flush_dataflash(dataflash);
+    flush_logger(logger);
 
-    dataflash.StopLogging();
+    logger.StopLogging();
 }
 
 void AP_LoggerTest_AllTypes::setup(void)
 {
-    hal.console->printf("Dataflash All Types 1.0\n");
+    hal.console->printf("Logger All Types 1.0\n");
 
     log_bitmask = (uint32_t)-1;
-    dataflash.Init(log_structure, ARRAY_SIZE(log_structure));
-    dataflash.set_vehicle_armed(true);
-    dataflash.Write_Message("AP_Logger Test");
+    logger.Init(log_structure, ARRAY_SIZE(log_structure));
+    logger.set_vehicle_armed(true);
+    logger.Write_Message("AP_Logger Test");
 
     // Test
     hal.scheduler->delay(20);
@@ -227,12 +265,12 @@ void AP_LoggerTest_AllTypes::loop(void)
     hal.scheduler->delay(1000);
 }
 
-const struct AP_Param::GroupInfo        GCS_MAVLINK::var_info[] = {
+const struct AP_Param::GroupInfo        GCS_MAVLINK_Parameters::var_info[] = {
     AP_GROUPEND
 };
 GCS_Dummy _gcs;
 
 
-static AP_LoggerTest_AllTypes dataflashtest;
+static AP_LoggerTest_AllTypes loggertest;
 
-AP_HAL_MAIN_CALLBACKS(&dataflashtest);
+AP_HAL_MAIN_CALLBACKS(&loggertest);

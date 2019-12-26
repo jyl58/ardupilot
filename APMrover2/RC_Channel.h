@@ -22,6 +22,9 @@ private:
     void do_aux_function_change_mode(Mode &mode,
                                      const aux_switch_pos_t ch_flag);
 
+    void add_waypoint_for_current_loc();
+
+    void do_aux_function_sailboat_motor_3pos(const aux_switch_pos_t ch_flag);
 };
 
 class RC_Channels_Rover : public RC_Channels
@@ -34,7 +37,7 @@ public:
     RC_Channel_Rover obj_channels[NUM_RC_CHANNELS];
 
     RC_Channel_Rover *channel(const uint8_t chan) override {
-        if (chan > NUM_RC_CHANNELS) {
+        if (chan >= NUM_RC_CHANNELS) {
             return nullptr;
         }
         return &obj_channels[chan];

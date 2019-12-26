@@ -11,7 +11,7 @@ public:
               Compass &_compass,
               AP_GPS &_gps,
               AP_Airspeed &_airspeed,
-              AP_Logger &_dataflash,
+              AP_Logger &_logger,
               struct LogStructure *log_structure,
               uint8_t log_structure_count,
               const char **&nottypes);
@@ -34,8 +34,8 @@ public:
     void set_save_chek_messages(bool _save_chek_messages) { save_chek_messages = _save_chek_messages; }
 
     uint64_t last_timestamp_us(void) const { return last_timestamp_usec; }
-    virtual bool handle_log_format_msg(const struct log_Format &f);
-    virtual bool handle_msg(const struct log_Format &f, uint8_t *msg);
+    bool handle_log_format_msg(const struct log_Format &f) override;
+    bool handle_msg(const struct log_Format &f, uint8_t *msg) override;
 
     static bool in_list(const char *type, const char *list[]);
 
@@ -47,7 +47,7 @@ private:
     Compass &compass;
     AP_GPS &gps;
     AP_Airspeed &airspeed;
-    AP_Logger &dataflash;
+    AP_Logger &logger;
     struct LogStructure *_log_structure;
     uint8_t _log_structure_count;
 

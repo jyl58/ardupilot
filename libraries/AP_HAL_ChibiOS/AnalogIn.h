@@ -11,7 +11,7 @@
  *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ *
  * Code by Andrew Tridgell and Siddharth Bharat Purohit
  */
 
@@ -36,8 +36,6 @@ public:
     float voltage_average() override;
     float voltage_latest() override;
     float voltage_average_ratiometric() override;
-    void set_stop_pin(uint8_t p) override {}
-    void set_settle_time(uint16_t settle_time_ms) override {}
 
 private:
     // what value it has
@@ -56,19 +54,19 @@ private:
 class ChibiOS::AnalogIn : public AP_HAL::AnalogIn {
 public:
     friend class AnalogSource;
-    
+
     void init() override;
     AP_HAL::AnalogSource* channel(int16_t pin) override;
     void _timer_tick(void);
     float board_voltage(void) override { return _board_voltage; }
     float servorail_voltage(void) override { return _servorail_voltage; }
     uint16_t power_status_flags(void) override { return _power_flags; }
-    static void adccallback(ADCDriver *adcp, adcsample_t *buffer, size_t n);
+    static void adccallback(ADCDriver *adcp);
 
 private:
     void read_adc(uint32_t *val);
     void update_power_flags(void);
-    
+
     int _battery_handle;
     int _servorail_handle;
     int _system_power_handle;
@@ -86,9 +84,9 @@ private:
     struct pin_info {
         uint8_t channel;
         float scaling;
-    }; 
+    };
     static const pin_info pin_config[];
-    
+
     static adcsample_t *samples;
     static uint32_t sample_sum[];
     static uint32_t sample_count;

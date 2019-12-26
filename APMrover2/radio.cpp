@@ -13,15 +13,20 @@ void Rover::set_control_channels(void)
     // set rc channel ranges
     channel_steer->set_angle(SERVO_MAX);
     channel_throttle->set_angle(100);
-    channel_lateral->set_angle(100);
+    if (channel_lateral != nullptr) {
+        channel_lateral->set_angle(100);
+    }
 
-    // Allow to reconfigure ouput when not armed
+    // sailboat rc input init
+    g2.sailboat.init_rc_in();
+
+    // Allow to reconfigure output when not armed
     if (!arming.is_armed()) {
         g2.motors.setup_servo_output();
         // For a rover safety is TRIM throttle
         g2.motors.setup_safety_output();
     }
-    // setup correct scaling for ESCs like the UAVCAN PX4ESC which
+    // setup correct scaling for ESCs like the UAVCAN ESCs which
     // take a proportion of speed. Default to 1000 to 2000 for systems without
     // a k_throttle output
     hal.rcout->set_esc_scaling(1000, 2000);
@@ -33,7 +38,9 @@ void Rover::init_rc_in()
     // set rc dead zones
     channel_steer->set_default_dead_zone(30);
     channel_throttle->set_default_dead_zone(30);
-    channel_lateral->set_default_dead_zone(30);
+    if (channel_lateral != nullptr) {
+        channel_lateral->set_default_dead_zone(30);
+    }
 }
 
 /*
@@ -42,8 +49,8 @@ void Rover::init_rc_in()
 void Rover::rudder_arm_disarm_check()
 {
     // check if arming/disarm using rudder is allowed
-    AP_Arming::ArmingRudder arming_rudder = arming.get_rudder_arming_type();
-    if (arming_rudder == AP_Arming::ARMING_RUDDER_DISABLED) {
+    const AP_Arming::RudderArming arming_rudder = arming.get_rudder_arming_type();
+    if (arming_rudder == AP_Arming::RudderArming::IS_DISABLED) {
         return;
     }
 
@@ -72,14 +79,14 @@ void Rover::rudder_arm_disarm_check()
                 }
             } else {
                 // time to arm!
-                arm_motors(AP_Arming::RUDDER);
+                arming.arm(AP_Arming::Method::RUDDER);
                 rudder_arm_timer = 0;
             }
         } else {
             // not at full right rudder
             rudder_arm_timer = 0;
         }
-    } else if ((arming_rudder == AP_Arming::ARMING_RUDDER_ARMDISARM) && !g2.motors.active()) {
+    } else if ((arming_rudder == AP_Arming::RudderArming::ARMDISARM) && !g2.motors.active()) {
         // when armed and motor not active (not moving), full left rudder starts disarming counter
         if (channel_steer->get_control_in() < -4000) {
             const uint32_t now = millis();
@@ -91,7 +98,7 @@ void Rover::rudder_arm_disarm_check()
                 }
             } else {
                 // time to disarm!
-                disarm_motors();
+                arming.disarm();
                 rudder_arm_timer = 0;
             }
         } else {
@@ -125,7 +132,7 @@ void Rover::radio_failsafe_check(uint16_t pwm)
     }
 
     bool failed = pwm < static_cast<uint16_t>(g.fs_throttle_value);
-    if (AP_HAL::millis() - failsafe.last_valid_rc_ms > 200) {
+    if (AP_HAL::millis() - failsafe.last_valid_rc_ms > 500) {
         failed = true;
     }
     failsafe_trigger(FAILSAFE_EVENT_THROTTLE, failed);

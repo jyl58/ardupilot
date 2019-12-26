@@ -1,13 +1,18 @@
-#include <AP_Common/AP_Common.h>
-#include <GCS_MAVLink/GCS.h>
-#include <AP_Math/AP_Math.h>
 #include "AP_Airspeed.h"
+
+#include <AP_AHRS/AP_AHRS.h>
+#include <AP_Common/AP_Common.h>
+#include <AP_GPS/AP_GPS.h>
+#include <AP_Math/AP_Math.h>
+#include <GCS_MAVLink/GCS.h>
 
 void AP_Airspeed::check_sensor_failures()
 {
+#ifndef HAL_BUILD_AP_PERIPH
     for (uint8_t i=0; i<AIRSPEED_MAX_SENSORS; i++) {
         check_sensor_ahrs_wind_max_failures(i);
     }
+#endif
 }
 
 void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
@@ -30,8 +35,9 @@ void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
 
     // update state[i].failures.health_probability via LowPassFilter
     float speed_accuracy;
-    if (AP::gps().speed_accuracy(speed_accuracy)) {
-        const float gnd_speed = AP::gps().ground_speed();
+    const AP_GPS &gps = AP::gps();
+    if (gps.speed_accuracy(speed_accuracy)) {
+        const float gnd_speed = gps.ground_speed();
 
         if (aspeed > (gnd_speed + wind_max) || aspeed < (gnd_speed - wind_max)) {
             // bad, decay fast

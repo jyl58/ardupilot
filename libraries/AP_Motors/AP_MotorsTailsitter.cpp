@@ -81,24 +81,20 @@ void AP_MotorsTailsitter::output_to_motors()
     if (!_flags.initialised_ok) {
         return;
     }
-    float throttle_pwm = 0.0f;
 
-    switch (_spool_mode) {
-        case SHUT_DOWN:
-            throttle_pwm = get_pwm_output_min();
+    switch (_spool_state) {
+        case SpoolState::SHUT_DOWN:
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleLeft, get_pwm_output_min());
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleRight, get_pwm_output_min());
             break;
-        case GROUND_IDLE:
-            throttle_pwm = output_to_pwm(actuator_spin_up_to_ground_idle());
+        case SpoolState::GROUND_IDLE:
             set_actuator_with_slew(_actuator[1], actuator_spin_up_to_ground_idle());
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleLeft, output_to_pwm(actuator_spin_up_to_ground_idle()));
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleRight, output_to_pwm(actuator_spin_up_to_ground_idle()));
             break;
-        case SPOOL_UP:
-        case THROTTLE_UNLIMITED:
-        case SPOOL_DOWN:
-            throttle_pwm = output_to_pwm(thrust_to_actuator(_throttle));
+        case SpoolState::SPOOLING_UP:
+        case SpoolState::THROTTLE_UNLIMITED:
+        case SpoolState::SPOOLING_DOWN:
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleLeft, output_to_pwm(thrust_to_actuator(_thrust_left)));
             SRV_Channels::set_output_pwm(SRV_Channel::k_throttleRight, output_to_pwm(thrust_to_actuator(_thrust_right)));
             break;
@@ -108,11 +104,6 @@ void AP_MotorsTailsitter::output_to_motors()
     SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorLeft, _tilt_left*SERVO_OUTPUT_RANGE);
     SRV_Channels::set_output_scaled(SRV_Channel::k_tiltMotorRight, _tilt_right*SERVO_OUTPUT_RANGE);
 
-    // plane outputs for Qmodes are setup here, and written to the HAL by the plane servos loop
-    SRV_Channels::set_output_scaled(SRV_Channel::k_aileron, -_yaw_in*SERVO_OUTPUT_RANGE);
-    SRV_Channels::set_output_scaled(SRV_Channel::k_elevator, _pitch_in*SERVO_OUTPUT_RANGE);
-    SRV_Channels::set_output_scaled(SRV_Channel::k_rudder, _roll_in*SERVO_OUTPUT_RANGE);
-    SRV_Channels::set_output_pwm(SRV_Channel::k_throttle, throttle_pwm);
 }
 
 // get_motor_mask - returns a bitmask of which outputs are being used for motors (1 means being used)
@@ -146,9 +137,9 @@ void AP_MotorsTailsitter::output_armed_stabilizing()
 
     // apply voltage and air pressure compensation
     const float compensation_gain = get_compensation_gain();
-    roll_thrust = _roll_in * compensation_gain;
-    pitch_thrust = _pitch_in * compensation_gain;
-    yaw_thrust = _yaw_in * compensation_gain;
+    roll_thrust = (_roll_in + _roll_in_ff) * compensation_gain;
+    pitch_thrust = (_pitch_in + _pitch_in_ff) * compensation_gain;
+    yaw_thrust = (_yaw_in + _yaw_in_ff) * compensation_gain;
     throttle_thrust = get_throttle() * compensation_gain;
 
     // sanity check throttle is above zero and below current limited throttle
@@ -162,21 +153,24 @@ void AP_MotorsTailsitter::output_armed_stabilizing()
     }
 
     // calculate left and right throttle outputs
-    _thrust_left  = throttle_thrust + roll_thrust*0.5f;
-    _thrust_right = throttle_thrust - roll_thrust*0.5f;
+    _thrust_left  = throttle_thrust + roll_thrust * 0.5f;
+    _thrust_right = throttle_thrust - roll_thrust * 0.5f;
 
     // if max thrust is more than one reduce average throttle
     thrust_max = MAX(_thrust_right,_thrust_left);
     if (thrust_max > 1.0f) {
         thr_adj = 1.0f - thrust_max;
         limit.throttle_upper = true;
-        limit.roll_pitch = true;
+        limit.roll = true;
+        limit.pitch = true;
     }
 
     // Add adjustment to reduce average throttle
     _thrust_left  = constrain_float(_thrust_left  + thr_adj, 0.0f, 1.0f);
     _thrust_right = constrain_float(_thrust_right + thr_adj, 0.0f, 1.0f);
     _throttle = throttle_thrust + thr_adj;
+    // compensation_gain can never be zero
+    _throttle_out = _throttle / compensation_gain;
 
     // thrust vectoring
     _tilt_left  = pitch_thrust - yaw_thrust;

@@ -20,6 +20,7 @@
  */
 #include "AP_Airspeed_SDP3X.h"
 #include <GCS_MAVLink/GCS.h>
+#include <AP_Baro/AP_Baro.h>
 
 #include <stdio.h>
 
@@ -196,13 +197,6 @@ void AP_Airspeed_SDP3X::_timer()
  */
 float AP_Airspeed_SDP3X::_correct_pressure(float press)
 {
-    float temperature;
-    AP_Baro *baro = AP_Baro::get_singleton();
-
-    if (baro == nullptr) {
-        return press;
-    }
-
     float sign = 1.0f;
     
     // fix for tube order
@@ -227,7 +221,17 @@ float AP_Airspeed_SDP3X::_correct_pressure(float press)
         return 0.0f;
     }
 
-    get_temperature(temperature);
+    AP_Baro *baro = AP_Baro::get_singleton();
+
+    if (baro == nullptr) {
+        return press;
+    }
+
+    float temperature;
+    if (!get_temperature(temperature)) {
+        return press;
+    }
+
     float rho_air = baro->get_pressure() / (ISA_GAS_CONSTANT * (temperature + C_TO_KELVIN));
 
     /*
@@ -274,18 +278,16 @@ float AP_Airspeed_SDP3X::_correct_pressure(float press)
 // return the current differential_pressure in Pascal
 bool AP_Airspeed_SDP3X::get_differential_pressure(float &pressure)
 {
-    uint32_t now = AP_HAL::millis();
-    if (now - _last_sample_time_ms > 100) {
+    WITH_SEMAPHORE(sem);
+
+    if (AP_HAL::millis() - _last_sample_time_ms > 100) {
         return false;
     }
 
-    {
-        WITH_SEMAPHORE(sem);
-        if (_press_count > 0) {
-            _press = _press_sum / _press_count;
-            _press_count = 0;
-            _press_sum = 0;
-        }
+    if (_press_count > 0) {
+        _press = _press_sum / _press_count;
+        _press_count = 0;
+        _press_sum = 0;
     }
 
     pressure = _correct_pressure(_press);
@@ -295,11 +297,11 @@ bool AP_Airspeed_SDP3X::get_differential_pressure(float &pressure)
 // return the current temperature in degrees C, if available
 bool AP_Airspeed_SDP3X::get_temperature(float &temperature)
 {
+    WITH_SEMAPHORE(sem);
+
     if ((AP_HAL::millis() - _last_sample_time_ms) > 100) {
         return false;
     }
-
-    WITH_SEMAPHORE(sem);
 
     if (_temp_count > 0) {
         _temp = _temp_sum / _temp_count;

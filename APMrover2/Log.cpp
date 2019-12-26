@@ -1,26 +1,8 @@
 #include "Rover.h"
 
-#include <AP_RangeFinder/RangeFinder_Backend.h>
+#include <AP_RangeFinder/AP_RangeFinder_Backend.h>
 
 #if LOGGING_ENABLED == ENABLED
-
-struct PACKED log_Arm_Disarm {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint8_t  arm_state;
-    uint16_t arm_checks;
-};
-
-void Rover::Log_Write_Arm_Disarm()
-{
-    struct log_Arm_Disarm pkt = {
-        LOG_PACKET_HEADER_INIT(LOG_ARM_DISARM_MSG),
-        time_us                 : AP_HAL::micros64(),
-        arm_state               : arming.is_armed(),
-        arm_checks              : arming.get_enabled_checks()
-    };
-    logger.WriteBlock(&pkt, sizeof(pkt));
-}
 
 // Write an attitude packet
 void Rover::Log_Write_Attitude()
@@ -28,13 +10,13 @@ void Rover::Log_Write_Attitude()
     float desired_pitch_cd = degrees(g2.attitude_control.get_desired_pitch()) * 100.0f;
     const Vector3f targets(0.0f, desired_pitch_cd, 0.0f);
 
-    logger.Write_Attitude(ahrs, targets);
+    logger.Write_Attitude(targets);
 
 #if AP_AHRS_NAVEKF_AVAILABLE
-    logger.Write_EKF(ahrs);
-    logger.Write_AHRS2(ahrs);
+    AP::ahrs_navekf().Log_Write();
+    logger.Write_AHRS2();
 #endif
-    logger.Write_POS(ahrs);
+    logger.Write_POS();
 
     // log steering rate controller
     logger.Write_PID(LOG_PIDS_MSG, g2.attitude_control.get_steering_rate_pid().get_pid_info());
@@ -46,7 +28,7 @@ void Rover::Log_Write_Attitude()
     }
 
     // log heel to sail control for sailboats
-    if (g2.motors.has_sail()) {
+    if (rover.g2.sailboat.sail_enabled()) {
         logger.Write_PID(LOG_PIDR_MSG, g2.attitude_control.get_sailboat_heel_pid().get_pid_info());
     }
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -81,25 +63,6 @@ void Rover::Log_Write_Depth()
                         loc.lat,
                         loc.lng,
                         (double)(rangefinder.distance_cm_orient(ROTATION_PITCH_270) * 0.01f));
-}
-
-struct PACKED log_Error {
-  LOG_PACKET_HEADER;
-  uint64_t time_us;
-  uint8_t sub_system;
-  uint8_t error_code;
-};
-
-// Write an error packet
-void Rover::Log_Write_Error(uint8_t sub_system, uint8_t error_code)
-{
-  struct log_Error pkt = {
-      LOG_PACKET_HEADER_INIT(LOG_ERROR_MSG),
-      time_us       : AP_HAL::micros64(),
-      sub_system    : sub_system,
-      error_code    : error_code,
-  };
-  logger.WriteBlock(&pkt, sizeof(pkt));
 }
 
 // guided mode logging
@@ -149,10 +112,10 @@ void Rover::Log_Write_Nav_Tuning()
         LOG_PACKET_HEADER_INIT(LOG_NTUN_MSG),
         time_us             : AP_HAL::micros64(),
         wp_distance         : control_mode->get_distance_to_destination(),
-        wp_bearing_cd       : (uint16_t)wrap_360_cd(nav_controller->target_bearing_cd()),
-        nav_bearing_cd      : (uint16_t)wrap_360_cd(nav_controller->nav_bearing_cd()),
+        wp_bearing_cd       : (uint16_t)wrap_360_cd(control_mode->wp_bearing() * 100),
+        nav_bearing_cd      : (uint16_t)wrap_360_cd(control_mode->nav_bearing() * 100),
         yaw                 : (uint16_t)ahrs.yaw_sensor,
-        xtrack_error        : nav_controller->crosstrack_error()
+        xtrack_error        : control_mode->crosstrack_error()
     };
     logger.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -160,7 +123,7 @@ void Rover::Log_Write_Nav_Tuning()
 void Rover::Log_Write_Sail()
 {
     // only log sail if present
-    if (!g2.motors.has_sail()) {
+    if (!rover.g2.sailboat.sail_enabled()) {
         return;
     }
 
@@ -170,12 +133,12 @@ void Rover::Log_Write_Sail()
     float wind_speed_true = logger.quiet_nanf();
     float wind_speed_apparent = logger.quiet_nanf();
     if (rover.g2.windvane.enabled()) {
-        wind_dir_abs = degrees(g2.windvane.get_absolute_wind_direction_rad());
+        wind_dir_abs = degrees(g2.windvane.get_true_wind_direction_rad());
         wind_dir_rel = degrees(g2.windvane.get_apparent_wind_direction_rad());
         wind_speed_true = g2.windvane.get_true_wind_speed();
         wind_speed_apparent = g2.windvane.get_apparent_wind_speed();
     }
-    logger.Write("SAIL", "TimeUS,WindDirAbs,WindDirApp,WindSpdTrue,WindSpdApp,SailOut,VMG",
+    logger.Write("SAIL", "TimeUS,WindDirTrue,WindDirApp,WindSpdTrue,WindSpdApp,SailOut,VMG",
                         "shhnn%n", "F000000", "Qffffff",
                         AP_HAL::micros64(),
                         (double)wind_dir_abs,
@@ -183,7 +146,7 @@ void Rover::Log_Write_Sail()
                         (double)wind_speed_true,
                         (double)wind_speed_apparent,
                         (double)g2.motors.get_mainsail(),
-                        (double)sailboat_get_VMG());
+                        (double)g2.sailboat.get_VMG());
 }
 
 struct PACKED log_Steering {
@@ -225,7 +188,7 @@ void Rover::Log_Write_Steering()
         time_us        : AP_HAL::micros64(),
         steering_in        : channel_steer->get_control_in(),
         steering_out       : g2.motors.get_steering(),
-        desired_lat_accel  : g2.attitude_control.get_desired_lat_accel(),
+        desired_lat_accel  : control_mode->get_desired_lat_accel(),
         lat_accel          : lat_accel,
         desired_turn_rate  : degrees(g2.attitude_control.get_desired_turn_rate()),
         turn_rate          : degrees(ahrs.get_yaw_rate_earth())
@@ -261,49 +224,12 @@ void Rover::Log_Write_Throttle()
     logger.WriteBlock(&pkt, sizeof(pkt));
 }
 
-struct PACKED log_Rangefinder {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    float    lateral_accel;
-    uint16_t rangefinder1_distance;
-    uint16_t rangefinder2_distance;
-    uint16_t detected_count;
-    int8_t   turn_angle;
-    uint16_t turn_time;
-    uint16_t ground_speed;
-    int8_t   throttle;
-};
-
-// Write a rangefinder packet
-void Rover::Log_Write_Rangefinder()
-{
-    uint16_t turn_time = 0;
-    if (!is_zero(obstacle.turn_angle)) {
-        turn_time = AP_HAL::millis() - obstacle.detected_time_ms;
-    }
-    AP_RangeFinder_Backend *s0 = rangefinder.get_backend(0);
-    AP_RangeFinder_Backend *s1 = rangefinder.get_backend(1);
-    struct log_Rangefinder pkt = {
-        LOG_PACKET_HEADER_INIT(LOG_RANGEFINDER_MSG),
-        time_us               : AP_HAL::micros64(),
-        lateral_accel         : g2.attitude_control.get_desired_lat_accel(),
-        rangefinder1_distance : s0 ? s0->distance_cm() : (uint16_t)0,
-        rangefinder2_distance : s1 ? s1->distance_cm() : (uint16_t)0,
-        detected_count        : obstacle.detected_count,
-        turn_angle            : static_cast<int8_t>(obstacle.turn_angle),
-        turn_time             : turn_time,
-        ground_speed          : static_cast<uint16_t>(fabsf(ground_speed * 100.0f)),
-        throttle              : int8_t(SRV_Channels::get_output_scaled(SRV_Channel::k_throttle))
-    };
-    logger.WriteBlock(&pkt, sizeof(pkt));
-}
-
 void Rover::Log_Write_RC(void)
 {
     logger.Write_RCIN();
     logger.Write_RCOUT();
     if (rssi.enabled()) {
-        logger.Write_RSSI(rssi);
+        logger.Write_RSSI();
     }
 }
 
@@ -327,16 +253,10 @@ const LogStructure Rover::log_structure[] = {
       "THR", "Qhffff", "TimeUS,ThrIn,ThrOut,DesSpeed,Speed,AccY", "s--nno", "F--000" },
     { LOG_NTUN_MSG, sizeof(log_Nav_Tuning),
       "NTUN", "QfHHHf", "TimeUS,WpDist,WpBrg,DesYaw,Yaw,XTrack", "smdddm", "F0BBB0" },
-    { LOG_RANGEFINDER_MSG, sizeof(log_Rangefinder),
-      "RGFD", "QfHHHbHCb",  "TimeUS,LatAcc,R1Dist,R2Dist,DCnt,TAng,TTim,Spd,Thr", "somm-hsm-", "F0BB-0CB-" },
-    { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm),
-      "ARM", "QBH", "TimeUS,ArmState,ArmChecks", "s--", "F--" },
     { LOG_STEERING_MSG, sizeof(log_Steering),
       "STER", "Qhfffff",   "TimeUS,SteerIn,SteerOut,DesLatAcc,LatAcc,DesTurnRate,TurnRate", "s--ookk", "F--0000" },
     { LOG_GUIDEDTARGET_MSG, sizeof(log_GuidedTarget),
       "GUID",  "QBffffff",    "TimeUS,Type,pX,pY,pZ,vX,vY,vZ", "s-mmmnnn", "F-000000" },
-    { LOG_ERROR_MSG, sizeof(log_Error),
-      "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" },
 };
 
 void Rover::log_init(void)
@@ -347,16 +267,13 @@ void Rover::log_init(void)
 #else  // LOGGING_ENABLED
 
 // dummy functions
-void Rover::Log_Write_Arm_Disarm() {}
 void Rover::Log_Write_Attitude() {}
 void Rover::Log_Write_Depth() {}
-void Rover::Log_Write_Error(uint8_t sub_system, uint8_t error_code) {}
 void Rover::Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target) {}
 void Rover::Log_Write_Nav_Tuning() {}
 void Rover::Log_Write_Sail() {}
 void Rover::Log_Write_Startup(uint8_t type) {}
 void Rover::Log_Write_Throttle() {}
-void Rover::Log_Write_Rangefinder() {}
 void Rover::Log_Write_RC(void) {}
 void Rover::Log_Write_Steering() {}
 void Rover::Log_Write_Vehicle_Startup_Messages() {}

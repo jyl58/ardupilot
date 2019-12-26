@@ -1,15 +1,21 @@
 #pragma once
 
+#include <AP_HAL/AP_HAL.h>
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+
 #include <AP_Math/AP_Math.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <AP_Common/Location.h>
 
-#include "SIM_Sprayer.h"
-#include "SIM_Gripper_Servo.h"
+#include "SIM_Buzzer.h"
 #include "SIM_Gripper_EPM.h"
+#include "SIM_Gripper_Servo.h"
 #include "SIM_Parachute.h"
-
-class AP_Logger;
+#include "SIM_Precland.h"
+#include "SIM_Sprayer.h"
+#include "SIM_ToneAlarm.h"
+#include "SIM_EFI_MegaSquirt.h"
 
 namespace SITL {
 
@@ -39,8 +45,8 @@ struct sitl_fdm {
     double airspeed; // m/s
     double battery_voltage; // Volts
     double battery_current; // Amps
-    double rpm1;            // main prop RPM
-    double rpm2;            // secondary RPM
+    uint8_t num_motors;
+    float rpm[12];         // RPM of all motors
     uint8_t rcin_chan_count;
     float  rcin[8];         // RC input 0..1
     double range;           // rangefinder value
@@ -77,6 +83,12 @@ public:
 
     static SITL *_singleton;
     static SITL *get_singleton() { return _singleton; }
+
+    enum SITL_RCFail {
+        SITL_RCFail_None = 0,
+        SITL_RCFail_NoPulses = 1,
+        SITL_RCFail_Throttle950 = 2,
+    };
 
     enum GPSType {
         GPS_TYPE_NONE  = 0,
@@ -168,6 +180,19 @@ public:
     AP_Float speedup; // simulation speedup
     AP_Int8  odom_enable; // enable visual odomotry data
     AP_Int8  telem_baudlimit_enable; // enable baudrate limiting on links
+    AP_Float flow_noise; // optical flow measurement noise (rad/sec)
+    AP_Int8  baro_count; // number of simulated baros to create
+    AP_Int8 gps_hdg_enabled; // enable the output of a NMEA heading HDT sentence
+    AP_Int32 loop_delay; // extra delay to add to every loop
+    AP_Float mag_scaling; // scaling factor on first compasses
+
+    // EFI type
+    enum EFIType {
+        EFI_TYPE_NONE = 0,
+        EFI_TYPE_MS = 1,
+    };
+    
+    AP_Int8  efi_type;
 
     // wind control
     enum WindType {
@@ -222,7 +247,68 @@ public:
 
     // vibration frequencies in Hz on each axis
     AP_Vector3f vibe_freq;
-    
+
+    // hover frequency to use as baseline for adding motor noise for the gyros and accels
+    AP_Float vibe_motor;
+
+    // gyro and accel fail masks
+    AP_Int8 gyro_fail_mask;
+    AP_Int8 accel_fail_mask;
+
+    struct {
+        AP_Float x;
+        AP_Float y;
+        AP_Float z;
+        AP_Int32 t;
+
+        uint32_t start_ms;
+    } shove;
+
+    struct {
+        AP_Float x;
+        AP_Float y;
+        AP_Float z;
+        AP_Int32 t;
+
+        uint32_t start_ms;
+    } twist;
+
+    AP_Int8 gnd_behav;
+
+    struct {
+        AP_Int8 enable;     // 0: disabled, 1: roll and pitch, 2: roll, pitch and heave
+        AP_Float length;    // m
+        AP_Float amp;       // m
+        AP_Float direction; // deg (direction wave is coming from)
+        AP_Float speed;     // m/s
+    } wave;
+
+    struct {
+        AP_Float direction; // deg (direction tide is coming from)
+        AP_Float speed;     // m/s
+    } tide;
+
+    // original simulated position
+    struct {
+        AP_Float lat;
+        AP_Float lng;
+        AP_Float alt; // metres
+        AP_Float hdg; // 0 to 360
+    } opos;
+
+    AP_Int8 _safety_switch_state;
+
+    AP_HAL::Util::safety_state safety_switch_state() const {
+        return (AP_HAL::Util::safety_state)_safety_switch_state.get();
+    }
+    void force_safety_off() {
+        _safety_switch_state = (uint8_t)AP_HAL::Util::SAFETY_ARMED;
+    }
+    bool force_safety_on() {
+        _safety_switch_state = (uint8_t)AP_HAL::Util::SAFETY_DISARMED;
+        return true;
+    }
+
     uint16_t irlock_port;
 
     void simstate_send(mavlink_channel_t chan);
@@ -243,6 +329,20 @@ public:
     Gripper_EPM gripper_epm_sim;
 
     Parachute parachute_sim;
+    Buzzer buzzer_sim;
+    ToneAlarm tonealarm_sim;
+    SIM_Precland precland_sim;
+
+    struct {
+        // LED state, for serial LED emulation
+        struct {
+            uint8_t rgb[3];
+        } rgb[16][32];
+        uint8_t num_leds[16];
+        uint32_t send_counter;
+    } led;
+
+    EFI_MegaSquirt efi_ms;
 };
 
 } // namespace SITL
@@ -251,3 +351,5 @@ public:
 namespace AP {
     SITL::SITL *sitl();
 };
+
+#endif // CONFIG_HAL_BOARD

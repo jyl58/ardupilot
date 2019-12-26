@@ -1,5 +1,107 @@
 #pragma once
 
+// if you add any new types, units or multipliers, please update README.md
+
+/*
+Format characters in the format string for binary log messages
+  a   : int16_t[32]
+  b   : int8_t
+  B   : uint8_t
+  h   : int16_t
+  H   : uint16_t
+  i   : int32_t
+  I   : uint32_t
+  f   : float
+  d   : double
+  n   : char[4]
+  N   : char[16]
+  Z   : char[64]
+  c   : int16_t * 100
+  C   : uint16_t * 100
+  e   : int32_t * 100
+  E   : uint32_t * 100
+  L   : int32_t latitude/longitude
+  M   : uint8_t flight mode
+  q   : int64_t
+  Q   : uint64_t
+ */
+
+struct UnitStructure {
+    const char ID;
+    const char *unit;
+};
+
+struct MultiplierStructure {
+    const char ID;
+    const double multiplier;
+};
+
+// all units here should be base units
+// This does mean battery capacity is here as "amp*second"
+// Please keep the names consistent with Tools/autotest/param_metadata/param.py:33
+const struct UnitStructure log_Units[] = {
+    { '-', "" },              // no units e.g. Pi, or a string
+    { '?', "UNKNOWN" },       // Units which haven't been worked out yet....
+    { 'A', "A" },             // Ampere
+    { 'd', "deg" },           // of the angular variety, -180 to 180
+    { 'b', "B" },             // bytes
+    { 'k', "deg/s" },         // degrees per second. Degrees are NOT SI, but is some situations more user-friendly than radians
+    { 'D', "deglatitude" },   // degrees of latitude
+    { 'e', "deg/s/s" },       // degrees per second per second. Degrees are NOT SI, but is some situations more user-friendly than radians
+    { 'E', "rad/s" },         // radians per second
+    { 'G', "Gauss" },         // Gauss is not an SI unit, but 1 tesla = 10000 gauss so a simple replacement is not possible here
+    { 'h', "degheading" },    // 0.? to 359.?
+    { 'i', "A.s" },           // Ampere second
+    { 'J', "W.s" },           // Joule (Watt second)
+    // { 'l', "l" },          // litres
+    { 'L', "rad/s/s" },       // radians per second per second
+    { 'm', "m" },             // metres
+    { 'n', "m/s" },           // metres per second
+    // { 'N', "N" },          // Newton
+    { 'o', "m/s/s" },         // metres per second per second
+    { 'O', "degC" },          // degrees Celsius. Not SI, but Kelvin is too cumbersome for most users
+    { '%', "%" },             // percent
+    { 'S', "satellites" },    // number of satellites
+    { 's', "s" },             // seconds
+    { 'q', "rpm" },           // rounds per minute. Not SI, but sometimes more intuitive than Hertz
+    { 'r', "rad" },           // radians
+    { 'U', "deglongitude" },  // degrees of longitude
+    { 'u', "ppm" },           // pulses per minute
+    { 'v', "V" },             // Volt
+    { 'P', "Pa" },            // Pascal
+    { 'w', "Ohm" },           // Ohm
+//    { 'W', "Watt" },        // Watt
+    { 'Y', "us" },            // pulse width modulation in microseconds
+    { 'z', "Hz" },            // Hertz
+    { '#', "instance" }       // (e.g.)Sensor instance number
+};
+
+// this multiplier information applies to the raw value present in the
+// log.  Any adjustment implied by the format field (e.g. the "centi"
+// in "centidegrees" is *IGNORED* for the purposes of scaling.
+// Essentially "format" simply tells you the C-type, and format-type h
+// (int16_t) is equivalent to format-type c (int16_t*100)
+// tl;dr a GCS shouldn't/mustn't infer any scaling from the unit name
+
+const struct MultiplierStructure log_Multipliers[] = {
+    { '-', 0 },       // no multiplier e.g. a string
+    { '?', 1 },       // multipliers which haven't been worked out yet....
+// <leave a gap here, just in case....>
+    { '2', 1e2 },
+    { '1', 1e1 },
+    { '0', 1e0 },
+    { 'A', 1e-1 },
+    { 'B', 1e-2 },
+    { 'C', 1e-3 },
+    { 'D', 1e-4 },
+    { 'E', 1e-5 },
+    { 'F', 1e-6 },
+    { 'G', 1e-7 },
+// <leave a gap here, just in case....>
+    { '!', 3.6 }, // (ampere*second => milliampere*hour) and (km/h => m/s)
+    { '/', 3600 }, // (ampere*second => ampere*hour)
+};
+
 /*
   unfortunately these need to be macros because of a limitation of
   named member structure initialisation in g++
@@ -65,80 +167,6 @@ struct PACKED log_Format_Units {
     char multipliers[16];
 };
 
-struct UnitStructure {
-    const char ID;
-    const char *unit;
-};
-
-struct MultiplierStructure {
-    const char ID;
-    const double multiplier;
-};
-
-// all units here should be base units
-// This does mean battery capacity is here as "amp*second"
-// Please keep the names consistent with Tools/autotest/param_metadata/param.py:33
-const struct UnitStructure log_Units[] = {
-    { '-', "" },              // no units e.g. Pi, or a string
-    { '?', "UNKNOWN" },       // Units which haven't been worked out yet....
-    { 'A', "A" },             // Ampere
-    { 'd', "deg" },           // of the angular variety, -180 to 180
-    { 'b', "B" },             // bytes
-    { 'k', "deg/s" },         // degrees per second. Degrees are NOT SI, but is some situations more user-friendly than radians
-    { 'D', "deglatitude" },   // degrees of latitude
-    { 'e', "deg/s/s" },       // degrees per second per second. Degrees are NOT SI, but is some situations more user-friendly than radians
-    { 'E', "rad/s" },         // radians per second
-    { 'G', "Gauss" },         // Gauss is not an SI unit, but 1 tesla = 10000 gauss so a simple replacement is not possible here
-    { 'h', "degheading" },    // 0.? to 359.?
-    { 'i', "A.s" },           // Ampere second
-    { 'J', "W.s" },           // Joule (Watt second)
-    // { 'l', "l" },          // litres
-    { 'L', "rad/s/s" },       // radians per second per second
-    { 'm', "m" },             // metres
-    { 'n', "m/s" },           // metres per second
-    // { 'N', "N" },          // Newton
-    { 'o', "m/s/s" },         // metres per second per second
-    { 'O', "degC" },          // degrees Celsius. Not SI, but Kelvin is too cumbersome for most users
-    { '%', "%" },             // percent
-    { 'S', "satellites" },    // number of satellites
-    { 's', "s" },             // seconds
-    { 'q', "rpm" },           // rounds per minute. Not SI, but sometimes more intuitive than Hertz
-    { 'r', "rad" },           // radians
-    { 'U', "deglongitude" },  // degrees of longitude
-    { 'u', "ppm" },           // pulses per minute
-    { 'v', "V" },             // Volt
-    { 'P', "Pa" },            // Pascal
-    { 'w', "Ohm" },           // Ohm
-    { 'Y', "us" },            // pulse width modulation in microseconds
-    { 'z', "Hz" }             // Hertz
-};
-
-// this multiplier information applies to the raw value present in the
-// log.  Any adjustment implied by the format field (e.g. the "centi"
-// in "centidegrees" is *IGNORED* for the purposes of scaling.
-// Essentially "format" simply tells you the C-type, and format-type h
-// (int16_t) is equivalent to format-type c (int16_t*100)
-// tl;dr a GCS shouldn't/mustn't infer any scaling from the unit name
-
-const struct MultiplierStructure log_Multipliers[] = {
-    { '-', 0 },       // no multiplier e.g. a string
-    { '?', 1 },       // multipliers which haven't been worked out yet....
-// <leave a gap here, just in case....>
-    { '2', 1e2 },
-    { '1', 1e1 },
-    { '0', 1e0 },
-    { 'A', 1e-1 },
-    { 'B', 1e-2 },
-    { 'C', 1e-3 },
-    { 'D', 1e-4 },
-    { 'E', 1e-5 },
-    { 'F', 1e-6 },
-    { 'G', 1e-7 },
-// <leave a gap here, just in case....>
-    { '!', 3.6 }, // (ampere*second => milliampere*hour) and (km/h => m/s)
-    { '/', 3600 }, // (ampere*second => ampere*hour)
-};
-
 struct PACKED log_Parameter {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -150,7 +178,6 @@ struct PACKED log_DSF {
     LOG_PACKET_HEADER;
     uint64_t time_us;
     uint32_t dropped;
-    uint8_t  internal_errors;
     uint16_t blocks;
     uint32_t bytes;
     uint32_t buf_space_min;
@@ -163,6 +190,14 @@ struct PACKED log_Event {
     uint64_t time_us;
     uint8_t id;
 };
+
+struct PACKED log_Error {
+  LOG_PACKET_HEADER;
+  uint64_t time_us;
+  uint8_t sub_system;
+  uint8_t error_code;
+};
+
 struct PACKED log_GPS {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -177,6 +212,7 @@ struct PACKED log_GPS {
     float    ground_speed;
     float    ground_course;
     float    vel_z;
+    float    yaw;
     uint8_t  used;
 };
 
@@ -187,6 +223,7 @@ struct PACKED log_GPA {
     uint16_t hacc;
     uint16_t vacc;
     uint16_t sacc;
+    float    yaw_accuracy;
     uint8_t  have_vv;
     uint32_t sample_ms;
     uint16_t delta_ms;
@@ -324,6 +361,15 @@ struct PACKED log_RCOUT {
     uint16_t chan14;
 };
 
+struct PACKED log_MAV {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t chan;
+    uint16_t packet_tx_count;
+    uint16_t packet_rx_success_count;
+    uint16_t packet_rx_drop_count;
+};
+
 struct PACKED log_RSSI {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -340,6 +386,7 @@ struct PACKED log_BARO {
     uint32_t sample_time_ms;
     float   drift_offset;
     float   ground_temp;
+    uint8_t healthy;
 };
 
 struct PACKED log_Optflow {
@@ -386,6 +433,7 @@ struct PACKED log_POWR {
 struct PACKED log_EKF1 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t roll;
     int16_t pitch;
     uint16_t yaw;
@@ -405,6 +453,7 @@ struct PACKED log_EKF1 {
 struct PACKED log_EKF2 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int8_t Ratio;
     int8_t AZ1bias;
     int8_t AZ2bias;
@@ -421,6 +470,7 @@ struct PACKED log_EKF2 {
 struct PACKED log_NKF2 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int8_t AZbias;
     int16_t scaleX;
     int16_t scaleY;
@@ -439,6 +489,7 @@ struct PACKED log_NKF2 {
 struct PACKED log_NKF2a {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t accBiasX;
     int16_t accBiasY;
     int16_t accBiasZ;
@@ -456,6 +507,7 @@ struct PACKED log_NKF2a {
 struct PACKED log_EKF3 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t innovVN;
     int16_t innovVE;
     int16_t innovVD;
@@ -471,6 +523,7 @@ struct PACKED log_EKF3 {
 struct PACKED log_NKF3 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t innovVN;
     int16_t innovVE;
     int16_t innovVD;
@@ -487,6 +540,7 @@ struct PACKED log_NKF3 {
 struct PACKED log_EKF4 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t sqrtvarV;
     int16_t sqrtvarP;
     int16_t sqrtvarH;
@@ -505,6 +559,7 @@ struct PACKED log_EKF4 {
 struct PACKED log_NKF4 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     int16_t sqrtvarV;
     int16_t sqrtvarP;
     int16_t sqrtvarH;
@@ -554,6 +609,7 @@ struct PACKED log_NKF5 {
 struct PACKED log_Quaternion {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     float q1;
     float q2;
     float q3;
@@ -636,6 +692,26 @@ struct PACKED log_Cmd {
     uint8_t frame;
 };
 
+struct PACKED log_MAVLink_Command {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t target_system;
+    uint8_t target_component;
+    uint8_t frame;
+    uint16_t command;
+    uint8_t current;
+    uint8_t autocontinue;
+    float param1;
+    float param2;
+    float param3;
+    float param4;
+    int32_t x;
+    int32_t y;
+    float z;
+    uint8_t result;
+    bool was_command_long;
+};
+
 struct PACKED log_Radio {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -679,8 +755,9 @@ struct PACKED log_Attitude {
 struct PACKED log_PID {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    float   desired;
+    float   target;
     float   actual;
+    float   error;
     float   P;
     float   I;
     float   D;
@@ -706,6 +783,19 @@ struct PACKED log_WheelEncoder {
     uint8_t quality_0;
     float distance_1;
     uint8_t quality_1;
+};
+
+struct PACKED log_ADSB {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint32_t ICAO_address;
+    int32_t lat;
+    int32_t lng;
+    int32_t alt;
+    uint16_t heading;
+    uint16_t hor_velocity;
+    int16_t ver_velocity;
+    uint16_t squawk;
 };
 
 struct PACKED log_Current_Cells {
@@ -745,12 +835,10 @@ struct PACKED log_Mode {
 struct PACKED log_RFND {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    uint16_t dist1;
-    uint8_t status1;
-    uint8_t orient1;
-    uint16_t dist2;
-    uint8_t status2;
-    uint8_t orient2;
+    uint8_t instance;
+    uint16_t dist;
+    uint8_t status;
+    uint8_t orient;
 };
 
 /*
@@ -858,8 +946,9 @@ struct PACKED log_Esc {
     int32_t rpm;
     uint16_t voltage;
     uint16_t current;
-    int16_t temperature;
+    int16_t esc_temp;
     uint16_t current_tot;
+    int16_t motor_temp;
 };
 
 struct PACKED log_AIRSPEED {
@@ -890,14 +979,13 @@ struct PACKED log_GYRO {
     float GyrX, GyrY, GyrZ;
 };
 
-struct PACKED log_DF_MAV_Stats {
+struct PACKED log_MAV_Stats {
     LOG_PACKET_HEADER;
     uint32_t timestamp;
     uint32_t seqno;
     uint32_t dropped;
     uint32_t retries;
     uint32_t resends;
-    uint8_t internal_errors; // uint8_t - wishful thinking?
     uint8_t state_free_avg;
     uint8_t state_free_min;
     uint8_t state_free_max;
@@ -944,8 +1032,6 @@ struct PACKED log_Rate {
     float   accel;
     float   accel_out;
 };
-
-// #if SBP_HW_LOGGING
 
 struct PACKED log_SbpLLH {
     LOG_PACKET_HEADER;
@@ -1057,6 +1143,12 @@ struct PACKED log_Performance {
     uint32_t max_time;
     uint32_t mem_avail;
     uint16_t load;
+    uint32_t internal_errors;
+    uint32_t internal_error_count;
+    uint32_t spi_count;
+    uint32_t i2c_count;
+    uint32_t i2c_isr_count;
+    uint32_t extra_loop_us;
 };
 
 struct PACKED log_SRTL {
@@ -1069,6 +1161,32 @@ struct PACKED log_SRTL {
     float N;
     float E;
     float D;
+};
+
+struct PACKED log_OABendyRuler {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t active;
+    uint16_t target_yaw;
+    uint16_t yaw;
+    float margin;
+    int32_t final_lat;
+    int32_t final_lng;
+    int32_t oa_lat;
+    int32_t oa_lng;
+};
+
+struct PACKED log_OADijkstra {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t state;
+    uint8_t error_id;
+    uint8_t curr_point;
+    uint8_t tot_points;
+    int32_t final_lat;
+    int32_t final_lng;
+    int32_t oa_lat;
+    int32_t oa_lng;
 };
 
 struct PACKED log_DSTL {
@@ -1089,7 +1207,12 @@ struct PACKED log_DSTL {
     float D;
 };
 
-// #endif // SBP_HW_LOGGING
+struct PACKED log_Arm_Disarm {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t  arm_state;
+    uint16_t arm_checks;
+};
 
 // FMT messages define all message formats other than FMT
 // UNIT messages define units which can be referenced by FMTU messages
@@ -1101,26 +1224,26 @@ struct PACKED log_DSTL {
 #define ACC_MULTS "FF000"
 
 // see "struct sensor" in AP_Baro.h and "Write_Baro":
-#define BARO_LABELS "TimeUS,Alt,Press,Temp,CRt,SMS,Offset,GndTemp"
-#define BARO_FMT   "QffcfIff"
-#define BARO_UNITS "smPOnsmO"
-#define BARO_MULTS "F00B0C?0"
+#define BARO_LABELS "TimeUS,Alt,Press,Temp,CRt,SMS,Offset,GndTemp,Health"
+#define BARO_FMT   "QffcfIffB"
+#define BARO_UNITS "smPOnsmO-"
+#define BARO_MULTS "F00B0C?0-"
 
-#define ESC_LABELS "TimeUS,RPM,Volt,Curr,Temp,CTot"
-#define ESC_FMT   "QeCCcH"
-#define ESC_UNITS "sqvAO-"
-#define ESC_MULTS "FBBBB-"
+#define ESC_LABELS "TimeUS,RPM,Volt,Curr,Temp,CTot,MotTemp"
+#define ESC_FMT   "QeCCcHc"
+#define ESC_UNITS "sqvAO-O"
+#define ESC_MULTS "FBBBB-B"
 
-#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,VV,SMS,Delta"
-#define GPA_FMT   "QCCCCBIH"
-#define GPA_UNITS "smmmn-ss"
-#define GPA_MULTS "FBBBB-CF"
+#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,YAcc,VV,SMS,Delta"
+#define GPA_FMT   "QCCCCfBIH"
+#define GPA_UNITS "smmmnd-ss"
+#define GPA_MULTS "FBBBB0-CC"
 
 // see "struct GPS_State" and "Write_GPS":
-#define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,U"
-#define GPS_FMT   "QBIHBcLLefffB"
-#define GPS_UNITS "s---SmDUmnhn-"
-#define GPS_MULTS "F---0BGGB000-"
+#define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,Yaw,U"
+#define GPS_FMT   "QBIHBcLLeffffB"
+#define GPS_UNITS "s---SmDUmnhnh-"
+#define GPS_MULTS "F---0BGGB000--"
 
 #define GYR_LABELS "TimeUS,SampleUS,GyrX,GyrY,GyrZ"
 #define GYR_FMT    "QQfff"
@@ -1152,15 +1275,15 @@ struct PACKED log_DSTL {
 #define MAG_UNITS "sGGGGGGGGG-s"
 #define MAG_MULTS "FCCCCCCCCC-F"
 
-#define PID_LABELS "TimeUS,Des,Act,P,I,D,FF"
-#define PID_FMT    "Qffffff"
-#define PID_UNITS  "s------"
-#define PID_MULTS  "F------"
+#define PID_LABELS "TimeUS,Tar,Act,Err,P,I,D,FF"
+#define PID_FMT    "Qfffffff"
+#define PID_UNITS  "s-------"
+#define PID_MULTS  "F-------"
 
-#define QUAT_LABELS "TimeUS,Q1,Q2,Q3,Q4"
-#define QUAT_FMT    "Qffff"
-#define QUAT_UNITS  "s????"
-#define QUAT_MULTS  "F????"
+#define QUAT_LABELS "TimeUS,C,Q1,Q2,Q3,Q4"
+#define QUAT_FMT    "QBffff"
+#define QUAT_UNITS  "s#????"
+#define QUAT_MULTS  "F-????"
 
 #define CURR_LABELS "TimeUS,Volt,VoltR,Curr,CurrTot,EnrgTot,Temp,Res"
 #define CURR_FMT    "Qfffffcf"
@@ -1176,30 +1299,6 @@ struct PACKED log_DSTL {
 #define ARSP_FMT "QffcffBBfB"
 #define ARSP_UNITS "snPOPP----"
 #define ARSP_MULTS "F00B00----"
-
-/*
-Format characters in the format string for binary log messages
-  a   : int16_t[32]
-  b   : int8_t
-  B   : uint8_t
-  h   : int16_t
-  H   : uint16_t
-  i   : int32_t
-  I   : uint32_t
-  f   : float
-  d   : double
-  n   : char[4]
-  N   : char[16]
-  Z   : char[64]
-  c   : int16_t * 100
-  C   : uint16_t * 100
-  e   : int32_t * 100
-  E   : uint32_t * 100
-  L   : int32_t latitude/longitude
-  M   : uint8_t flight mode
-  q   : int64_t
-  Q   : uint64_t
- */
 
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
@@ -1241,6 +1340,8 @@ Format characters in the format string for binary log messages
       "POWR","QffHB","TimeUS,Vcc,VServo,Flags,Safety", "svv--", "F00--" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
       "CMD", "QHHHffffLLfB","TimeUS,CTot,CNum,CId,Prm1,Prm2,Prm3,Prm4,Lat,Lng,Alt,Frame", "s-------DUm-", "F-------GG0-" }, \
+    { LOG_MAVLINK_COMMAND_MSG, sizeof(log_MAVLink_Command), \
+      "MAVC", "QBBBHBBffffiifBB","TimeUS,TS,TC,Fr,Cmd,Cur,AC,P1,P2,P3,P4,X,Y,Z,Res,WL", "s---------------", "F---------------" }, \
     { LOG_RADIO_MSG, sizeof(log_Radio), \
       "RAD", "QBBBBBHH", "TimeUS,RSSI,RemRSSI,TxBuf,Noise,RemNoise,RxErrors,Fixed", "s-------", "F-------" }, \
     { LOG_CAMERA_MSG, sizeof(log_Camera), \
@@ -1292,20 +1393,21 @@ Format characters in the format string for binary log messages
     { LOG_MODE_MSG, sizeof(log_Mode), \
       "MODE", "QMBB",         "TimeUS,Mode,ModeNum,Rsn", "s---", "F---" }, \
     { LOG_RFND_MSG, sizeof(log_RFND), \
-      "RFND", "QCBBCBB", "TimeUS,Dist1,Stat1,Orient1,Dist2,Stat2,Orient2", "sm--m--", "FB--B--" }, \
-    { LOG_DF_MAV_STATS, sizeof(log_DF_MAV_Stats), \
-      "DMS", "IIIIIBBBBBBBBBB",         "TimeMS,N,Dp,RT,RS,Er,Fa,Fmn,Fmx,Pa,Pmn,Pmx,Sa,Smn,Smx", "s--------------", "C--------------" }, \
+      "RFND", "QBCBB", "TimeUS,Instance,Dist,Stat,Orient", "s#m--", "F-B--" }, \
+    { LOG_MAV_STATS, sizeof(log_MAV_Stats), \
+      "DMS", "IIIIIBBBBBBBBB",         "TimeMS,N,Dp,RT,RS,Fa,Fmn,Fmx,Pa,Pmn,Pmx,Sa,Smn,Smx", "s-------------", "C-------------" }, \
     { LOG_BEACON_MSG, sizeof(log_Beacon), \
       "BCN", "QBBfffffff",  "TimeUS,Health,Cnt,D0,D1,D2,D3,PosX,PosY,PosZ", "s--mmmmmmm", "F--BBBBBBB" }, \
     { LOG_PROXIMITY_MSG, sizeof(log_Proximity), \
-      "PRX", "QBfffffffffff", "TimeUS,Health,D0,D45,D90,D135,D180,D225,D270,D315,DUp,CAn,CDis", "s-mmmmmmmmmhm", "F-BBBBBBBBB00" }, \
+      "PRX", "QBfffffffffff", "TimeUS,Health,D0,D45,D90,D135,D180,D225,D270,D315,DUp,CAn,CDis", "s-mmmmmmmmmhm", "F-00000000000" }, \
     { LOG_PERFORMANCE_MSG, sizeof(log_Performance),                     \
-      "PM",  "QHHIIH", "TimeUS,NLon,NLoop,MaxT,Mem,Load", "s---b%", "F---0A" }, \
+      "PM",  "QHHIIHIIIIII", "TimeUS,NLon,NLoop,MaxT,Mem,Load,IntE,IntEC,SPIC,I2CC,I2CI,ExUS", "s---b%-----s", "F---0A-----F" }, \
     { LOG_SRTL_MSG, sizeof(log_SRTL), \
-      "SRTL", "QBHHBfff", "TimeUS,Active,NumPts,MaxPts,Action,N,E,D", "s----mmm", "F----000" }
-
-// messages for more advanced boards
-#define LOG_EXTRA_STRUCTURES \
+      "SRTL", "QBHHBfff", "TimeUS,Active,NumPts,MaxPts,Action,N,E,D", "s----mmm", "F----000" }, \
+    { LOG_OA_BENDYRULER_MSG, sizeof(log_OABendyRuler), \
+      "OABR","QBHHfLLLL","TimeUS,Active,DesYaw,Yaw,Mar,DLat,DLng,OALat,OALng", "sbddmDUDU", "F----GGGG" }, \
+    { LOG_OA_DIJKSTRA_MSG, sizeof(log_OADijkstra), \
+      "OADJ","QBBBBLLLL","TimeUS,State,Err,CurrPoint,TotPoints,DLat,DLng,OALat,OALng", "sbbbbDUDU", "F----GGGG" }, \
     { LOG_IMU2_MSG, sizeof(log_IMU), \
       "IMU2",  IMU_FMT,     IMU_LABELS, IMU_UNITS, IMU_MULTS }, \
     { LOG_IMU3_MSG, sizeof(log_IMU), \
@@ -1317,49 +1419,31 @@ Format characters in the format string for binary log messages
     { LOG_SIMSTATE_MSG, sizeof(log_AHRS), \
       "SIM","QccCfLLffff","TimeUS,Roll,Pitch,Yaw,Alt,Lat,Lng,Q1,Q2,Q3,Q4", "sddhmDU????", "FBBB0GG????" }, \
     { LOG_NKF1_MSG, sizeof(log_EKF1), \
-      "NKF1","QccCfffffffccce","TimeUS,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "sddhnnnnmmmkkkm", "FBBB0000000BBBB" }, \
+      "NKF1","QBccCfffffffccce","TimeUS,C,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "s#ddhnnnnmmmkkkm", "F-BBB0000000BBBB" }, \
     { LOG_NKF2_MSG, sizeof(log_NKF2), \
-      "NKF2","QbccccchhhhhhB","TimeUS,AZbias,GSX,GSY,GSZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s----nnGGGGGG-", "F----BBCCCCCC-" }, \
+      "NKF2","QBbccccchhhhhhB","TimeUS,C,AZbias,GSX,GSY,GSZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s#----nnGGGGGG-", "F-----BBCCCCCC-" }, \
     { LOG_NKF3_MSG, sizeof(log_NKF3), \
-      "NKF3","Qcccccchhhcc","TimeUS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "snnnmmmGGG??", "FBBBBBBCCCBB" }, \
+      "NKF3","QBcccccchhhcc","TimeUS,C,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "s#nnnmmmGGG??", "F-BBBBBBCCCBB" }, \
     { LOG_NKF4_MSG, sizeof(log_NKF4), \
-      "NKF4","QcccccfbbHBHHb","TimeUS,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s------??-----", "F------??-----" }, \
+      "NKF4","QBcccccfbbHBHHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_NKF5_MSG, sizeof(log_NKF5), \
       "NKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
-    { LOG_NKF6_MSG, sizeof(log_EKF1), \
-      "NKF6","QccCfffffffccce","TimeUS,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "sddhnnn-mmmkkkm", "FBBB000-000BBBB" }, \
-    { LOG_NKF7_MSG, sizeof(log_NKF2), \
-      "NKF7","QbccccchhhhhhB","TimeUS,AZbias,GSX,GSY,GSZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s----nnGGGGGG-", "F----BBCCCCCC-" }, \
-    { LOG_NKF8_MSG, sizeof(log_NKF3), \
-      "NKF8","Qcccccchhhcc","TimeUS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "snnnmmmGGGd?", "FBBBBBBCCCBB" }, \
-    { LOG_NKF9_MSG, sizeof(log_NKF4), \
-      "NKF9","QcccccfbbHBHHb","TimeUS,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s-----???-----", "F-----???-----" }, \
     { LOG_NKF10_MSG, sizeof(log_RngBcnDebug), \
       "NKF0","QBccCCcccccccc","TimeUS,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s-m---mmmmmmmm", "F-B---BBBBBBBB" }, \
-    { LOG_NKQ1_MSG, sizeof(log_Quaternion), "NKQ1", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
-    { LOG_NKQ2_MSG, sizeof(log_Quaternion), "NKQ2", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
+    { LOG_NKQ_MSG, sizeof(log_Quaternion), "NKQ", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
     { LOG_XKF1_MSG, sizeof(log_EKF1), \
-      "XKF1","QccCfffffffccce","TimeUS,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "sddhnnnnmmmkkkm", "FBBB0000000BBBB" }, \
+      "XKF1","QBccCfffffffccce","TimeUS,C,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "s#ddhnnnnmmmkkkm", "F-BBB0000000BBBB" }, \
     { LOG_XKF2_MSG, sizeof(log_NKF2a), \
-      "XKF2","QccccchhhhhhB","TimeUS,AX,AY,AZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s---nnGGGGGG-", "F---BBCCCCCC-" }, \
+      "XKF2","QBccccchhhhhhB","TimeUS,C,AX,AY,AZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s#---nnGGGGGG-", "F----BBCCCCCC-" }, \
     { LOG_XKF3_MSG, sizeof(log_NKF3), \
-      "XKF3","Qcccccchhhcc","TimeUS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "snnnmmmGGG??", "FBBBBBBCCCBB" }, \
+      "XKF3","QBcccccchhhcc","TimeUS,C,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "s#nnnmmmGGG??", "F-BBBBBBCCCBB" }, \
     { LOG_XKF4_MSG, sizeof(log_NKF4), \
-      "XKF4","QcccccfbbHBHHb","TimeUS,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s------??-----", "F------??-----" }, \
+      "XKF4","QBcccccfbbHBHHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_XKF5_MSG, sizeof(log_NKF5), \
       "XKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
-    { LOG_XKF6_MSG, sizeof(log_EKF1), \
-      "XKF6","QccCfffffffccce","TimeUS,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "sddhnnn-mmmkkkm", "FBBB000-000BBBB" }, \
-    { LOG_XKF7_MSG, sizeof(log_NKF2a), \
-      "XKF7","QccccchhhhhhB","TimeUS,AX,AY,AZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s---nnGGGGGG-", "F---BBCCCCCC-" }, \
-    { LOG_XKF8_MSG, sizeof(log_NKF3), \
-      "XKF8","Qcccccchhhcc","TimeUS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "snnnmmmGGGd?", "FBBBBBBCCCBB" }, \
-    { LOG_XKF9_MSG, sizeof(log_NKF4), \
-      "XKF9","QcccccfbbHBHHb","TimeUS,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s-----???-----", "F-----???-----" }, \
     { LOG_XKF10_MSG, sizeof(log_RngBcnDebug), \
       "XKF0","QBccCCcccccccc","TimeUS,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s-m---mmmmmmmm", "F-B---BBBBBBBB" }, \
-    { LOG_XKQ1_MSG, sizeof(log_Quaternion), "XKQ1", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
-    { LOG_XKQ2_MSG, sizeof(log_Quaternion), "XKQ2", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
+    { LOG_XKQ_MSG, sizeof(log_Quaternion), "XKQ", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
     { LOG_XKFD_MSG, sizeof(log_ekfBodyOdomDebug), \
       "XKFD","Qffffff","TimeUS,IX,IY,IZ,IVX,IVY,IVZ", "s------", "F------" }, \
     { LOG_XKV1_MSG, sizeof(log_ekfStateVar), \
@@ -1447,7 +1531,7 @@ Format characters in the format string for binary log messages
     { LOG_ORGN_MSG, sizeof(log_ORGN), \
       "ORGN","QBLLe","TimeUS,Type,Lat,Lng,Alt", "s-DUm", "F-GGB" },   \
     { LOG_DF_FILE_STATS, sizeof(log_DSF), \
-      "DSF", "QIBHIIII", "TimeUS,Dp,IErr,Blk,Bytes,FMn,FMx,FAv", "s---b---", "F---0---" }, \
+      "DSF", "QIHIIII", "TimeUS,Dp,Blk,Bytes,FMn,FMx,FAv", "s--b---", "F--0---" }, \
     { LOG_RPM_MSG, sizeof(log_RPM), \
       "RPM",  "Qff", "TimeUS,rpm1,rpm2", "sqq", "F00" }, \
     { LOG_GIMBAL1_MSG, sizeof(log_Gimbal1), \
@@ -1460,15 +1544,24 @@ Format characters in the format string for binary log messages
       "RATE", "Qffffffffffff",  "TimeUS,RDes,R,ROut,PDes,P,POut,YDes,Y,YOut,ADes,A,AOut", "skk-kk-kk-oo-", "F?????????BB-" }, \
     { LOG_RALLY_MSG, sizeof(log_Rally), \
       "RALY", "QBBLLh", "TimeUS,Tot,Seq,Lat,Lng,Alt", "s--DUm", "F--GGB" },  \
+    { LOG_MAV_MSG, sizeof(log_MAV),   \
+      "MAV", "QBHHH",   "TimeUS,chan,txp,rxp,rxdp", "s#---", "F-000" },   \
     { LOG_VISUALODOM_MSG, sizeof(log_VisualOdom), \
       "VISO", "Qffffffff", "TimeUS,dt,AngDX,AngDY,AngDZ,PosDX,PosDY,PosDZ,conf", "ssrrrmmm-", "FF000000-" }, \
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow), \
       "OF",   "QBffff",   "TimeUS,Qual,flowX,flowY,bodyX,bodyY", "s-EEEE", "F-0000" }, \
     { LOG_WHEELENCODER_MSG, sizeof(log_WheelEncoder), \
-      "WENC",  "Qfbfb", "TimeUS,Dist0,Qual0,Dist1,Qual1", "sm-m-", "F0-0-" }
+      "WENC",  "Qfbfb", "TimeUS,Dist0,Qual0,Dist1,Qual1", "sm-m-", "F0-0-" }, \
+    { LOG_ADSB_MSG, sizeof(log_ADSB), \
+      "ADSB",  "QIiiiHHhH", "TimeUS,ICAO_address,Lat,Lng,Alt,Heading,Hor_vel,Ver_vel,Squark", "s-DUmhnn-", "F-GGCBCC-" }, \
+    { LOG_EVENT_MSG, sizeof(log_Event), \
+      "EV",   "QB",           "TimeUS,Id", "s-", "F-" }, \
+    { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm), \
+      "ARM", "QBH", "TimeUS,ArmState,ArmChecks", "s--", "F--" }, \
+    { LOG_ERROR_MSG, sizeof(log_Error), \
+      "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" }
 
 
-// #if SBP_HW_LOGGING
 #define LOG_SBP_STRUCTURES \
     { LOG_MSG_SBPHEALTH, sizeof(log_SbpHealth), \
       "SBPH", "QIII", "TimeUS,CrcError,LastInject,IARhyp", "s---", "F---" }, \
@@ -1476,13 +1569,10 @@ Format characters in the format string for binary log messages
       "SBRH", "QQQQQQQQ", "TimeUS,msg_flag,1,2,3,4,5,6", "s--b----", "F--0----" }, \
     { LOG_MSG_SBPRAWM, sizeof(log_SbpRAWM), \
       "SBRM", "QQQQQQQQQQQQQQQ", "TimeUS,msg_flag,1,2,3,4,5,6,7,8,9,10,11,12,13", "s??????????????", "F??????????????" }, \
-    { LOG_EVENT_MSG, sizeof(log_Event), \
-      "EV",   "QB",           "TimeUS,Id", "s-", "F-" }, \
     { LOG_MSG_SBPEVENT, sizeof(log_SbpEvent), \
       "SBRE", "QHIiBB", "TimeUS,GWk,GMS,ns_residual,level,quality", "s?????", "F?????" }
-// #endif
 
-#define LOG_COMMON_STRUCTURES LOG_BASE_STRUCTURES, LOG_EXTRA_STRUCTURES, LOG_SBP_STRUCTURES
+#define LOG_COMMON_STRUCTURES LOG_BASE_STRUCTURES, LOG_SBP_STRUCTURES
 
 // message types 0 to 63 reserved for vehicle specific use
 
@@ -1493,25 +1583,15 @@ enum LogMessages : uint8_t {
     LOG_NKF3_MSG,
     LOG_NKF4_MSG,
     LOG_NKF5_MSG,
-    LOG_NKF6_MSG,
-    LOG_NKF7_MSG,
-    LOG_NKF8_MSG,
-    LOG_NKF9_MSG,
     LOG_NKF10_MSG,
-    LOG_NKQ1_MSG,
-    LOG_NKQ2_MSG,
+    LOG_NKQ_MSG,
     LOG_XKF1_MSG,
     LOG_XKF2_MSG,
     LOG_XKF3_MSG,
     LOG_XKF4_MSG,
     LOG_XKF5_MSG,
-    LOG_XKF6_MSG,
-    LOG_XKF7_MSG,
-    LOG_XKF8_MSG,
-    LOG_XKF9_MSG,
     LOG_XKF10_MSG,
-    LOG_XKQ1_MSG,
-    LOG_XKQ2_MSG,
+    LOG_XKQ_MSG,
     LOG_XKFD_MSG,
     LOG_XKV1_MSG,
     LOG_XKV2_MSG,
@@ -1533,6 +1613,7 @@ enum LogMessages : uint8_t {
     LOG_AHR2_MSG,
     LOG_SIMSTATE_MSG,
     LOG_CMD_MSG,
+    LOG_MAVLINK_COMMAND_MSG,
     LOG_RADIO_MSG,
     LOG_ATRP_MSG,
     LOG_CAMERA_MSG,
@@ -1603,7 +1684,7 @@ enum LogMessages : uint8_t {
     LOG_GPAB_MSG,
     LOG_RFND_MSG,
     LOG_BAR3_MSG,
-    LOG_DF_MAV_STATS,
+    LOG_MAV_STATS,
     LOG_FORMAT_UNITS_MSG,
     LOG_UNIT_MSG,
     LOG_MULT_MSG,
@@ -1636,6 +1717,13 @@ enum LogMessages : uint8_t {
     LOG_OPTFLOW_MSG,
     LOG_EVENT_MSG,
     LOG_WHEELENCODER_MSG,
+    LOG_MAV_MSG,
+    LOG_ERROR_MSG,
+    LOG_ADSB_MSG,
+    LOG_ARM_DISARM_MSG,
+    LOG_OA_BENDYRULER_MSG,
+    LOG_OA_DIJKSTRA_MSG,
+
     _LOG_LAST_MSG_
 };
 

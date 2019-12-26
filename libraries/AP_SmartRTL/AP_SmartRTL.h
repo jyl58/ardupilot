@@ -3,9 +3,6 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Common/Bitmask.h>
 #include <AP_Math/AP_Math.h>
-#include <AP_AHRS/AP_AHRS.h>
-#include <AP_Logger/AP_Logger.h>
-#include <GCS_MAVLink/GCS.h>
 
 // definitions and macros
 #define SMARTRTL_ACCURACY_DEFAULT        2.0f   // default _ACCURACY parameter value.  Points will be no closer than this distance (in meters) together.
@@ -158,7 +155,7 @@ private:
     // get the closest distance between 2 line segments and the point midway between the closest points
     static dist_point segment_segment_dist(const Vector3f& p1, const Vector3f& p2, const Vector3f& p3, const Vector3f& p4);
 
-    // de-activate SmartRTL, send warning to GCS and log to dataflash
+    // de-activate SmartRTL, send warning to GCS and logger
     void deactivate(SRTL_Actions action, const char *reason);
 
     // logging
@@ -176,6 +173,7 @@ private:
     uint32_t _last_position_save_ms;    // the system time a position was saved to the path (used for timeout)
     uint32_t _thorough_clean_request_ms;// the last system time the thorough cleanup was requested (set by thorough_cleanup method, used by background cleanup)
     uint32_t _thorough_clean_complete_ms; // set to _thorough_clean_request_ms when the background thread completes the thorough cleanup
+    uint32_t _last_low_space_notify_ms; //last time low on SmartRTL space was notified on Mavlink. Minimum time is required before re-notification to avoid nagging.
     ThoroughCleanupType _thorough_clean_type;   // used by example sketch to test simplify and prune separately
 
     // path variables
@@ -199,7 +197,7 @@ private:
         simplify_start_finish_t* stack;
         uint16_t stack_max;     // maximum number of elements in the _simplify_stack array
         uint16_t stack_count;   // number of elements in _simplify_stack array
-        Bitmask bitmask{SMARTRTL_POINTS_MAX};  // simplify algorithm clears bits for each point that can be removed
+        Bitmask<SMARTRTL_POINTS_MAX> bitmask;  // simplify algorithm clears bits for each point that can be removed
     } _simplify;
 
     // Pruning

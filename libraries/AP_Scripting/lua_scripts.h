@@ -18,16 +18,20 @@
 #include <AP_Param/AP_Param.h>
 #include <setjmp.h>
 
+#include <AP_Filesystem/posix_compat.h>
 #include "lua_bindings.h"
 
 class lua_scripts
 {
 public:
-    lua_scripts(const AP_Int32 &vm_steps, const AP_Int32 &heap_size);
+    lua_scripts(const AP_Int32 &vm_steps, const AP_Int32 &heap_size, const AP_Int8 &debug_level);
 
     /* Do not allow copies */
     lua_scripts(const lua_scripts &other) = delete;
     lua_scripts &operator=(const lua_scripts&) = delete;
+
+    // return true if initialisation failed
+    bool heap_allocated() const { return _heap != nullptr; }
 
     // run scripts, does not return unless an error occured
     void run(void);
@@ -66,6 +70,7 @@ private:
     lua_State *lua_state;
 
     const AP_Int32 & _vm_steps;
+    const AP_Int8 & _debug_level;
 
     static void *alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 

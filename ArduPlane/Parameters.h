@@ -88,7 +88,7 @@ public:
         k_param_scheduler,
         k_param_relay,
         k_param_takeoff_throttle_delay,
-        k_param_skip_gyro_cal, // unused
+        k_param_mode_takeoff, // was skip_gyro_cal
         k_param_auto_fbw_steer,
         k_param_waypoint_max_radius,
         k_param_ground_steer_alt,        
@@ -186,7 +186,7 @@ public:
         k_param_imu = 130,  // unused
         k_param_altitude_mix, // deprecated
 
-        k_param_compass_enabled,
+        k_param_compass_enabled_deprecated,
         k_param_compass,
         k_param_battery_monitoring, // unused
         k_param_volt_div_ratio,     // unused
@@ -461,7 +461,6 @@ public:
     AP_Int8  hil_mode;
 #endif
 
-    AP_Int8 compass_enabled;
     AP_Int8 flap_1_percent;
     AP_Int8 flap_1_speed;
     AP_Int8 flap_2_percent;
@@ -506,7 +505,7 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
     // button reporting library
-    AP_Button button;
+    AP_Button *button_ptr;
 
 #if STATS_ENABLED == ENABLED
     // vehicle statistics
@@ -533,6 +532,9 @@ public:
     // dual motor tailsitter rudder to differential thrust scaling: 0-100%
     AP_Int8 rudd_dt_gain;
 
+    // QACRO mode max yaw rate in deg/sec
+    AP_Int16 acro_yaw_rate;
+
     // mask of channels to do manual pass-thru for
     AP_Int32 manual_rc_mask;
 
@@ -551,14 +553,22 @@ public:
 #endif // ENABLE_SCRIPTING
 
     AP_Int8 takeoff_throttle_accel_count;
+    AP_Int8 takeoff_timeout;
 
 #if LANDING_GEAR_ENABLED == ENABLED
     AP_LandingGear landing_gear;
 #endif
 
     // crow flaps weighting
-    AP_Int8 crow_flap_weight1;
-    AP_Int8 crow_flap_weight2;
+    AP_Int8 crow_flap_weight_outer;
+    AP_Int8 crow_flap_weight_inner;
+    AP_Int8 crow_flap_options;
+    AP_Int8 crow_flap_aileron_matching;
+
+#if EFI_ENABLED
+    // EFI Engine Monitor
+    AP_EFI efi;
+#endif  
 };
 
 extern const AP_Param::Info var_info[];

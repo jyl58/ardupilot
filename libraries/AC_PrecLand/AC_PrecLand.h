@@ -1,12 +1,10 @@
 #pragma once
 
-#include <AP_Common/AP_Common.h>
 #include <AP_Math/AP_Math.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <stdint.h>
 #include "PosVelEKF.h"
 #include <AP_HAL/utility/RingBuffer.h>
-#include <AP_AHRS/AP_AHRS.h>
 
 // declare backend classes
 class AC_PrecLand_Backend;
@@ -88,7 +86,7 @@ public:
     bool target_acquired();
 
     // process a LANDING_TARGET mavlink message
-    void handle_msg(mavlink_message_t* msg);
+    void handle_msg(const mavlink_message_t &msg);
 
     // parameter var table
     static const struct AP_Param::GroupInfo var_info[];

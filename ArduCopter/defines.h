@@ -30,54 +30,6 @@ enum autopilot_yaw_mode {
 #define HIL_MODE_DISABLED               0
 #define HIL_MODE_SENSORS                1
 
-// Auto Pilot Modes enumeration
-enum control_mode_t {
-    STABILIZE =     0,  // manual airframe angle with manual throttle
-    ACRO =          1,  // manual body-frame angular rate with manual throttle
-    ALT_HOLD =      2,  // manual airframe angle with automatic throttle
-    AUTO =          3,  // fully automatic waypoint control using mission commands
-    GUIDED =        4,  // fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
-    LOITER =        5,  // automatic horizontal acceleration with automatic throttle
-    RTL =           6,  // automatic return to launching point
-    CIRCLE =        7,  // automatic circular flight with automatic throttle
-    LAND =          9,  // automatic landing with horizontal position control
-    DRIFT =        11,  // semi-automous position, yaw and throttle control
-    SPORT =        13,  // manual earth-frame angular rate control with manual throttle
-    FLIP =         14,  // automatically flip the vehicle on the roll axis
-    AUTOTUNE =     15,  // automatically tune the vehicle's roll and pitch gains
-    POSHOLD =      16,  // automatic position hold with manual override, with automatic throttle
-    BRAKE =        17,  // full-brake using inertial/GPS system, no pilot input
-    THROW =        18,  // throw to launch mode using inertial/GPS system, no pilot input
-    AVOID_ADSB =   19,  // automatic avoidance of obstacles in the macro scale - e.g. full-sized aircraft
-    GUIDED_NOGPS = 20,  // guided mode but only accepts attitude and altitude
-    SMART_RTL =    21,  // SMART_RTL returns to home by retracing its steps
-    FLOWHOLD  =    22,  // FLOWHOLD holds position with optical flow without rangefinder
-    FOLLOW    =    23,  // follow attempts to follow another vehicle or ground station
-    ZIGZAG    =    24,  // ZIGZAG mode is able to fly in a zigzag manner with predefined point A and point B
-};
-
-enum mode_reason_t {
-    MODE_REASON_UNKNOWN=0,
-    MODE_REASON_TX_COMMAND,
-    MODE_REASON_GCS_COMMAND,
-    MODE_REASON_RADIO_FAILSAFE,
-    MODE_REASON_BATTERY_FAILSAFE,
-    MODE_REASON_GCS_FAILSAFE,
-    MODE_REASON_EKF_FAILSAFE,
-    MODE_REASON_GPS_GLITCH,
-    MODE_REASON_MISSION_END,
-    MODE_REASON_THROTTLE_LAND_ESCAPE,
-    MODE_REASON_FENCE_BREACH,
-    MODE_REASON_TERRAIN_FAILSAFE,
-    MODE_REASON_BRAKE_TIMEOUT,
-    MODE_REASON_FLIP_COMPLETE,
-    MODE_REASON_AVOIDANCE,
-    MODE_REASON_AVOIDANCE_RECOVERY,
-    MODE_REASON_THROW_COMPLETE,
-    MODE_REASON_TERMINATE,
-    MODE_REASON_TMODE,
-};
-
 // Tuning enumeration
 enum tuning_func {
     TUNING_NONE =                        0, //
@@ -120,13 +72,9 @@ enum tuning_func {
     TUNING_RATE_YAW_FF =                54, // body frame yaw rate controller FF term
     TUNING_RATE_MOT_YAW_HEADROOM =      55, // motors yaw headroom minimum
     TUNING_RATE_YAW_FILT =              56, // yaw rate input filter
-    TUNING_WINCH =                      57  // winch control (not actually a value to be tuned)
+    TUNING_WINCH =                      57, // winch control (not actually a value to be tuned)
+    TUNING_SYSTEM_ID_MAGNITUDE =        58  // magnitude of the system ID signal
 };
-
-// Acro Trainer types
-#define ACRO_TRAINER_DISABLED   0
-#define ACRO_TRAINER_LEVELING   1
-#define ACRO_TRAINER_LIMITED    2
 
 // Yaw behaviours during missions - possible values for WP_YAW_BEHAVIOR parameter
 #define WP_YAW_BEHAVIOR_NONE                          0   // auto pilot will never control yaw during missions or rtl (except for DO_CONDITIONAL_YAW command received)
@@ -158,15 +106,6 @@ enum GuidedMode {
     Guided_Angle,
 };
 
-// RTL states
-enum RTLState {
-    RTL_InitialClimb,
-    RTL_ReturnHome,
-    RTL_LoiterAtHome,
-    RTL_FinalDescent,
-    RTL_Land
-};
-
 // Safe RTL states
 enum SmartRTLState {
     SmartRTL_WaitForPathCleanup,
@@ -174,45 +113,6 @@ enum SmartRTLState {
     SmartRTL_PreLandPosition,
     SmartRTL_Descend,
     SmartRTL_Land
-};
-
-// Alt_Hold states
-enum AltHoldModeState {
-    AltHold_MotorStopped,
-    AltHold_Takeoff,
-    AltHold_Flying,
-    AltHold_Landed
-};
-
-// Loiter states
-enum LoiterModeState {
-    Loiter_MotorStopped,
-    Loiter_Takeoff,
-    Loiter_Flying,
-    Loiter_Landed
-};
-
-// Sport states
-enum SportModeState {
-    Sport_MotorStopped,
-    Sport_Takeoff,
-    Sport_Flying,
-    Sport_Landed
-};
-
-// Flip states
-enum FlipState {
-    Flip_Start,
-    Flip_Roll,
-    Flip_Pitch_A,
-    Flip_Pitch_B,
-    Flip_Recover,
-    Flip_Abandon
-};
-
-enum LandStateType {
-    LandStateType_FlyToLocation = 0,
-    LandStateType_Descending = 1
 };
 
 enum PayloadPlaceStateType {
@@ -237,10 +137,7 @@ enum DevOptions {
 
 //  Logging parameters
 enum LoggingParameters {
-     TYPE_AIRSTART_MSG,
-     TYPE_GROUNDSTART_MSG,
      LOG_CONTROL_TUNING_MSG,
-     LOG_ERROR_MSG,
      LOG_DATA_INT16_MSG,
      LOG_DATA_UINT16_MSG,
      LOG_DATA_INT32_MSG,
@@ -251,6 +148,8 @@ enum LoggingParameters {
      LOG_HELI_MSG,
      LOG_PRECLAND_MSG,
      LOG_GUIDEDTARGET_MSG,
+     LOG_SYSIDD_MSG,
+     LOG_SYSIDS_MSG,
 };
 
 #define MASK_LOG_ATTITUDE_FAST          (1<<0)
@@ -274,71 +173,10 @@ enum LoggingParameters {
 #define MASK_LOG_IMU_RAW                (1UL<<19)
 #define MASK_LOG_ANY                    0xFFFF
 
-// Error message sub systems and error codes
-#define ERROR_SUBSYSTEM_MAIN                1
-#define ERROR_SUBSYSTEM_RADIO               2
-#define ERROR_SUBSYSTEM_COMPASS             3
-#define ERROR_SUBSYSTEM_OPTFLOW             4   // not used
-#define ERROR_SUBSYSTEM_FAILSAFE_RADIO      5
-#define ERROR_SUBSYSTEM_FAILSAFE_BATT       6
-#define ERROR_SUBSYSTEM_FAILSAFE_GPS        7   // not used
-#define ERROR_SUBSYSTEM_FAILSAFE_GCS        8
-#define ERROR_SUBSYSTEM_FAILSAFE_FENCE      9
-#define ERROR_SUBSYSTEM_FLIGHT_MODE         10
-#define ERROR_SUBSYSTEM_GPS                 11
-#define ERROR_SUBSYSTEM_CRASH_CHECK         12
-#define ERROR_SUBSYSTEM_FLIP                13
-#define ERROR_SUBSYSTEM_AUTOTUNE            14  // not used
-#define ERROR_SUBSYSTEM_PARACHUTE           15
-#define ERROR_SUBSYSTEM_EKFCHECK            16
-#define ERROR_SUBSYSTEM_FAILSAFE_EKFINAV    17
-#define ERROR_SUBSYSTEM_BARO                18
-#define ERROR_SUBSYSTEM_CPU                 19
-#define ERROR_SUBSYSTEM_FAILSAFE_ADSB       20
-#define ERROR_SUBSYSTEM_TERRAIN             21
-#define ERROR_SUBSYSTEM_NAVIGATION          22
-#define ERROR_SUBSYSTEM_FAILSAFE_TERRAIN    23
-#define ERROR_SUBSYSTEM_EKF_PRIMARY         24
-#define ERROR_SUBSYSTEM_THRUST_LOSS_CHECK   25
-// general error codes
-#define ERROR_CODE_ERROR_RESOLVED           0
-#define ERROR_CODE_FAILED_TO_INITIALISE     1
-#define ERROR_CODE_UNHEALTHY                4
-// subsystem specific error codes -- radio
-#define ERROR_CODE_RADIO_LATE_FRAME         2
-// subsystem specific error codes -- failsafe_thr, batt, gps
-#define ERROR_CODE_FAILSAFE_RESOLVED        0
-#define ERROR_CODE_FAILSAFE_OCCURRED        1
-// subsystem specific error codes -- main
-#define ERROR_CODE_MAIN_INS_DELAY           1
-// subsystem specific error codes -- crash checker
-#define ERROR_CODE_CRASH_CHECK_CRASH        1
-#define ERROR_CODE_CRASH_CHECK_LOSS_OF_CONTROL 2
-// subsystem specific error codes -- flip
-#define ERROR_CODE_FLIP_ABANDONED           2
-// subsystem specific error codes -- terrain
-#define ERROR_CODE_MISSING_TERRAIN_DATA     2
-// subsystem specific error codes -- navigation
-#define ERROR_CODE_FAILED_TO_SET_DESTINATION    2
-#define ERROR_CODE_RESTARTED_RTL            3
-#define ERROR_CODE_FAILED_CIRCLE_INIT       4
-#define ERROR_CODE_DEST_OUTSIDE_FENCE       5
-
-// parachute failed to deploy because of low altitude or landed
-#define ERROR_CODE_PARACHUTE_TOO_LOW        2
-#define ERROR_CODE_PARACHUTE_LANDED         3
-// EKF check definitions
-#define ERROR_CODE_EKFCHECK_BAD_VARIANCE       2
-#define ERROR_CODE_EKFCHECK_VARIANCE_CLEARED   0
-// Baro specific error codes
-#define ERROR_CODE_BARO_GLITCH              2
-// GPS specific error coces
-#define ERROR_CODE_GPS_GLITCH               2
-
 // Radio failsafe definitions (FS_THR parameter)
 #define FS_THR_DISABLED                            0
 #define FS_THR_ENABLED_ALWAYS_RTL                  1
-#define FS_THR_ENABLED_CONTINUE_MISSION            2
+#define FS_THR_ENABLED_CONTINUE_MISSION            2    // Deprecated in 4.0+, now use fs_options
 #define FS_THR_ENABLED_ALWAYS_LAND                 3
 #define FS_THR_ENABLED_ALWAYS_SMARTRTL_OR_RTL      4
 #define FS_THR_ENABLED_ALWAYS_SMARTRTL_OR_LAND     5
@@ -346,9 +184,10 @@ enum LoggingParameters {
 // GCS failsafe definitions (FS_GCS_ENABLE parameter)
 #define FS_GCS_DISABLED                        0
 #define FS_GCS_ENABLED_ALWAYS_RTL              1
-#define FS_GCS_ENABLED_CONTINUE_MISSION        2
+#define FS_GCS_ENABLED_CONTINUE_MISSION        2    // Deprecated in 4.0+, now use fs_options
 #define FS_GCS_ENABLED_ALWAYS_SMARTRTL_OR_RTL  3
 #define FS_GCS_ENABLED_ALWAYS_SMARTRTL_OR_LAND 4
+#define FS_GCS_ENABLED_ALWAYS_LAND             5
 
 // EKF failsafe definitions (FS_EKF_ACTION parameter)
 #define FS_EKF_ACTION_LAND                  1       // switch to LAND mode on EKF failsafe

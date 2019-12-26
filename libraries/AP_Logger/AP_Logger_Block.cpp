@@ -11,7 +11,7 @@ extern AP_HAL::HAL& hal;
 
 // the last page holds the log format in first 4 bytes. Please change
 // this if (and only if!) the low level format changes
-#define DF_LOGGING_FORMAT    0x19012019
+#define DF_LOGGING_FORMAT    0x1901201A
 
 AP_Logger_Block::AP_Logger_Block(AP_Logger &front, LoggerMessageWriter_DFLogStart *writer) :
     writebuf(0),
@@ -66,7 +66,7 @@ uint32_t AP_Logger_Block::bufferspace_available()
     return df_NumPages * df_PageSize;
 }
 
-// *** DATAFLASH PUBLIC FUNCTIONS ***
+// *** LOGGER PUBLIC FUNCTIONS ***
 void AP_Logger_Block::StartWrite(uint32_t PageAdr)
 {
     df_PageAdr    = PageAdr;
@@ -279,7 +279,9 @@ int16_t AP_Logger_Block::get_log_data(uint16_t log_num, uint16_t page, uint32_t 
     WITH_SEMAPHORE(sem);
     if (offset == 0) {
         uint8_t header[3];
-        get_log_data_raw(log_num, page, 0, 3, header);
+        if (get_log_data_raw(log_num, page, 0, 3, header) == -1) {
+            return -1;
+        }
         adding_fmt_headers = (header[0] != HEAD_BYTE1 || header[1] != HEAD_BYTE2 || header[2] != LOG_FORMAT_MSG);
     }
     uint16_t ret = 0;
@@ -307,7 +309,11 @@ int16_t AP_Logger_Block::get_log_data(uint16_t log_num, uint16_t page, uint32_t 
     }
 
     if (len > 0) {
-        ret += get_log_data_raw(log_num, page, offset, len, data);
+        const int16_t bytes = get_log_data_raw(log_num, page, offset, len, data);
+        if (bytes == -1) {
+            return ret == 0 ? -1 : ret;
+        }
+        ret += bytes;
     }
 
     return ret;
@@ -338,7 +344,7 @@ uint16_t AP_Logger_Block::get_num_logs(void)
     last = GetFileNumber();
     StartRead(lastpage + 2);
     if (GetFileNumber() == 0xFFFF) {
-        StartRead(((lastpage >> 8) + 1) << 8);    // next sector
+        StartRead(((((lastpage-1)>>8)+1)<<8)+1);    // next sector
     }
     first = GetFileNumber();
     if (first > last) {
@@ -458,20 +464,20 @@ uint32_t AP_Logger_Block::find_last_page(void)
     uint32_t look;
     uint32_t bottom = 1;
     uint32_t top = df_NumPages;
-    uint32_t look_hash;
-    uint32_t bottom_hash;
-    uint32_t top_hash;
+    uint64_t look_hash;
+    uint64_t bottom_hash;
+    uint64_t top_hash;
 
     WITH_SEMAPHORE(sem);
 
     StartRead(bottom);
-    bottom_hash = ((int32_t)GetFileNumber()<<16) | df_FilePage;
+    bottom_hash = ((int64_t)GetFileNumber()<<32) | df_FilePage;
 
     while (top-bottom > 1) {
         look = (top+bottom)/2;
         StartRead(look);
-        look_hash = (int32_t)GetFileNumber()<<16 | df_FilePage;
-        if (look_hash >= 0xFFFF0000) {
+        look_hash = (int64_t)GetFileNumber()<<32 | df_FilePage;
+        if (look_hash >= 0xFFFF00000000) {
             look_hash = 0;
         }
 
@@ -486,8 +492,8 @@ uint32_t AP_Logger_Block::find_last_page(void)
     }
 
     StartRead(top);
-    top_hash = ((int32_t)GetFileNumber()<<16) | df_FilePage;
-    if (top_hash >= 0xFFFF0000) {
+    top_hash = ((int64_t)GetFileNumber()<<32) | df_FilePage;
+    if (top_hash >= 0xFFFF00000000) {
         top_hash = 0;
     }
     if (top_hash > bottom_hash) {
@@ -503,8 +509,8 @@ uint32_t AP_Logger_Block::find_last_page_of_log(uint16_t log_number)
     uint32_t look;
     uint32_t bottom;
     uint32_t top;
-    uint32_t look_hash;
-    uint32_t check_hash;
+    uint64_t look_hash;
+    uint64_t check_hash;
 
     WITH_SEMAPHORE(sem);
 
@@ -523,13 +529,13 @@ uint32_t AP_Logger_Block::find_last_page_of_log(uint16_t log_number)
         top = find_last_page();
     }
 
-    check_hash = (int32_t)log_number<<16 | 0xFFFF;
+    check_hash = (int64_t)log_number<<32 | 0xFFFFFFFF;
 
     while (top-bottom > 1) {
         look = (top+bottom)/2;
         StartRead(look);
-        look_hash = (int32_t)GetFileNumber()<<16 | df_FilePage;
-        if (look_hash >= 0xFFFF0000) {
+        look_hash = (int64_t)GetFileNumber()<<32 | df_FilePage;
+        if (look_hash >= 0xFFFF00000000) {
             look_hash = 0;
         }
 

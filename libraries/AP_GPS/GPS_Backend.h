@@ -50,13 +50,15 @@ public:
 
     virtual void broadcast_configuration_failure_reason(void) const { return ; }
 
-    virtual void handle_msg(const mavlink_message_t *msg) { return ; }
+    virtual void handle_msg(const mavlink_message_t &msg) { return ; }
 
     // driver specific lag, returns true if the driver is confident in the provided lag
     virtual bool get_lag(float &lag) const { lag = 0.2f; return true; }
 
     // driver specific health, returns true if the driver is healthy
     virtual bool is_healthy(void) const { return true; }
+    // returns true if the GPS is doing any logging it is expected to
+    virtual bool logging_healthy(void) const { return true; }
 
     virtual const char *name() const = 0;
 
@@ -87,7 +89,7 @@ protected:
 
     void _detection_message(char *buffer, uint8_t buflen) const;
 
-    bool should_df_log() const;
+    bool should_log() const;
 
     /*
       set a timestamp based on arrival time on uart at current byte,

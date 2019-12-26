@@ -14,10 +14,12 @@
  */
 
 #include <AP_HAL/AP_HAL.h>
-#include <GCS_MAVLink/GCS.h>
 #include "AP_Follow.h"
 #include <ctype.h>
 #include <stdio.h>
+
+#include <AP_AHRS/AP_AHRS.h>
+#include <AP_Logger/AP_Logger.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -77,7 +79,7 @@ const AP_Param::GroupInfo AP_Follow::var_info[] = {
 
     // @Param: _OFS_Y
     // @DisplayName: Follow offsets in meters east/right
-    // @Description: Follow offsets in meters east/right.  If positive, this vehicle fly to the right or east of lead vehicle.  Depends on FOLL_OFS_TYPE
+    // @Description: Follow offsets in meters east/right.  If positive, this vehicle will fly to the right or east of lead vehicle.  Depends on FOLL_OFS_TYPE
     // @Range: -100 100
     // @Units: m
     // @Increment: 1
@@ -85,19 +87,21 @@ const AP_Param::GroupInfo AP_Follow::var_info[] = {
 
     // @Param: _OFS_Z
     // @DisplayName: Follow offsets in meters down
-    // @Description: Follow offsets in meters down.  If positive, this vehicle fly below the lead vehicle
+    // @Description: Follow offsets in meters down.  If positive, this vehicle will fly below the lead vehicle
     // @Range: -100 100
     // @Units: m
     // @Increment: 1
     // @User: Standard
     AP_GROUPINFO("_OFS", 7, AP_Follow, _offset, 0),
 
+#if !(APM_BUILD_TYPE(APM_BUILD_APMrover2))
     // @Param: _YAW_BEHAVE
     // @DisplayName: Follow yaw behaviour
     // @Description: Follow yaw behaviour
     // @Values: 0:None,1:Face Lead Vehicle,2:Same as Lead vehicle,3:Direction of Flight
     // @User: Standard
     AP_GROUPINFO("_YAW_BEHAVE", 8, AP_Follow, _yaw_behave, 1),
+#endif
 
     // @Param: _POS_P
     // @DisplayName: Follow position error P gain
@@ -107,12 +111,14 @@ const AP_Param::GroupInfo AP_Follow::var_info[] = {
     // @User: Standard
     AP_SUBGROUPINFO(_p_pos, "_POS_", 9, AP_Follow, AC_P),
 
+#if !(APM_BUILD_TYPE(APM_BUILD_APMrover2)) 
     // @Param: _ALT_TYPE
     // @DisplayName: Follow altitude type
     // @Description: Follow altitude type
     // @Values: 0:absolute, 1: relative
     // @User: Standard
     AP_GROUPINFO("_ALT_TYPE", 10, AP_Follow, _alt_type, AP_FOLLOW_ALTITUDE_TYPE_RELATIVE),
+#endif
 
     AP_GROUPEND
 };
@@ -126,6 +132,15 @@ AP_Follow::AP_Follow() :
         _p_pos(AP_FOLLOW_POS_P_DEFAULT)
 {
     AP_Param::setup_object_defaults(this, var_info);
+}
+
+// restore offsets to zero if necessary, should be called when vehicle exits follow mode
+void AP_Follow::clear_offsets_if_required()
+{
+    if (_offsets_were_zero) {
+        _offset = Vector3f();
+    }
+    _offsets_were_zero = false;
 }
 
 // get target's estimated location
@@ -151,7 +166,7 @@ bool AP_Follow::get_target_location_and_velocity(Location &loc, Vector3f &vel_ne
 
     // project the vehicle position
     Location last_loc = _target_location;
-    location_offset(last_loc, vel_ned.x * dt, vel_ned.y * dt);
+    last_loc.offset(vel_ned.x * dt, vel_ned.y * dt);
     last_loc.alt -= vel_ned.z * 100.0f * dt; // convert m/s to cm/s, multiply by dt.  minus because NED
 
     // return latest position estimate
@@ -183,7 +198,7 @@ bool AP_Follow::get_target_dist_and_vel_ned(Vector3f &dist_ned, Vector3f &dist_w
     }
 
     // calculate difference
-    const Vector3f dist_vec = location_3d_diff_NED(current_loc, target_loc);
+    const Vector3f dist_vec = current_loc.get_distance_NED(target_loc);
 
     // fail if too far
     if (is_positive(_dist_max.get()) && (dist_vec.length() > _dist_max)) {
@@ -218,7 +233,7 @@ bool AP_Follow::get_target_dist_and_vel_ned(Vector3f &dist_ned, Vector3f &dist_w
 }
 
 // get target's heading in degrees (0 = north, 90 = east)
-bool AP_Follow::get_target_heading(float &heading) const
+bool AP_Follow::get_target_heading_deg(float &heading) const
 {
     // exit immediately if not enabled
     if (!_enabled) {
@@ -340,16 +355,19 @@ void AP_Follow::init_offsets_if_required(const Vector3f &dist_vec_ned)
     if (!_offset.get().is_zero()) {
         return;
     }
+    _offsets_were_zero = true;
 
     float target_heading_deg;
-    if ((_offset_type == AP_FOLLOW_OFFSET_TYPE_RELATIVE) && get_target_heading(target_heading_deg)) {
+    if ((_offset_type == AP_FOLLOW_OFFSET_TYPE_RELATIVE) && get_target_heading_deg(target_heading_deg)) {
         // rotate offsets from north facing to vehicle's perspective
         _offset = rotate_vector(-dist_vec_ned, -target_heading_deg);
+        gcs().send_text(MAV_SEVERITY_INFO, "Relative follow offset loaded");
     } else {
         // initialise offset in NED frame
         _offset = -dist_vec_ned;
         // ensure offset_type used matches frame of offsets saved
         _offset_type = AP_FOLLOW_OFFSET_TYPE_NED;
+        gcs().send_text(MAV_SEVERITY_INFO, "N-E-D follow offset loaded");
     }
 }
 
@@ -366,7 +384,7 @@ bool AP_Follow::get_offsets_ned(Vector3f &offset) const
 
     // offset type is relative, exit if we cannot get vehicle's heading
     float target_heading_deg;
-    if (!get_target_heading(target_heading_deg)) {
+    if (!get_target_heading_deg(target_heading_deg)) {
         return false;
     }
 

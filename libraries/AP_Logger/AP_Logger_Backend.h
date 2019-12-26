@@ -15,8 +15,6 @@ public:
 
     vehicle_startup_message_Writer vehicle_message_writer();
 
-    void internal_error();
-
     virtual bool CardInserted(void) const = 0;
 
     // erase handling
@@ -69,10 +67,10 @@ public:
     virtual void flush(void) { }
 #endif
 
-     // for Dataflash_MAVlink
-    virtual void remote_log_block_status_msg(mavlink_channel_t chan,
-                                             mavlink_message_t* msg) { }
-    // end for Dataflash_MAVlink
+     // for Logger_MAVlink
+    virtual void remote_log_block_status_msg(const mavlink_channel_t chan,
+                                             const mavlink_message_t &msg) { }
+    // end for Logger_MAVlink
 
    virtual void periodic_tasks();
 
@@ -95,7 +93,7 @@ public:
     bool Write_MessageF(const char *fmt, ...);
     bool Write_Mission_Cmd(const AP_Mission &mission,
                                const AP_Mission::Mission_Command &cmd);
-    bool Write_Mode(uint8_t mode, uint8_t reason = 0);
+    bool Write_Mode(uint8_t mode, const ModeReason reason = ModeReason::UNKNOWN);
     bool Write_Parameter(const char *name, float value);
     bool Write_Parameter(const AP_Param *ap,
                              const AP_Param::ParamToken &token,
@@ -149,7 +147,6 @@ protected:
     LoggerMessageWriter_DFLogStart *_startup_messagewriter;
     bool _writing_startup_messages;
 
-    uint8_t _internal_errors;
     uint32_t _dropped;
 
     // must be called when a new log is being started:

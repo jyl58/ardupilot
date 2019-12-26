@@ -13,7 +13,7 @@ bool QAutoTune::init()
     }
 
     // use position hold while tuning if we were in QLOITER
-    bool position_hold = (plane.previous_mode == QLOITER);
+    bool position_hold = (plane.previous_mode == &plane.mode_qloiter);
 
     return init_internals(position_hold,
                           plane.quadplane.attitude_control,
@@ -27,7 +27,7 @@ float QAutoTune::get_pilot_desired_climb_rate_cms(void) const
     return plane.quadplane.get_pilot_desired_climb_rate_cms();
 }
 
-void QAutoTune::get_pilot_desired_rp_yrate_cd(int32_t &des_roll_cd, int32_t &des_pitch_cd, int32_t &yaw_rate_cds)
+void QAutoTune::get_pilot_desired_rp_yrate_cd(float &des_roll_cd, float &des_pitch_cd, float &yaw_rate_cds)
 {
     if (plane.channel_roll->get_control_in() == 0 && plane.channel_pitch->get_control_in() == 0) {
         des_roll_cd = 0;
@@ -45,21 +45,6 @@ void QAutoTune::init_z_limits()
     plane.quadplane.pos_control->set_max_accel_z(plane.quadplane.pilot_accel_z);
 }
 
-
-// Wrote an event packet
-void QAutoTune::Log_Write_Event(enum at_event id)
-{
-    // offset of 30 aligned with ArduCopter autotune events
-    uint8_t ev_id = 30 + (uint8_t)id;
-    AP::logger().Write(
-        "EVT",
-        "TimeUS,Id",
-        "s-",
-        "F-",
-        "QB",
-        AP_HAL::micros64(),
-        ev_id);
-}
 
 // log VTOL PIDs for during twitch
 void QAutoTune::log_pids(void)
