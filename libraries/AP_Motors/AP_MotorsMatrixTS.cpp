@@ -25,49 +25,11 @@ extern const AP_HAL::HAL& hal;
 
 #define SERVO_OUTPUT_RANGE  4500
 
-// output a thrust to all motors that match a given motor mask. This
-// is used to control motors enabled for forward flight. Thrust is in
-// the range 0 to 1
-void AP_MotorsMatrixTS::output_motor_mask(float thrust, uint8_t mask, float rudder_dt)
-{
-    const int16_t pwm_min = get_pwm_output_min();
-    const int16_t pwm_range = get_pwm_output_max() - pwm_min;
-
-    for (uint8_t i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
-        if (motor_enabled[i]) {
-            int16_t motor_out;
-            if (mask & (1U<<i)) {
-                /*
-                    apply rudder mixing differential thrust
-                    copter frame roll is plane frame yaw (this is only
-                    used by tiltrotors and tailsitters)
-                */
-                float diff_thrust = get_roll_factor(i) * rudder_dt * 0.5f;
-                motor_out = pwm_min + pwm_range * constrain_float(thrust + diff_thrust, 0.0f, 1.0f);
-            } else {
-                motor_out = pwm_min;
-            }
-            rc_write(i, motor_out);
-        }
-    }
-}
-
-void AP_MotorsMatrixTS::output_to_motors()
-{
-    // calls calc_thrust_to_pwm(_thrust_rpyt_out[i]) for each enabled motor
-    AP_MotorsMatrix::output_to_motors();
-
-    // also actuate control surfaces
-    SRV_Channels::set_output_scaled(SRV_Channel::k_aileron,  -_yaw_in * SERVO_OUTPUT_RANGE);
-    SRV_Channels::set_output_scaled(SRV_Channel::k_elevator, _pitch_in * SERVO_OUTPUT_RANGE);
-    SRV_Channels::set_output_scaled(SRV_Channel::k_rudder, _roll_in * SERVO_OUTPUT_RANGE);
-}
-
 // output_armed - sends commands to the motors
 // includes new scaling stability patch
 void AP_MotorsMatrixTS::output_armed_stabilizing()
 {
-    if (enable_yaw_torque) {
+    if (use_standard_matrix) {
         AP_MotorsMatrix::output_armed_stabilizing();
         return;
     }
@@ -132,7 +94,7 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
     }
 
     bool success = false;
-    enable_yaw_torque = true;
+    use_standard_matrix = true;
 
     switch (frame_class) {
 
@@ -145,15 +107,6 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
             break;
         case MOTOR_FRAME_QUAD:
             switch (frame_type) {
-                case MOTOR_FRAME_TYPE_PLUS:
-                    // differential torque for yaw: rotation directions specified below
-                    add_motor(AP_MOTORS_MOT_1,  90, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 2);
-                    add_motor(AP_MOTORS_MOT_2, -90, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 4);
-                    add_motor(AP_MOTORS_MOT_3,   0, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  1);
-                    add_motor(AP_MOTORS_MOT_4, 180, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  3);
-
-                    success = true;
-                    break;
                 case MOTOR_FRAME_TYPE_NYT_PLUS:
                     // motors 1,2 on wings, motors 3,4 on vertical tail/subfin
                     // motors 1,2 are counter-rotating, as are motors 3,4
@@ -164,19 +117,10 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
                     add_motor(AP_MOTORS_MOT_3,   0, 0, 1);
                     add_motor(AP_MOTORS_MOT_4, 180, 0, 3);
 
-                    enable_yaw_torque = false;
+                    use_standard_matrix = false;
                     success = true;
                     break;
-                case MOTOR_FRAME_TYPE_X:
-                    // PLUS_TS layout rotated 45 degrees about X axis
-                    // differential torque for yaw: rotation directions specified below
-                    add_motor(AP_MOTORS_MOT_1,   45, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 1);
-                    add_motor(AP_MOTORS_MOT_2, -135, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 3);
-                    add_motor(AP_MOTORS_MOT_3,  -45, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  4);
-                    add_motor(AP_MOTORS_MOT_4,  135, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  2);
 
-                    success = true;
-                    break;
                 case MOTOR_FRAME_TYPE_NYT_X:
                     // PLUS_TS layout rotated 45 degrees about X axis
                     // no differential torque for yaw: wing and fin motors counter-rotating
@@ -185,17 +129,21 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
                     add_motor(AP_MOTORS_MOT_3,  -45, 0, 4);
                     add_motor(AP_MOTORS_MOT_4,  135, 0, 2);
 
-                    enable_yaw_torque = false;
+                    use_standard_matrix = false;
                     success = true;
                     break;
                 default:
                     // matrixTS doesn't support the configured frame_type
-                    break;
+                    // try to use normal Matrix
+                    AP_MotorsMatrix::setup_motors(frame_class, frame_type);
+                    return;
             }
             break;
         default:
             // matrixTS doesn't support the configured frame_class
-            break;
+            // try to use normal Matrix
+            AP_MotorsMatrix::setup_motors(frame_class, frame_type);
+            return;
         } // switch frame_class
 
     // normalise factors to magnitude 0.5

@@ -8,13 +8,19 @@
 
 [![Autotest Status](https://autotest.ardupilot.org/autotest-badge.svg)](https://autotest.ardupilot.org/)
 
+Ardupilot is the most advanced, full-featured and reliable open source autopilot software available. It has
+been under development since 2010 by a team of diverse professional engineers and computer scientists. It is
+the only autopilot software capable of controlling almost any vehicle system imaginable, from conventional
+airplanes, multirotors, and helicopters, to boats and even submarines. And now being expanded to feature
+support for new emerging vehicle types such as quad-planes and compound helicopters.
+
 ## The ArduPilot project is made up of: ##
 
 - ArduCopter (or APM:Copter) : [code](https://github.com/ArduPilot/ardupilot/tree/master/ArduCopter), [wiki](https://ardupilot.org/copter/index.html)
 
 - ArduPlane (or APM:Plane) : [code](https://github.com/ArduPilot/ardupilot/tree/master/ArduPlane), [wiki](https://ardupilot.org/plane/index.html)
 
-- ArduRover (or APMrover2) : [code](https://github.com/ArduPilot/ardupilot/tree/master/APMrover2), [wiki](https://ardupilot.org/rover/index.html)
+- ArduRover (or Rover) : [code](https://github.com/ArduPilot/ardupilot/tree/master/Rover), [wiki](https://ardupilot.org/rover/index.html)
 
 - ArduSub (or APM:Sub) : [code](https://github.com/ArduPilot/ardupilot/tree/master/ArduSub), [wiki](http://ardusub.com/)
 
@@ -30,7 +36,7 @@
 
 - Github repository: <https://github.com/ArduPilot/ardupilot>
 
-- Main developer wiki: <https://dev.ardupilot.org>
+- Main developer wiki: <https://ardupilot.org/dev/>
 
 - Developer discussion: <https://discuss.ardupilot.org>
 
@@ -125,3 +131,5 @@ for reviewing patches on their specific area.  See also the list of developers w
   - ***Board***: PXF, Erle-Brain 2, PXFmini
 - [Amilcar Lucas](https://github.com/amilcarlucas):
   - ***Subsystem***: Marvelmind
+- [Samuel Tabor](https://github.com/samuelctabor):
+  - ***Subsystem***: Soaring/Gliding

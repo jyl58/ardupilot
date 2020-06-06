@@ -53,7 +53,7 @@ public:
     void takeoff_controller(void);
     void waypoint_controller(void);
 
-    void update_throttle_thr_mix(void);
+    void update_throttle_mix(void);
     
     // update transition handling
     void update(void);
@@ -89,6 +89,7 @@ public:
     bool verify_vtol_land(void);
     bool in_vtol_auto(void) const;
     bool in_vtol_mode(void) const;
+    bool in_vtol_posvel_mode(void) const;
     void update_throttle_hover();
 
     // vtol help for is_flying()
@@ -108,6 +109,9 @@ public:
 
     // return true when tailsitter frame configured
     bool is_tailsitter(void) const;
+
+    // return true when flying a control surface only tailsitter tailsitter
+    bool is_contol_surface_tailsitter(void) const;
 
     // return true when flying a tailsitter in VTOL
     bool tailsitter_active(void);
@@ -154,6 +158,13 @@ public:
 
     MAV_TYPE get_mav_type(void) const;
 
+    enum Q_ASSIST_STATE_ENUM {
+        Q_ASSIST_DISABLED,
+        Q_ASSIST_ENABLED,
+        Q_ASSIST_FORCE,
+    };
+    void set_q_assist_state(Q_ASSIST_STATE_ENUM state) {q_assist_state = state;};
+
 private:
     AP_AHRS_NavEKF &ahrs;
     AP_Vehicle::MultiCopter aparm;
@@ -178,7 +189,10 @@ private:
     AP_Int16 pilot_accel_z;
 
     // check for quadplane assistance needed
-    bool assistance_needed(float aspeed);
+    bool assistance_needed(float aspeed, bool have_airspeed);
+
+    // check if it is safe to provide assistance
+    bool assistance_safe();
 
     // update transition handling
     void update_transition(void);
@@ -221,7 +235,7 @@ private:
     void init_loiter(void);
     void init_qland(void);
     void control_loiter(void);
-    void check_land_complete(void);
+    bool check_land_complete(void);
     bool land_detector(uint32_t timeout_ms);
     bool check_land_final(void);
 
@@ -347,6 +361,7 @@ private:
     
     // timer start for transition
     uint32_t transition_start_ms;
+    float transition_initial_pitch;
     uint32_t transition_low_airspeed_ms;
 
     Location last_auto_target;
@@ -387,6 +402,9 @@ private:
         uint32_t land_start_ms;
         float vpos_start_m;
     } landing_detect;
+
+    // throttle mix acceleration filter
+    LowPassFilterVector3f throttle_mix_accel_ef_filter = LowPassFilterVector3f(1.0f);
 
     // time we last set the loiter target
     uint32_t last_loiter_ms;
@@ -538,6 +556,8 @@ private:
     uint32_t takeoff_start_time_ms;
     uint32_t takeoff_time_limit_ms;
 
+    float last_land_final_agl;
+
     /*
       return true if current mission item is a vtol takeoff
      */
@@ -567,7 +587,15 @@ private:
       are we in the final landing phase of a VTOL landing?
      */
     bool in_vtol_land_final(void) const;
-    
+
+    /*
+      are we in any of the phases of a VTOL landing?
+     */
+    bool in_vtol_land_sequence(void) const;
+
+    // Q assist state, can be enabled, disabled or force. Default to enabled
+    Q_ASSIST_STATE_ENUM q_assist_state = Q_ASSIST_STATE_ENUM::Q_ASSIST_ENABLED;
+
 public:
     void motor_test_output();
     MAV_RESULT mavlink_motor_test_start(mavlink_channel_t chan, uint8_t motor_seq, uint8_t throttle_type,

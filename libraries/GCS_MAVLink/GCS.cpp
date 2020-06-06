@@ -8,6 +8,7 @@
 #include <AP_Baro/AP_Baro.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_GPS/AP_GPS.h>
+#include <AP_Arming/AP_Arming.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -32,13 +33,16 @@ const MAV_MISSION_TYPE GCS_MAVLINK::supported_mission_types[] = {
     MAV_MISSION_TYPE_FENCE,
 };
 
+void GCS::init()
+{
+    mavlink_system.sysid = sysid_this_mav();
+}
+
 /*
   send a text message to all GCS
  */
 void GCS::send_textv(MAV_SEVERITY severity, const char *fmt, va_list arg_list)
 {
-    char text[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
-    hal.util->vsnprintf(text, sizeof(text), fmt, arg_list);
     uint8_t mask = GCS_MAVLINK::active_channel_mask() | GCS_MAVLINK::streaming_channel_mask();
     if (!update_send_has_been_called) {
         // we have not yet initialised the streaming-channel-mask,
@@ -46,7 +50,7 @@ void GCS::send_textv(MAV_SEVERITY severity, const char *fmt, va_list arg_list)
         // it to all channels:
         mask = (1<<_num_gcs)-1;
     }
-    send_statustext(severity, mask, text);
+    send_textv(severity, fmt, arg_list, mask);
 }
 
 void GCS::send_text(MAV_SEVERITY severity, const char *fmt, ...)
@@ -210,6 +214,27 @@ void GCS::update_sensor_status_flags()
         }
     }
 
+#if HAL_VISUALODOM_ENABLED
+    const AP_VisualOdom *visual_odom = AP::visualodom();
+    if (visual_odom && visual_odom->enabled()) {
+        control_sensors_present |= MAV_SYS_STATUS_SENSOR_VISION_POSITION;
+        control_sensors_enabled |= MAV_SYS_STATUS_SENSOR_VISION_POSITION;
+        if (visual_odom->healthy()) {
+            control_sensors_health |= MAV_SYS_STATUS_SENSOR_VISION_POSITION;
+        }
+    }
+#endif
+
+    // give GCS status of prearm checks. This is enabled if any arming checks are enabled.
+    // it is healthy if armed or checks are passing
+    control_sensors_present |= MAV_SYS_STATUS_PREARM_CHECK;
+    if (AP::arming().get_enabled_checks()) {
+        control_sensors_enabled |= MAV_SYS_STATUS_PREARM_CHECK;
+        if (hal.util->get_soft_armed() || AP_Notify::flags.pre_arm_check) {
+            control_sensors_health |= MAV_SYS_STATUS_PREARM_CHECK;
+        }
+    }
+
     update_vehicle_sensor_status_flags();
 }
 
@@ -230,4 +255,9 @@ bool GCS::out_of_time() const
     }
 
     return true;
+}
+
+void gcs_out_of_space_to_send_count(mavlink_channel_t chan)
+{
+    gcs().chan(chan)->out_of_space_to_send();
 }

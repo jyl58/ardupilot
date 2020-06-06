@@ -57,6 +57,10 @@ bool RC_Channels_Copter::has_valid_input() const
     return true;
 }
 
+RC_Channel * RC_Channels_Copter::get_arming_channel(void) const
+{
+    return copter.channel_yaw;
+}
 
 // init_aux_switch_function - initialize aux functions
 void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const aux_switch_pos_t ch_flag)
@@ -65,7 +69,6 @@ void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const aux_
     switch(ch_option) {
     // the following functions do not need to be initialised:
     case AUX_FUNC::ALTHOLD:
-    case AUX_FUNC::ARMDISARM:
     case AUX_FUNC::AUTO:
     case AUX_FUNC::AUTOTUNE:
     case AUX_FUNC::BRAKE:
@@ -91,6 +94,7 @@ void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const aux_
     case AUX_FUNC::USER_FUNC3:
     case AUX_FUNC::WINCH_CONTROL:
     case AUX_FUNC::ZIGZAG:
+    case AUX_FUNC::ZIGZAG_Auto:
     case AUX_FUNC::ZIGZAG_SaveWP:
         break;
     case AUX_FUNC::ACRO_TRAINER:
@@ -140,6 +144,16 @@ void RC_Channel_Copter::do_aux_function_change_mode(const Mode::Number mode,
         if (copter.control_mode == mode) {
             rc().reset_mode_switch();
         }
+    }
+}
+
+void RC_Channel_Copter::do_aux_function_armdisarm(const aux_switch_pos_t ch_flag)
+{
+    RC_Channel::do_aux_function_armdisarm(ch_flag);
+    if (copter.arming.is_armed()) {
+        // remember that we are using an arming switch, for use by
+        // set_throttle_zero_flag
+        copter.ap.armed_with_switch = true;
     }
 }
 
@@ -348,9 +362,15 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
             break;
 
         case AUX_FUNC::MOTOR_INTERLOCK:
-            // Turn on when above LOW, because channel will also be used for speed
-            // control signal in tradheli
+#if FRAME_CONFIG == HELI_FRAME
+            // The interlock logic for ROTOR_CONTROL_MODE_SPEED_PASSTHROUGH is handled 
+            // in heli_update_rotor_speed_targets.  Otherwise turn on when above low.
+            if (copter.motors->get_rsc_mode() != ROTOR_CONTROL_MODE_SPEED_PASSTHROUGH) {
+                copter.ap.motor_interlock_switch = (ch_flag == HIGH || ch_flag == MIDDLE);
+            }
+#else
             copter.ap.motor_interlock_switch = (ch_flag == HIGH || ch_flag == MIDDLE);
+#endif
             break;
 
         case AUX_FUNC::BRAKE:
@@ -379,23 +399,6 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
                     break;
             }
 #endif
-            break;
-
-        case AUX_FUNC::ARMDISARM:
-            // arm or disarm the vehicle
-            switch (ch_flag) {
-            case HIGH:
-                copter.arming.arm(AP_Arming::Method::AUXSWITCH);
-                // remember that we are using an arming switch, for use by set_throttle_zero_flag
-                copter.ap.armed_with_switch = true;
-                break;
-            case MIDDLE:
-                // nothing
-                break;
-            case LOW:
-                copter.arming.disarm();
-                break;
-            }
             break;
 
         case AUX_FUNC::SMART_RTL:
@@ -482,15 +485,17 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
         case AUX_FUNC::ZIGZAG_SaveWP:
 #if MODE_ZIGZAG_ENABLED == ENABLED
             if (copter.flightmode == &copter.mode_zigzag) {
+                // initialize zigzag auto
+                copter.mode_zigzag.init_auto();
                 switch (ch_flag) {
                     case LOW:
-                        copter.mode_zigzag.save_or_move_to_destination(0);
+                        copter.mode_zigzag.save_or_move_to_destination(ModeZigZag::Destination::A);
                         break;
                     case MIDDLE:
                         copter.mode_zigzag.return_to_manual_control(false);
                         break;
                     case HIGH:
-                        copter.mode_zigzag.save_or_move_to_destination(1);
+                        copter.mode_zigzag.save_or_move_to_destination(ModeZigZag::Destination::B);
                         break;
                 }
             }
@@ -511,7 +516,7 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
             do_aux_function_change_mode(Mode::Number::ALT_HOLD, ch_flag);
             break;
 
-	case AUX_FUNC::FLOWHOLD:
+        case AUX_FUNC::FLOWHOLD:
 #if OPTFLOW == ENABLED
             do_aux_function_change_mode(Mode::Number::FLOWHOLD, ch_flag);
 #endif
@@ -559,6 +564,21 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
             }
             break;
 
+        case AUX_FUNC::ZIGZAG_Auto:
+#if MODE_ZIGZAG_ENABLED == ENABLED
+            if (copter.flightmode == &copter.mode_zigzag) {
+                switch (ch_flag) {
+                case HIGH:
+                    copter.mode_zigzag.run_auto();
+                    break;
+                default:
+                    copter.mode_zigzag.suspend_auto();
+                    break;
+                }
+            }
+#endif
+            break;
+            
     default:
         RC_Channel::do_aux_function(ch_option, ch_flag);
         break;
@@ -578,13 +598,40 @@ void Copter::save_trim()
 
 // auto_trim - slightly adjusts the ahrs.roll_trim and ahrs.pitch_trim towards the current stick positions
 // meant to be called continuously while the pilot attempts to keep the copter level
+void Copter::auto_trim_cancel()
+{
+    auto_trim_counter = 0;
+    AP_Notify::flags.save_trim = false;
+    gcs().send_text(MAV_SEVERITY_INFO, "AutoTrim cancelled");
+}
+
 void Copter::auto_trim()
 {
     if (auto_trim_counter > 0) {
-        auto_trim_counter--;
+        if (copter.flightmode != &copter.mode_stabilize ||
+            !copter.motors->armed()) {
+            auto_trim_cancel();
+            return;
+        }
 
         // flash the leds
         AP_Notify::flags.save_trim = true;
+
+        if (!auto_trim_started) {
+            if (ap.land_complete) {
+                // haven't taken off yet
+                return;
+            }
+            auto_trim_started = true;
+        }
+
+        if (ap.land_complete) {
+            // landed again.
+            auto_trim_cancel();
+            return;
+        }
+
+        auto_trim_counter--;
 
         // calculate roll trim adjustment
         float roll_trim_adjustment = ToRad((float)channel_roll->get_control_in() / 4000.0f);
@@ -599,6 +646,7 @@ void Copter::auto_trim()
         // on last iteration restore leds and accel gains to normal
         if (auto_trim_counter == 0) {
             AP_Notify::flags.save_trim = false;
+            gcs().send_text(MAV_SEVERITY_INFO, "AutoTrim: Trims saved");
         }
     }
 }
