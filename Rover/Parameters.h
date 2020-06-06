@@ -6,7 +6,7 @@
 #include "AC_Sprayer/AC_Sprayer.h"
 #include "AP_Gripper/AP_Gripper.h"
 #include "AP_Rally.h"
-
+#include <Serial_Control/SerialControl.h>
 // Global parameter class.
 //
 class Parameters {
@@ -300,6 +300,9 @@ public:
 
     // Motor library
     AP_MotorsUGV motors;
+
+    //serial control 
+	SerialControl serial_control;
 
     // wheel encoders
     AP_WheelEncoder wheel_encoder;

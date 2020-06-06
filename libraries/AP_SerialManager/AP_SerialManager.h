@@ -137,6 +137,8 @@ public:
         SerialProtocol_RunCam = 26,
         SerialProtocol_Hott = 27,
         SerialProtocol_Scripting = 28,
+        SerialProtocol_serialControl_throttle=30,
+        SerialProtocol_serialControl_steer=31,
     };
 
     // get singleton instance

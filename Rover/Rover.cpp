@@ -110,6 +110,8 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
 #if OSD_ENABLED == ENABLED
     SCHED_TASK(publish_osd_info,        1,     10),
 #endif
+    SCHED_TASK_CLASS(SerialControl,        &rover.g2.serial_control,     update,       50,  100),
+	SCHED_TASK(update_button_handle,        100,     10),
 };
 
 

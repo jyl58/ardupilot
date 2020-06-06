@@ -406,7 +406,7 @@ protected:
     };
 
     bool _enter() override;
-
+    void _exit()override;
     GuidedMode _guided_mode;    // stores which GUIDED mode the vehicle is in
 
     // attitude control

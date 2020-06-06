@@ -481,7 +481,18 @@ void AP_SerialManager::init()
                                          AP_SERIALMANAGER_EFI_MS_BUFSIZE_TX);
                     state[i].uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
                     break;
-
+                case SerialProtocol_serialControl_throttle:
+					state[i].uart->begin(map_baudrate(state[i].baud), 
+                                         AP_SERIALMANAGER_GPS_BUFSIZE_RX,
+                                         AP_SERIALMANAGER_GPS_BUFSIZE_TX);
+					state[i].uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
+					break;
+				case SerialProtocol_serialControl_steer:
+					state[i].uart->begin(map_baudrate(state[i].baud), 
+                                         AP_SERIALMANAGER_GPS_BUFSIZE_RX,
+                                         AP_SERIALMANAGER_GPS_BUFSIZE_TX);
+					state[i].uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
+					break;
                 default:
                     state[i].uart->begin(map_baudrate(state[i].baud));
             }

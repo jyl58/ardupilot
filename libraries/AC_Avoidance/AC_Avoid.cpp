@@ -81,6 +81,7 @@ AC_Avoid::AC_Avoid()
 
 void AC_Avoid::adjust_velocity(float kP, float accel_cmss, Vector2f &desired_vel_cms, float dt)
 {
+    _vehicle_in_limited_range=false;
     // exit immediately if disabled
     if (_enabled == AC_AVOID_DISABLED) {
         return;
@@ -790,6 +791,7 @@ void AC_Avoid::adjust_velocity_polygon(float kP, float accel_cmss, Vector2f &des
                 if (!is_zero(limit_distance_cm)) {
                     if (limit_distance_cm <= margin_cm) {
                         // we are within the margin so stop vehicle
+                        _vehicle_in_limited_range=true;
                         safe_vel.zero();
                     } else {
                         // vehicle inside the given edge, adjust velocity to not violate this edge

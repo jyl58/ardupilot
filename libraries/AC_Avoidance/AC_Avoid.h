@@ -83,7 +83,7 @@ public:
 
     // return margin (in meters) that the vehicle should stay from objects
     float get_margin() const { return _margin; }
-
+    bool get_limit_status(){return _vehicle_in_limited_range;}
     // return true if limiting is active
     bool limits_active() const {return (AP_HAL::millis() - _last_limit_time) < AC_AVOID_ACTIVE_LIMIT_TIMEOUT_MS;};
 
@@ -154,7 +154,8 @@ private:
 
     bool _proximity_enabled = true; // true if proximity sensor based avoidance is enabled (used to allow pilot to enable/disable)
     uint32_t _last_limit_time;      // the last time a limit was active
-
+    
+    bool _vehicle_in_limited_range{false};
     static AC_Avoid *_singleton;
 };
 

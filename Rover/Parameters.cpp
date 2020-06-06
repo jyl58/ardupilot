@@ -636,6 +636,10 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FS_OPTIONS", 48, ParametersG2, fs_options, 0),
 
+    // @Group: SC_
+	// @Path: ../libraries/serial_control/serialcontrol.cpp
+	AP_SUBGROUPINFO(serial_control, "SC_", 49, ParametersG2, SerialControl),
+
     AP_GROUPEND
 };
 
@@ -676,6 +680,7 @@ ParametersG2::ParametersG2(void)
 #endif
     beacon(rover.serial_manager),
     motors(rover.ServoRelayEvents),
+    serial_control(),
     wheel_rate_control(wheel_encoder),
     attitude_control(rover.ahrs),
     smart_rtl(),
@@ -756,8 +761,10 @@ void Rover::load_parameters(void)
 
     AP_Param::set_frame_type_flags(AP_PARAM_FRAME_ROVER);
 
-    SRV_Channels::set_default_function(CH_1, SRV_Channel::k_steering);
-    SRV_Channels::set_default_function(CH_3, SRV_Channel::k_throttle);
+    //SRV_Channels::set_default_function(CH_1, SRV_Channel::k_steering);
+    //SRV_Channels::set_default_function(CH_3, SRV_Channel::k_throttle);
+    SRV_Channels::set_default_function(CH_1,  SRV_Channel::k_throttleLeft);
+	SRV_Channels::set_default_function(CH_3,  SRV_Channel::k_throttleRight);
 
     if (is_balancebot()) {
         g2.crash_angle.set_default(30);

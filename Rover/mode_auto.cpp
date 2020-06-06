@@ -36,10 +36,12 @@ void ModeAuto::_exit()
     if (mission.state() == AP_Mission::MISSION_RUNNING) {
         mission.stop();
     }
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_None);
 }
 
 void ModeAuto::update()
 {
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_auto);
     switch (_submode) {
         case Auto_WP:
         {

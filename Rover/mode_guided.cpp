@@ -16,9 +16,13 @@ bool ModeGuided::_enter()
 
     return true;
 }
+void ModeGuided::_exit(){
+	g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_None);
+}
 
 void ModeGuided::update()
 {
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_auto);
     switch (_guided_mode) {
         case Guided_WP:
         {

@@ -392,7 +392,7 @@ private:
 #if OSD_ENABLED == ENABLED
     void publish_osd_info();
 #endif
-
+    void update_button_handle();
     enum Failsafe_Action {
         Failsafe_Action_None          = 0,
         Failsafe_Action_RTL           = 1,
@@ -430,6 +430,10 @@ public:
     // frame type
     uint8_t get_frame_type() { return g2.frame_type.get(); }
     AP_WheelRateControl& get_wheel_rate_control() { return g2.wheel_rate_control; }
+
+    //run mode
+	uint8_t get_motor_run_mode(){return (uint8_t)g2.serial_control.getMotorControlMode();}
+	bool get_avoid_status(){return g2.avoid.get_limit_status();}
 
     // Simple mode
     float simple_sin_yaw;

@@ -130,3 +130,36 @@ void Rover::rpm_update(void)
         }
     }
 }
+/*
+  update buuton handle function
+ */
+
+void Rover::update_button_handle(void)
+{	static uint8_t _last_mask=0;
+	uint8_t last_mask=rover.button.getLastGpioInputMask();
+	if(_last_mask==last_mask){
+		return;
+	}
+	_last_mask=last_mask;
+	// hit the target,stop the vehicle
+	if(_last_mask==13){ //1101=13
+		rover.set_mode( Mode::HOLD, ModeReason::UNKNOWN);
+		//hal.console->printf("Hit the target");
+	}else if(_last_mask==14){ //not hit the target ,set guied mode 1110=14
+		rover.set_mode( Mode::GUIDED, ModeReason::UNKNOWN);
+		Location stop_destination;
+		//get stop point
+		rover.g2.serial_control.getStopPoint(stop_destination);
+		//set guid stop point
+		if(labs(stop_destination.lat)>0&&labs(stop_destination.lat)>0){
+			if(!rover.control_mode->set_desired_location(stop_destination)){
+			}
+		}
+		//hal.console->printf("Do not hit the target");
+		//get stop point
+		float speed=rover.g2.serial_control.getStopSpeed();
+		if(speed>0.0f){
+			rover.control_mode->set_desired_speed(speed);
+		}	
+	}
+}
