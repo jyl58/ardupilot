@@ -5,6 +5,7 @@ void ModeManual::_exit()
 {
     // clear lateral when exiting manual mode
     g2.motors.set_lateral(0);
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_None);
 }
 
 void ModeManual::update()
@@ -17,7 +18,7 @@ void ModeManual::update()
     if (rover.is_balancebot()) {
         rover.balancebot_pitch_control(desired_throttle);
     }
-
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_manual);
     // set sailboat sails
     float desired_mainsail;
     float desired_wingsail;
