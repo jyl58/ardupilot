@@ -122,7 +122,7 @@ public:
     friend class RC_Channels_Rover;
 
     friend class Sailboat;
-
+    friend class ModeRepeat;
     Rover(void);
 
 private:
@@ -263,6 +263,7 @@ private:
     ModeSmartRTL mode_smartrtl;
     ModeFollow mode_follow;
     ModeSimple mode_simple;
+    ModeRepeat mode_repeat;
 
     // cruise throttle and speed learning
     typedef struct {

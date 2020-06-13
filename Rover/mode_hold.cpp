@@ -9,7 +9,7 @@ void ModeHold::update()
     if (rover.is_balancebot()) {
         rover.balancebot_pitch_control(throttle);
     }
-
+    g2._dac.setMotorControlMode(DACCtrl::MotorRunMode_None);
     // relax mainsail
     g2.motors.set_mainsail(100.0f);
     g2.motors.set_wingsail(0.0f);

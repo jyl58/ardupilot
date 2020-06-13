@@ -636,6 +636,8 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FS_OPTIONS", 48, ParametersG2, fs_options, 0),
 
+    AP_SUBGROUPINFO(_dac, "DAC_", 49, ParametersG2, DACCtrl),
+
     AP_GROUPEND
 };
 
@@ -676,6 +678,7 @@ ParametersG2::ParametersG2(void)
 #endif
     beacon(rover.serial_manager),
     motors(rover.ServoRelayEvents),
+    _dac(rover.ServoRelayEvents),
     wheel_rate_control(wheel_encoder),
     attitude_control(rover.ahrs),
     smart_rtl(),

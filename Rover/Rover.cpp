@@ -110,6 +110,8 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
 #if OSD_ENABLED == ENABLED
     SCHED_TASK(publish_osd_info,        1,     10),
 #endif
+    SCHED_TASK_CLASS(DACCtrl, 		  &rover.g2._dac,		   update,			100,	100),
+
 };
 
 
