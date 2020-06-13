@@ -420,6 +420,7 @@ private:
 
 
 public:
+    bool _need_restart_auto_mission=false;
     void failsafe_check();
     // Motor test
     void motor_test_output();

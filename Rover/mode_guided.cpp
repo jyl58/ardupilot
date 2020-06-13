@@ -43,7 +43,12 @@ void ModeGuided::update()
                         stop_vehicle();
                     }
                 } else {
-                    stop_vehicle();
+                    if(rover._need_restart_auto_mission){
+						rover._need_restart_auto_mission=false;
+						rover.set_mode( Mode::AUTO, ModeReason::UNKNOWN);
+					}else{
+						stop_vehicle();
+					}
                 }
                 // update distance to destination
                 _distance_to_destination = rover.current_loc.get_distance(g2.wp_nav.get_destination());
