@@ -31,9 +31,12 @@ bool ModeRTL::_enter()
     _loitering = false;
     return true;
 }
-
+void ModeRTL::_exit(){
+	g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_None);
+}
 void ModeRTL::update()
 {
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_auto);
     // determine if we should keep navigating
     if (!g2.wp_nav.reached_destination()) {
         // update navigation controller

@@ -310,6 +310,8 @@ AP_SerialManager::AP_SerialManager()
     _singleton = this;
     // setup parameter defaults
     AP_Param::setup_object_defaults(this, var_info);
+    //set the track default param
+    set_track_default_param();
 }
 
 // init_console - initialise console at default baud rate
@@ -372,7 +374,6 @@ void AP_SerialManager::init()
         init_console();
     }
 #endif
-    
     // initialise serial ports
     for (uint8_t i=1; i<SERIALMANAGER_NUM_PORTS; i++) {
 
@@ -700,6 +701,15 @@ void AP_SerialManager::set_protocol_and_baud(uint8_t sernum, enum SerialProtocol
     }
 }
 
+void 
+AP_SerialManager::set_track_default_param()
+{
+    state[4].protocol=SerialProtocol_serialControl_throttle;
+    state[4].baud=9;
+
+    state[5].protocol=SerialProtocol_serialControl_steer;
+    state[5].baud=9;
+}
 
 namespace AP {
 

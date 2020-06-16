@@ -173,7 +173,7 @@ const AP_Param::Info Rover::var_info[] = {
     // @DisplayName: Mode channel
     // @Description: RC Channel to use for driving mode control
     // @User: Advanced
-    GSCALAR(mode_channel,    "MODE_CH",       MODE_CHANNEL),
+    GSCALAR(mode_channel,    "MODE_CH",       5),
 
     // @Param: MODE1
     // @DisplayName: Mode1
@@ -194,28 +194,28 @@ const AP_Param::Info Rover::var_info[] = {
     // @Description: Driving mode for switch position 3 (1361 to 1490)
     // @Values: 0:Manual,1:Acro,3:Steering,4:Hold,5:Loiter,6:Follow,7:Simple,10:Auto,11:RTL,12:SmartRTL,15:Guided
     // @User: Standard
-    GSCALAR(mode3,           "MODE3",         Mode::Number::MANUAL),
+    GSCALAR(mode3,           "MODE3",         Mode::Number::HOLD),
 
     // @Param: MODE4
     // @DisplayName: Mode4
     // @Description: Driving mode for switch position 4 (1491 to 1620)
     // @Values: 0:Manual,1:Acro,3:Steering,4:Hold,5:Loiter,6:Follow,7:Simple,10:Auto,11:RTL,12:SmartRTL,15:Guided
     // @User: Standard
-    GSCALAR(mode4,           "MODE4",         Mode::Number::MANUAL),
+    GSCALAR(mode4,           "MODE4",         Mode::Number::HOLD),
 
     // @Param: MODE5
     // @DisplayName: Mode5
     // @Description: Driving mode for switch position 5 (1621 to 1749)
     // @Values: 0:Manual,1:Acro,3:Steering,4:Hold,5:Loiter,6:Follow,7:Simple,10:Auto,11:RTL,12:SmartRTL,15:Guided
     // @User: Standard
-    GSCALAR(mode5,           "MODE5",         Mode::Number::MANUAL),
+    GSCALAR(mode5,           "MODE5",         Mode::Number::AUTO),
 
     // @Param: MODE6
     // @DisplayName: Mode6
     // @Description: Driving mode for switch position 6 (1750 to 2049)
     // @Values: 0:Manual,1:Acro,3:Steering,4:Hold,5:Loiter,6:Follow,7:Simple,10:Auto,11:RTL,12:SmartRTL,15:Guided
     // @User: Standard
-    GSCALAR(mode6,           "MODE6",         Mode::Number::MANUAL),
+    GSCALAR(mode6,           "MODE6",         Mode::Number::AUTO),
 
     // @Param: TURN_MAX_G
     // @DisplayName: Turning maximum G force

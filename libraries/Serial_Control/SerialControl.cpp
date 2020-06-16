@@ -40,6 +40,8 @@ SerialControl::SerialControl(){
 }
 bool 
 SerialControl::init(){
+	_min_speed=10;
+	
 	port_throttle=AP::serialmanager().find_serial(AP_SerialManager::SerialProtocol_serialControl_throttle,0); //left motor
 	if(port_throttle==nullptr){
 		hal.console->printf("Unable to get the throttle serial control UART\n");

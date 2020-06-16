@@ -305,3 +305,4 @@ bool Rover::is_boat() const
 
 // dummy method to avoid linking AP_Avoidance
 AP_Avoidance *AP::ap_avoidance() { return nullptr; }
+

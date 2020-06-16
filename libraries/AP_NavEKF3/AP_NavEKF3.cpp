@@ -644,11 +644,17 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
 };
 
 NavEKF3::NavEKF3()
-{
+{   
     AP_Param::setup_object_defaults(this, var_info);
+    set_track_default_param();
    _ahrs = &AP::ahrs();
 }
-
+void NavEKF3::set_track_default_param()
+{
+    _enable=1;
+    _magCal=5;
+    _fusionModeGPS=0;
+}
 /*
   see if we should log some sensor data
  */

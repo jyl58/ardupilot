@@ -529,6 +529,7 @@ public:
 protected:
 
     bool _enter() override;
+    void _exit() override;
 
     bool sent_notification; // used to send one time notification to ground station
     bool _loitering;        // true if loitering at end of RTL
@@ -602,7 +603,7 @@ public:
     float get_desired_lat_accel() const override { return _desired_lat_accel; }
 
 private:
-
+    void _exit() override;
     float _desired_lat_accel;   // desired lateral acceleration calculated from pilot steering input
 };
 

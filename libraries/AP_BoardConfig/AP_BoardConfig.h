@@ -208,6 +208,7 @@ private:
 
 #endif // AP_FEATURE_BOARD_DETECT
 
+    void set_track_default_param();
     void board_init_safety(void);
 
     void board_setup_uart(void);
