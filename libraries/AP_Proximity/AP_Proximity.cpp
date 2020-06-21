@@ -24,6 +24,7 @@
 #include "AP_Proximity_SITL.h"
 #include "AP_Proximity_MorseSITL.h"
 #include "AP_Proximity_AirSimSITL.h"
+#include "AP_Proximity_DYP.h"
 
 extern const AP_HAL::HAL &hal;
 
@@ -326,7 +327,13 @@ void AP_Proximity::detect_instance(uint8_t instance)
             return;
         }
         break;
-
+    case Type::DYP:
+        if(AP_Proximity_DYP::detect()){
+            state[instance].instance = instance;
+            drivers[instance] = new AP_Proximity_DYP(*this, state[instance]);
+            return;
+        }
+        break;
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     case Type::SITL:
         state[instance].instance = instance;

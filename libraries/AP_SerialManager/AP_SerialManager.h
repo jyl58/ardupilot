@@ -139,6 +139,7 @@ public:
         SerialProtocol_Scripting = 28,
         SerialProtocol_serialControl_throttle=30,
         SerialProtocol_serialControl_steer=31,
+        SerialProtocol_Proximity_DYP=40,
     };
 
     // get singleton instance
