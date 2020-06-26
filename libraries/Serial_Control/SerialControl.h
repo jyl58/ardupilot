@@ -36,7 +36,7 @@ public:
 	void motorOutBreak();
 	void setSpeedMode(control_struct_t& cmd_data);
 	void setMotorControlMode(enum MotorRunMode motor_control_mode){_motor_control_mode=motor_control_mode;}
-	float getSteerValue(){return _test_steer_value;}
+	//float getSteerValue(){return _test_steer_value;}
 	enum VehicleStatus getVehicleStatus(){return _vehicle_status;}
 	enum MotorRunMode getMotorControlMode(){return _motor_control_mode;}
 	void getStopPoint(struct Location& stop_point){stop_point.lat=(int32_t)_stop_point_lat*1e7;stop_point.lng=(int32_t)_stop_point_lon*1e7;stop_point.alt=0;}
