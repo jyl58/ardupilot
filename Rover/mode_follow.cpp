@@ -18,10 +18,12 @@ bool ModeFollow::_enter()
 void ModeFollow::_exit()
 {
     g2.follow.clear_offsets_if_required();
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_None);
 }
 
 void ModeFollow::update()
 {
+    g2.serial_control.setMotorControlMode(SerialControl::MotorRunMode_auto);
     // stop vehicle if no speed estimate
     float speed;
     if (!attitude_control.get_forward_speed(speed)) {
