@@ -21,6 +21,7 @@ class AP_Proximity_DYP:public AP_Proximity_Backend
         void initialise();
         void collect_byte(uint8_t msg);
         void parserMsg();
+        void update_sector_distance(float angle,float distance);
         enum PARSE_phase _parse_phase{STEP_head};
         uint32_t _last_distance_received_ms;    // system time of last distance measurement received from sensor
         AP_HAL::UARTDriver *_uart=nullptr;              // uart for communicating with sensor
