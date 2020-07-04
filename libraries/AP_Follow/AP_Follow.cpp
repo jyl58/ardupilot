@@ -136,7 +136,7 @@ AP_Follow::AP_Follow() :
 }
 void AP_Follow::set_track_default_param()
 {
-    _enabled=1;
+    _enabled=0;
 }
 // restore offsets to zero if necessary, should be called when vehicle exits follow mode
 void AP_Follow::clear_offsets_if_required()
