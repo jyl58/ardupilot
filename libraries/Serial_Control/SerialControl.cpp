@@ -20,18 +20,19 @@ const AP_Param::GroupInfo SerialControl::var_info[] = {
 	//_max_speed _test_steer_value
 	AP_GROUPINFO("MinSpeed", 3, SerialControl,_min_speed , 10.0f),
 
-	AP_GROUPINFO("TestSteer", 4, SerialControl,_test_steer_value , -1000.0f),
+	//AP_GROUPINFO("TestSteer", 4, SerialControl,_test_steer_value , -1000.0f),
 
-	AP_GROUPINFO("StopLat", 5, SerialControl,_stop_point_lat,0.0f),
+	AP_GROUPINFO("StopLat", 4, SerialControl,_stop_point_lat,0.0f),
 
-	AP_GROUPINFO("StopLon", 6, SerialControl,_stop_point_lon,0.0f),
+	AP_GROUPINFO("StopLon", 5, SerialControl,_stop_point_lon,0.0f),
 	
-	AP_GROUPINFO("StopSpeed", 7, SerialControl,_stop_speed,0.0f),
+	AP_GROUPINFO("StopSpeed", 6, SerialControl,_stop_speed,0.0f),
 	
 	AP_GROUPEND
 };
 
 SerialControl::SerialControl(){
+	AP_Param::setup_object_defaults(this, var_info);
 	if(_singleton!=nullptr){
 		return ;
 	}
@@ -40,8 +41,8 @@ SerialControl::SerialControl(){
 }
 bool 
 SerialControl::init(){
-	_min_speed=10;
-	
+	_min_speed=10.0f;
+
 	port_throttle=AP::serialmanager().find_serial(AP_SerialManager::SerialProtocol_serialControl_throttle,0); //left motor
 	if(port_throttle==nullptr){
 		hal.console->printf("Unable to get the throttle serial control UART\n");
