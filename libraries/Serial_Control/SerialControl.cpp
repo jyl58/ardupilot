@@ -69,8 +69,8 @@ SerialControl::MotorStop(){
 	//set steer to stop mode
 	control_struct_t cmd_data;
 	cmd_data.function=FUNCTION_WRITE_DATA;
-	cmd_data.memory_address=MEMORY_ADDRESS_0X0066;
-	cmd_data.control_data=CONTROL_DATA_0X0000;   //run stop
+	cmd_data.memory_address=MEMORY_ADDRESS_0X0056;
+	cmd_data.control_data=0;
 	cmd_data.device_address=throttle_addr;
 	cmd_data.crc=CRC16_MODBUS(cmd_data);
 	sendThrottleleft(cmd_data);
