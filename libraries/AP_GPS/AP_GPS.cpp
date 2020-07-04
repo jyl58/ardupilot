@@ -309,7 +309,7 @@ AP_GPS::AP_GPS()
                     "GPS initilisation blob is too large to be completely sent before the baud rate changes");
 
     AP_Param::setup_object_defaults(this, var_info);
-
+    set_track_default_param();
     if (_singleton != nullptr) {
         AP_HAL::panic("AP_GPS must be singleton");
     }
@@ -330,7 +330,11 @@ bool AP_GPS::needs_uart(GPS_Type type) const
     }
     return true;
 }
-
+void AP_GPS::set_track_default_param()
+{
+    _type[0]=5;
+    _type[1]=0;
+}
 /// Startup initialisation.
 void AP_GPS::init(const AP_SerialManager& serial_manager)
 {
