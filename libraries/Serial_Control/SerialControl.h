@@ -58,7 +58,8 @@ private:
 	
 	static SerialControl* _singleton;
 	AP_HAL::UARTDriver *port_throttle;  
-	AP_HAL::UARTDriver *port_steer;  
+	AP_HAL::UARTDriver *port_steer;
+	AP_Int8 _leader_id;
 	AP_Int8 throttle_addr;
 	AP_Int8 steer_addr;
 	AP_Float _max_speed;

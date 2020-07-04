@@ -20,13 +20,13 @@ const AP_Param::GroupInfo SerialControl::var_info[] = {
 	//_max_speed _test_steer_value
 	AP_GROUPINFO("MinSpeed", 3, SerialControl,_min_speed , 10.0f),
 
-	//AP_GROUPINFO("TestSteer", 4, SerialControl,_test_steer_value , -1000.0f),
-
 	AP_GROUPINFO("StopLat", 4, SerialControl,_stop_point_lat,0.0f),
 
 	AP_GROUPINFO("StopLon", 5, SerialControl,_stop_point_lon,0.0f),
 	
 	AP_GROUPINFO("StopSpeed", 6, SerialControl,_stop_speed,0.0f),
+
+	AP_GROUPINFO("LEADER_ID", 7, SerialControl,_leader_id,1),
 	
 	AP_GROUPEND
 };
