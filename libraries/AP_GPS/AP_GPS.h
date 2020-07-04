@@ -186,7 +186,7 @@ public:
         uint32_t rtk_accuracy;             ///< Current estimate of 3D baseline accuracy (receiver dependent, typical 0 to 9999)
         int32_t  rtk_iar_num_hypotheses;   ///< Current number of integer ambiguity hypotheses
     };
-
+    void set_track_default_param();
     /// Startup initialisation.
     void init(const AP_SerialManager& serial_manager);
 

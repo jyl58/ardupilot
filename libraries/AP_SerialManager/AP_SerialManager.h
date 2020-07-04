@@ -191,6 +191,7 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
+    void set_track_default_param();
     static AP_SerialManager *_singleton;
     
     // array of uart info

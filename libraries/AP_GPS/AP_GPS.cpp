@@ -315,7 +315,11 @@ AP_GPS::AP_GPS()
     }
     _singleton = this;
 }
-
+void AP_GPS::set_track_default_param()
+{
+    _type[0]=5;
+    _type[1]=0;
+}
 // return true if a specific type of GPS uses a UART
 bool AP_GPS::needs_uart(GPS_Type type) const
 {

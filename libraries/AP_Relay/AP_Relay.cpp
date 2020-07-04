@@ -105,7 +105,6 @@ extern const AP_HAL::HAL& hal;
 AP_Relay::AP_Relay(void)
 {
     AP_Param::setup_object_defaults(this, var_info);
-
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     if (singleton != nullptr) {
         AP_HAL::panic("AP_Relay must be singleton");
@@ -114,9 +113,18 @@ AP_Relay::AP_Relay(void)
     singleton = this;
 }
 
-
+void AP_Relay::set_track_default_param()
+{
+  _pin[0]=50;
+  _pin[1]=51;
+  _pin[2]=52;
+  _pin[3]=53;
+  _pin[4]=54;
+  _pin[5]=55;
+}
 void AP_Relay::init()
 {
+    set_track_default_param();
     if (_default != 0 && _default != 1) {
         return;
     }

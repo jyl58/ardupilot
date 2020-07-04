@@ -153,11 +153,11 @@ void
 DACCtrl::autoControlMode()
 {
 	if(_vehicle_status==Vehicle_forward){
-		//30 off
+		//30 off aux-5-->back
 		_relayEvents.do_set_relay(4,0); // 30
-		//18 on
+		//18 on aux-4-->forward
 		_relayEvents.do_set_relay(3,1);	// 18 forward
-		//fs on
+		//fs on  aux-6-->fs
 		_relayEvents.do_set_relay(5,1);
 	}else if(_vehicle_status==Vehicle_backward){
 		//18 off
