@@ -640,6 +640,8 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
 	// @Path: ../libraries/serial_control/serialcontrol.cpp
 	AP_SUBGROUPINFO(serial_control, "SC_", 49, ParametersG2, SerialControl),
 
+    AP_GROUPINFO("FOR_LEADER_ID", 50, ParametersG2, _formation_leader_id,1),
+
     AP_GROUPEND
 };
 

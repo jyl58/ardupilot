@@ -25,8 +25,6 @@ const AP_Param::GroupInfo SerialControl::var_info[] = {
 	AP_GROUPINFO("StopLon", 5, SerialControl,_stop_point_lon,0.0f),
 	
 	AP_GROUPINFO("StopSpeed", 6, SerialControl,_stop_speed,0.0f),
-
-	AP_GROUPINFO("LEADER_ID", 7, SerialControl,_leader_id,1),
 	
 	AP_GROUPEND
 };
