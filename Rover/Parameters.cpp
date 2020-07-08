@@ -817,4 +817,30 @@ void Rover::load_parameters(void)
                                                       AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_ON|
                                                       AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_ARMED);
 #endif
+
+    AP_Param::defaults_table_struct _init_table[]={
+        {"MODE_CH",5},
+        {"MODE1",0},
+        {"MODE2",0},
+        {"MODE3",4},
+        {"MODE4",4},
+        {"MODE5",10},
+        {"MODE6",10},
+        {"FOLL_ENABLE",0},
+        {"GPS_TYPE",5},
+        {"BRD_PWM_COUNT",0},
+        {"BRD_SAFETYENABLE",0},
+        {"AHRS_EKF_TYPE",3},
+        {"EK3_ENABLE",1},
+        {"EK3_MAG_CAL",5},
+        {"EK3_GPS_TYPE",0},
+        {"SERVO1_FUNCTION",73},
+        {"SERVO3_FUNCTION",74},
+        {"SERIAL4_PROTOCOL",30},
+        {"SERIAL4_BAUD",115},
+        {"COMPASS_USE",0},
+        {"COMPASS_USE2",0},
+        {"COMPASS_USE3",0}
+    };
+    AP_Param::set_defaults_from_table(_init_table,sizeof(_init_table)/sizeof(_init_table[0]));
 }

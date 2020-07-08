@@ -310,14 +310,6 @@ AP_SerialManager::AP_SerialManager()
     _singleton = this;
     // setup parameter defaults
     AP_Param::setup_object_defaults(this, var_info);
-    //set the track default param
-    set_track_default_param();
-}
-void 
-AP_SerialManager::set_track_default_param()
-{
-    state[4].protocol=SerialProtocol_Steer;
-    state[4].baud=115;
 }
 // init_console - initialise console at default baud rate
 void AP_SerialManager::init_console()
