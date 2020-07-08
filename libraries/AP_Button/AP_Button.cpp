@@ -77,21 +77,11 @@ const AP_Param::GroupInfo AP_Button::var_info[] = {
 AP_Button::AP_Button(void)
 {
     AP_Param::setup_object_defaults(this, var_info);
-    set_track_default_param();
 
     if (_singleton != nullptr) {
         AP_HAL::panic("AP_Button must be singleton");
     }
     _singleton = this;
-}
-void 
-AP_Button::set_track_default_param()
-{
-    enable=1;
-    pin[0]=50;
-    pin[1]=51;
-    pin[2]=52;
-    pin[3]=53;
 }
 /*
   update and report, called from main loop

@@ -849,6 +849,7 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("SERIAL4_BAUD",9);
     AP_Param::set_default_by_name("SERIAL5_PROTOCOL",31);
     AP_Param::set_default_by_name("SERIAL5_BAUD",9);
+    AP_Param::set_default_by_name("BTN_ENABLE",1);
     AP_Param::set_default_by_name("BTN_PIN1",50);
     AP_Param::set_default_by_name("BTN_PIN2",51);
     AP_Param::set_default_by_name("BTN_PIN3",52);

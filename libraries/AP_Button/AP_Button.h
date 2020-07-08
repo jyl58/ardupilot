@@ -46,7 +46,6 @@ public:
     bool get_button_state(uint8_t number);
 
 private:
-    void set_track_default_param();
     static AP_Button *_singleton;
 
     AP_Int8 enable;
