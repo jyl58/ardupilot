@@ -823,4 +823,43 @@ void Rover::load_parameters(void)
                                                       AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_SAFETY_ON|
                                                       AP_BoardConfig::BOARD_SAFETY_OPTION_BUTTON_ACTIVE_ARMED);
 #endif
+
+/*set the default track param*/
+    //mode
+    AP_Param::set_default_by_name("MODE_CH",5);
+    AP_Param::set_default_by_name("MODE1",0);
+    AP_Param::set_default_by_name("MODE2",0);
+    AP_Param::set_default_by_name("MODE3",4);
+    AP_Param::set_default_by_name("MODE4",4);
+    AP_Param::set_default_by_name("MODE5",10);
+    AP_Param::set_default_by_name("MODE6",10);
+    // formation switch
+    AP_Param::set_default_by_name("FOLL_ENABLE",0);
+    //gps nmea
+    AP_Param::set_default_by_name("GPS_TYPE",5);
+    AP_Param::set_default_by_name("BRD_PWM_COUNT",0);
+    AP_Param::set_default_by_name("BRD_SAFETYENABLE",0);
+    AP_Param::set_default_by_name("AHRS_EKF_TYPE",3);
+    AP_Param::set_default_by_name("EK3_ENABLE",1);
+    AP_Param::set_default_by_name("EK3_MAG_CAL",5);
+    AP_Param::set_default_by_name("EK3_GPS_TYPE",0);
+    AP_Param::set_default_by_name("SERVO1_FUNCTION",73);
+    AP_Param::set_default_by_name("SERVO3_FUNCTION",74);
+    AP_Param::set_default_by_name("SERIAL4_PROTOCOL",30);
+    AP_Param::set_default_by_name("SERIAL4_BAUD",9);
+    AP_Param::set_default_by_name("SERIAL5_PROTOCOL",31);
+    AP_Param::set_default_by_name("SERIAL5_BAUD",9);
+    AP_Param::set_default_by_name("BTN_PIN1",50);
+    AP_Param::set_default_by_name("BTN_PIN2",51);
+    AP_Param::set_default_by_name("BTN_PIN3",52);
+    AP_Param::set_default_by_name("BTN_PIN4",53);
+    AP_Param::set_default_by_name("COMPASS_USE",0);
+    AP_Param::set_default_by_name("COMPASS_USE2",0);
+    AP_Param::set_default_by_name("COMPASS_USE3",0);
+    AP_Param::set_default_by_name("RELAY_PIN",-1);
+    AP_Param::set_default_by_name("RELAY_PIN2",-1);
+    AP_Param::set_default_by_name("RELAY_PIN3",-1);
+    AP_Param::set_default_by_name("RELAY_PIN4",-1);
+    AP_Param::set_default_by_name("RELAY_PIN5",-1);
+    AP_Param::set_default_by_name("RELAY_PIN6",-1);
 }
