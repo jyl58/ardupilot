@@ -31,7 +31,6 @@ bool ModeRepeat::_enter()
 void ModeRepeat::_exit()
 {
 	g2._dac.setMotorControlMode(DACCtrl::MotorRunMode_None);
-	
 	g2.wp_nav.set_reversed(false);// forward
 }
 void ModeRepeat::update()

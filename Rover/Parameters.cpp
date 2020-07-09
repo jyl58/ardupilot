@@ -834,13 +834,21 @@ void Rover::load_parameters(void)
         {"EK3_ENABLE",1},
         {"EK3_MAG_CAL",5},
         {"EK3_GPS_TYPE",0},
-        {"SERVO1_FUNCTION",73},
-        {"SERVO3_FUNCTION",74},
         {"SERIAL4_PROTOCOL",30},
         {"SERIAL4_BAUD",115},
         {"COMPASS_USE",0},
         {"COMPASS_USE2",0},
-        {"COMPASS_USE3",0}
+        {"COMPASS_USE3",0},
+        {"BTN_ENABLE",0},
+        {"RELAY_DEFAULT",0},
+        {"RELAY_PIN",50},
+        {"RELAY_PIN2",51},
+        {"RELAY_PIN3",52},
+        {"RELAY_PIN4",53},
+        {"RELAY_PIN5",54},
+        {"RELAY_PIN6",55},
+        {"SERVO1_FUNCTION",26},
+        {"SERVO3_FUNCTION",70}
     };
     AP_Param::set_defaults_from_table(_init_table,sizeof(_init_table)/sizeof(_init_table[0]));
 }

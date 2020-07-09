@@ -27,6 +27,7 @@ const AP_Param::GroupInfo DACCtrl::var_info[] = {
 DACCtrl::DACCtrl(AP_ServoRelayEvents &relayEvents)
 :_relayEvents(relayEvents)
 {
+	AP_Param::setup_object_defaults(this, var_info);
 }
 
 bool 
