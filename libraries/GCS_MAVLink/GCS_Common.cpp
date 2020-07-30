@@ -3367,20 +3367,20 @@ void GCS_MAVLINK::send_banner()
                   fwver.middleware_name, fwver.middleware_hash_str,
                   fwver.os_name, fwver.os_hash_str);
     } else if (fwver.os_name) {
-        send_text(MAV_SEVERITY_INFO, "%s: %s",
+        send_text(MAV_SEVERITY_INFO, "%s-%s",
                   fwver.os_name, fwver.os_hash_str);
     }
 
     // send system ID if we can
     char sysid[40];
     if (hal.util->get_system_id(sysid)) {
-        send_text(MAV_SEVERITY_INFO, "%s", sysid);
+        //send_text(MAV_SEVERITY_INFO, "%s", sysid);
     }
 
     // send RC output mode info if available
     char banner_msg[50];
     if (hal.rcout->get_output_mode_banner(banner_msg, sizeof(banner_msg))) {
-        send_text(MAV_SEVERITY_INFO, "%s", banner_msg);
+        //send_text(MAV_SEVERITY_INFO, "%s", banner_msg);
     }
 }
 
