@@ -131,6 +131,8 @@ public:
     // handle tacking request (from auxiliary switch) in sailboats
     virtual void handle_tack_request();
 
+    virtual void try_motor(){}
+
 protected:
 
     // subclasses override this to perform checks before entering the mode
@@ -494,8 +496,13 @@ public:
     bool requires_position() const override { return false; }
     bool requires_velocity() const override { return false; }
 
-protected:
+    //try motor
+    void try_motor()override{_try_control=true;}
 
+protected:
+    bool _try_control=false;
+    uint32_t _try_start_time_ms=0;
+    bool _enter() override;
     void _exit() override;
 };
 

@@ -192,6 +192,7 @@ public:
         // inputs eventually used to replace RCMAP
         MAINSAIL =           207, // mainsail input
         FLAP =               208, // flap input
+        TRY_MOTOR=           300,
     };
     typedef enum AUX_FUNC aux_func_t;
 

@@ -230,7 +230,13 @@ void RC_Channel_Rover::do_aux_function(const aux_func_t ch_option, const aux_swi
     // mainsail input, nothing to do
     case AUX_FUNC::MAINSAIL:
         break;
-
+    case AUX_FUNC::TRY_MOTOR:
+        if (ch_flag == LOW) {
+            if(rover.control_mode==&rover.mode_manual){
+                rover.control_mode->try_motor();
+            }
+        }
+        break;
     // save steering trim
     case AUX_FUNC::SAVE_TRIM:
         if (!rover.g2.motors.have_skid_steering() && rover.arming.is_armed() &&

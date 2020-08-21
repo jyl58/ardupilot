@@ -865,4 +865,30 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("RELAY_PIN4",-1);
     AP_Param::set_by_name("RELAY_PIN5",-1);
     AP_Param::set_by_name("RELAY_PIN6",-1);
+    //set rc steer
+    AP_Param::set_by_name("RC1_MAX",1932);
+    AP_Param::set_by_name("RC1_MIN",1065);
+    AP_Param::set_by_name("RC1_TRIM",1498);
+    AP_Param::set_by_name("RC1_DZ",50);
+    // throt
+    AP_Param::set_by_name("RC3_MAX",1932);
+    AP_Param::set_by_name("RC3_MIN",1065);
+    AP_Param::set_by_name("RC3_TRIM",1498);
+    AP_Param::set_by_name("RC3_DZ",50);
+    //not use
+    AP_Param::set_by_name("RC2_MAX",1932);
+    AP_Param::set_by_name("RC2_MIN",1065);
+    AP_Param::set_by_name("RC2_TRIM",1498);
+    AP_Param::set_by_name("RC2_DZ",50);
+    //not use
+    AP_Param::set_by_name("RC4_MAX",1932);
+    AP_Param::set_by_name("RC4_MIN",1065);
+    AP_Param::set_by_name("RC4_TRIM",1498);
+    AP_Param::set_by_name("RC4_DZ",50);
+    //try motor
+    AP_Param::set_by_name("RC9_MAX",1932);
+    AP_Param::set_by_name("RC9_MIN",1065);
+    AP_Param::set_by_name("RC9_TRIM",1498);
+    AP_Param::set_by_name("RC9_OPTION",300);
+    AP_Param::set_by_name("RC9_DZ",0);
 }
