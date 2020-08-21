@@ -164,7 +164,7 @@ void Rover::rpm_update(void)
 	}
 }*/
 /*
-  update buuton handle function
+  update buton handle function
 */
 void Rover::update_button_handle(void)
 {	static uint8_t _last_mask=15;
@@ -200,7 +200,7 @@ void Rover::update_button_handle(void)
 		//get the current point
 		interrupt_destination=rover.current_loc;
 		_hit_need_resume=true;
-	}else if(_last_mask==15){
+	}else if(_last_mask==15){//go on
 		if(_hit_need_resume){
 			//
 			if(rover.set_mode( Mode::GUIDED, ModeReason::UNKNOWN)){
