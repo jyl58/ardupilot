@@ -865,6 +865,11 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("RELAY_PIN4",-1);
     AP_Param::set_by_name("RELAY_PIN5",-1);
     AP_Param::set_by_name("RELAY_PIN6",-1);
+    //rc map
+    AP_Param::set_by_name("RCMAP_THROTTLE",2); //throttle
+    AP_Param::set_by_name("RCMAP_ROLL",1); //steer
+    AP_Param::set_by_name("RCMAP_YAW",4); //lateral
+    AP_Param::set_by_name("RCMAP_PITCH",3);
     //set rc steer
     AP_Param::set_by_name("RC1_MAX",1932);
     AP_Param::set_by_name("RC1_MIN",1065);
