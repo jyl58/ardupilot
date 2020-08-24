@@ -833,6 +833,8 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("MODE4",0);
     AP_Param::set_by_name("MODE5",4);
     AP_Param::set_by_name("MODE6",4);
+    //disable brake for auto mode ,if not severout will <1500
+    AP_Param::set_by_name("ATC_BRAKE",0);
     // formation switch
     AP_Param::set_by_name("FOLL_ENABLE",0);
     //gps nmea
