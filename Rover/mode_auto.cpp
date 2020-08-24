@@ -157,7 +157,7 @@ bool ModeAuto::get_desired_location(Location& destination) const
     case Auto_Loiter:
         return rover.mode_loiter.get_desired_location(destination);
     case Auto_Guided:
-        return rover.mode_guided.get_desired_location(destination);\
+        return rover.mode_guided.get_desired_location(destination);
     }
 
     // we should never reach here but just in case
