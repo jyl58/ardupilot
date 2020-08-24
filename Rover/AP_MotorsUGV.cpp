@@ -766,7 +766,7 @@ void AP_MotorsUGV::output_throttle(SRV_Channel::Aux_servo_function_t function, f
     throttle = get_rate_controlled_throttle(function, throttle, dt);
 
     // set relay if necessary
-    if (_pwm_type == PWM_TYPE_BRUSHED_WITH_RELAY) {
+    /*if (_pwm_type == PWM_TYPE_BRUSHED_WITH_RELAY) {
         // find the output channel, if not found return
         const SRV_Channel *out_chan = SRV_Channels::get_channel_for(function);
         if (out_chan == nullptr) {
@@ -797,7 +797,7 @@ void AP_MotorsUGV::output_throttle(SRV_Channel::Aux_servo_function_t function, f
         }
         // invert the output to always have positive value calculated by calc_pwm
         throttle = reverse_multiplier * fabsf(throttle);
-    }
+    }*/
 
     // output to servo channel
     switch (function) {
