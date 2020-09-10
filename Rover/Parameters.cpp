@@ -898,4 +898,7 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("RC9_TRIM",1498);
     AP_Param::set_by_name("RC9_OPTION",300);
     AP_Param::set_by_name("RC9_DZ",0);
+
+    AP_Param::set_by_name("SC_ThrAddr",1);  //left motor controller addr
+    AP_Param::set_by_name("SC_SteAddr",2);  //right motor controller addr
 }
