@@ -37,13 +37,16 @@ AP_Proximity_DYP::update()
     }
     //TODO: add the read uart code
     int16_t nbytes = _uart->available();
+    //hal.console->printf("==>>>>");
     while (nbytes-- > 0) {
         const int16_t r = _uart->read();
-        if ((r < 0) || (r > 0xFF)) {
+        if((r < 0) || (r > 0xFF)){
             continue;
         }
+        //hal.console->printf("%02X",(uint8_t)r);
         collect_byte((uint8_t)r);
     }
+    //hal.console->printf("<<<<==");
     if ((_last_distance_received_ms == 0) || ((AP_HAL::millis() - _last_distance_received_ms) > PROXIMITY_DYP_TIMEOUT_MS)) {
         set_status(AP_Proximity::Status::NoData);
     } else {
@@ -84,7 +87,7 @@ AP_Proximity_DYP::parserMsg()
         update_sector_distance(315,(_data[0]*256+_data[1])*0.001);  //firt one
         update_sector_distance(0,(_data[2]*256+_data[3])*0.001);
         update_sector_distance(45,(_data[4]*256+_data[5])*0.001);
-        update_sector_distance(90,(_data[6]*256+_data[7])*0.001);
+        //update_sector_distance(90,(_data[6]*256+_data[7])*0.001);
         uint32_t now = AP_HAL::millis();
         _last_distance_received_ms= now;
     }
