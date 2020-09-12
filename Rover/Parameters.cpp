@@ -847,12 +847,20 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("EK3_GPS_TYPE",0);
     AP_Param::set_by_name("SERVO1_FUNCTION",73);
     AP_Param::set_by_name("SERVO3_FUNCTION",74);
+    //nmea gps
     AP_Param::set_by_name("SERIAL3_PROTOCOL",5);
     AP_Param::set_by_name("SERIAL3_BAUD",115);
+    //motor left
     AP_Param::set_by_name("SERIAL4_PROTOCOL",30);
     AP_Param::set_by_name("SERIAL4_BAUD",9);
+    //motor right
     AP_Param::set_by_name("SERIAL5_PROTOCOL",31);
     AP_Param::set_by_name("SERIAL5_BAUD",9);
+    //proximity
+    AP_Param::set_by_name("SERIAL2_PROTOCOL",40);
+    AP_Param::set_by_name("SERIAL2_BAUD",9);
+    AP_Param::set_by_name("PRX_TYPE",8);
+
     AP_Param::set_by_name("BTN_ENABLE",1);
     AP_Param::set_by_name("BTN_PIN1",50);
     AP_Param::set_by_name("BTN_PIN2",51);
@@ -899,6 +907,6 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("RC9_OPTION",300);
     AP_Param::set_by_name("RC9_DZ",0);
 
-    AP_Param::set_by_name("SC_ThrAddr",1);  //left motor controller addr
-    AP_Param::set_by_name("SC_SteAddr",2);  //right motor controller addr
+    AP_Param::set_by_name("SC_ThrAddr",1);  //left motor controller addr  1
+    AP_Param::set_by_name("SC_SteAddr",2);  //right motor controller addr 2
 }
