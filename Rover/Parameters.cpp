@@ -826,14 +826,14 @@ void Rover::load_parameters(void)
 
 /*set the default track param*/
     //mode
-    AP_Param::set_by_name("MODE_CH",7);
+    AP_Param::set_by_name("MODE_CH",5);
     AP_Param::set_by_name("MODE1",10);
     AP_Param::set_by_name("MODE2",10);
     AP_Param::set_by_name("MODE3",0);
     AP_Param::set_by_name("MODE4",0);
     AP_Param::set_by_name("MODE5",4);
     AP_Param::set_by_name("MODE6",4);
-    //disable brake for auto mode ,if not severout will <1500
+    //disable brake for auto mode ,if not, the severout will <1500
     AP_Param::set_by_name("ATC_BRAKE",0);
     // formation switch
     AP_Param::set_by_name("FOLL_ENABLE",0);
@@ -881,32 +881,49 @@ void Rover::load_parameters(void)
     AP_Param::set_by_name("RCMAP_YAW",4); //lateral
     AP_Param::set_by_name("RCMAP_PITCH",3);
     //set rc steer
-    AP_Param::set_by_name("RC1_MAX",1932);
-    AP_Param::set_by_name("RC1_MIN",1065);
-    AP_Param::set_by_name("RC1_TRIM",1498);
+    AP_Param::set_by_name("RC1_MAX",1933);
+    AP_Param::set_by_name("RC1_MIN",1094);
+    AP_Param::set_by_name("RC1_TRIM",1514);
+    AP_Param::set_by_name("RC1_REVERSED",0);
     AP_Param::set_by_name("RC1_DZ",50);
-    // throt
-    AP_Param::set_by_name("RC3_MAX",1932);
-    AP_Param::set_by_name("RC3_MIN",1065);
-    AP_Param::set_by_name("RC3_TRIM",1498);
+    // not use
+    AP_Param::set_by_name("RC3_MAX",1933);
+    AP_Param::set_by_name("RC3_MIN",1094);
+    AP_Param::set_by_name("RC3_TRIM",1514);
+    AP_Param::set_by_name("RC3_REVERSED",0);
     AP_Param::set_by_name("RC3_DZ",50);
-    //not use
-    AP_Param::set_by_name("RC2_MAX",1932);
-    AP_Param::set_by_name("RC2_MIN",1065);
-    AP_Param::set_by_name("RC2_TRIM",1498);
+    //thro
+    AP_Param::set_by_name("RC2_MAX",1933);
+    AP_Param::set_by_name("RC2_MIN",1094);
+    AP_Param::set_by_name("RC2_TRIM",1514);
+    AP_Param::set_by_name("RC2_REVERSED",1);
     AP_Param::set_by_name("RC2_DZ",50);
     //not use
-    AP_Param::set_by_name("RC4_MAX",1932);
-    AP_Param::set_by_name("RC4_MIN",1065);
-    AP_Param::set_by_name("RC4_TRIM",1498);
+    AP_Param::set_by_name("RC4_MAX",1933);
+    AP_Param::set_by_name("RC4_MIN",1094);
+    AP_Param::set_by_name("RC4_TRIM",1514);
+    AP_Param::set_by_name("RC4_REVERSED",0);
     AP_Param::set_by_name("RC4_DZ",50);
     //try motor
-    AP_Param::set_by_name("RC9_MAX",1932);
-    AP_Param::set_by_name("RC9_MIN",1065);
-    AP_Param::set_by_name("RC9_TRIM",1498);
+    AP_Param::set_by_name("RC9_MAX",1933);
+    AP_Param::set_by_name("RC9_MIN",1094);
+    AP_Param::set_by_name("RC9_TRIM",1514);
     AP_Param::set_by_name("RC9_OPTION",300);
     AP_Param::set_by_name("RC9_DZ",0);
 
     AP_Param::set_by_name("SC_ThrAddr",1);  //left motor controller addr  1
     AP_Param::set_by_name("SC_SteAddr",2);  //right motor controller addr 2
+
+    //board origin
+    AP_Param::set_by_name("AHRS_ORIENTATION",100);
+    AP_Param::set_by_name("AHRS_CUSTOM_PIT",17); //17deg
+    AP_Param::set_by_name("AHRS_CUSTOM_ROLL",0); //
+    AP_Param::set_by_name("AHRS_CUSTOM_YAW",0); //
+
+    //target control
+    AP_Param::set_by_name("RC6_MAX",1933);
+    AP_Param::set_by_name("RC6_MIN",1094);
+    AP_Param::set_by_name("RC6_TRIM",1514);
+    AP_Param::set_by_name("RC6_OPTION",400);
+    AP_Param::set_by_name("RC6_DZ",0);
 }
