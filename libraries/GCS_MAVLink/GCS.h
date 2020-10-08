@@ -329,7 +329,11 @@ public:
     uint16_t get_stream_slowdown_ms() const { return stream_slowdown_ms; }
 
     MAV_RESULT set_message_interval(uint32_t msg_id, int32_t interval_us);
-
+    void parserCommand(uint8_t msg);
+    static command_from_gcs_t _command_from_gcs;
+    uint8_t _buffer[4];
+    uint8_t _parse_count=0;
+    uint8_t _parse_phase=0;
 protected:
 
     virtual bool in_hil_mode() const { return false; }
@@ -901,7 +905,7 @@ public:
     void init();
     void setup_console();
     void setup_uarts();
-
+    virtual void send_to_command(uint8_t id,uint8_t data)=0;
     bool out_of_time() const;
 
     // frsky backend
@@ -934,7 +938,6 @@ public:
     MAV_RESULT set_message_interval(uint8_t port_num, uint32_t msg_id, int32_t interval_us);
 
     uint8_t get_channel_from_port_number(uint8_t port_num);
-
 protected:
 
     virtual uint8_t sysid_this_mav() const = 0;

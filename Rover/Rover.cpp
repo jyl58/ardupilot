@@ -315,6 +315,9 @@ void Rover::one_second_loop(void)
 
     // send latest param values to wp_nav
     g2.wp_nav.set_turn_params(g.turn_max_g, g2.turn_radius, g2.motors.have_skid_steering());
+
+    //send moving status
+    gcs().send_to_command(103,moving_status);
 }
 
 void Rover::update_GPS(void)
@@ -349,7 +352,11 @@ void Rover::update_mission(void)
         }
     }
 }
-
+void 
+Rover::control_target(uint8_t commad)
+{
+    gcs().send_to_command(104,commad);
+}
 #if OSD_ENABLED == ENABLED
 void Rover::publish_osd_info()
 {

@@ -272,7 +272,6 @@ private:
         uint32_t log_count;
     } cruise_learn_t;
     cruise_learn_t cruise_learn;
-
 private:
 
     // Rover.cpp
@@ -438,6 +437,9 @@ public:
 
     // Simple mode
     float simple_sin_yaw;
+
+    void control_target(uint8_t commad);
+    uint8_t moving_status=0;
 };
 
 extern Rover rover;

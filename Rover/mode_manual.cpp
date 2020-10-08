@@ -40,6 +40,12 @@ void ModeManual::update()
                 _try_control=false;
                 _try_start_time_ms=0;
             }
+        }else{
+            if(GCS_MAVLINK::_command_from_gcs.move_diret==1){
+                desired_throttle=GCS_MAVLINK::_command_from_gcs.thr;
+            }else if(GCS_MAVLINK::_command_from_gcs.move_diret==2){
+                desired_throttle=-GCS_MAVLINK::_command_from_gcs.thr;
+            }
         }
     }else{
         _try_control=false;

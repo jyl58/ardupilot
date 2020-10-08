@@ -193,6 +193,7 @@ public:
         MAINSAIL =           207, // mainsail input
         FLAP =               208, // flap input
         TRY_MOTOR=           300,
+        TARGET_CONTROL=      400,
     };
     typedef enum AUX_FUNC aux_func_t;
 

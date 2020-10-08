@@ -195,6 +195,12 @@ void AP_MotorsUGV::set_throttle(float throttle)
 
     // check throttle is between -_throttle_max and  +_throttle_max
     _throttle = constrain_float(throttle, -_throttle_max, _throttle_max);
+    //update moving status
+    if(is_zero(_throttle)){
+        rover.moving_status=0;
+    }else{
+        rover.moving_status=1;
+    }
 }
 
 // set lateral input as a value from -100 to +100
